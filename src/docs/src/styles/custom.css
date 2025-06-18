@@ -1,0 +1,303 @@
+/* Custom styles for SOCIA documentation */
+
+:root {
+  --socia-primary: #3b82f6;
+  --socia-secondary: #8b5cf6;
+  --socia-accent: #06b6d4;
+  --socia-success: #10b981;
+  --socia-warning: #f59e0b;
+  --socia-error: #ef4444;
+}
+
+/* Custom color scheme */
+[data-theme='light'] {
+  --sl-color-accent: var(--socia-primary);
+  --sl-color-accent-low: #dbeafe;
+  --sl-color-accent-high: #1d4ed8;
+}
+
+[data-theme='dark'] {
+  --sl-color-accent: var(--socia-accent);
+  --sl-color-accent-low: #164e63;
+  --sl-color-accent-high: #67e8f9;
+}
+
+/* Hero section customization */
+.hero {
+  background: linear-gradient(135deg, var(--socia-primary) 0%, var(--socia-secondary) 100%);
+}
+
+/* Custom cards for features */
+.feature-card {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  background: var(--sl-color-bg-nav);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Code block enhancements */
+pre {
+  border-radius: 0.5rem;
+  border: 1px solid var(--sl-color-gray-5);
+}
+
+/* Custom badges */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge.critical {
+  background-color: var(--socia-error);
+  color: white;
+}
+
+.badge.high {
+  background-color: var(--socia-warning);
+  color: white;
+}
+
+.badge.medium {
+  background-color: var(--socia-accent);
+  color: white;
+}
+
+.badge.low {
+  background-color: var(--socia-success);
+  color: white;
+}
+
+/* Alert boxes */
+.alert {
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  border-left: 4px solid;
+}
+
+.alert-info {
+  background-color: #dbeafe;
+  border-color: var(--socia-primary);
+  color: #1e40af;
+}
+
+.alert-warning {
+  background-color: #fef3c7;
+  border-color: var(--socia-warning);
+  color: #92400e;
+}
+
+.alert-error {
+  background-color: #fecaca;
+  border-color: var(--socia-error);
+  color: #991b1b;
+}
+
+.alert-success {
+  background-color: #d1fae5;
+  border-color: var(--socia-success);
+  color: #065f46;
+}
+
+/* SOC interface styling */
+.soc-interface {
+  background: #1a1a1a;
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #333;
+}
+
+.soc-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin: 0.25rem 0;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.soc-alert.critical {
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid #ef4444;
+}
+
+.soc-alert.high {
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #f59e0b;
+}
+
+.soc-alert.medium {
+  background: rgba(6, 182, 212, 0.1);
+  border-left: 3px solid #06b6d4;
+}
+
+.soc-alert.low {
+  background: rgba(16, 185, 129, 0.1);
+  border-left: 3px solid #10b981;
+}
+
+/* Timeline styling */
+.timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--sl-color-accent);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -2rem;
+  top: 0.5rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--sl-color-accent);
+  border: 3px solid var(--sl-color-bg);
+}
+
+/* Responsive tables */
+.table-responsive {
+  overflow-x: auto;
+}
+
+.table-responsive table {
+  min-width: 600px;
+}
+
+/* Custom navigation enhancements */
+.sidebar-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sl-color-accent) transparent;
+}
+
+.sidebar-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: var(--sl-color-accent);
+  border-radius: 3px;
+}
+
+/* Command line interface styling */
+.cli {
+  background: #000;
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+
+.cli-prompt::before {
+  content: '$ ';
+  color: #00ff00;
+  font-weight: bold;
+}
+
+.cli-output {
+  color: #ccc;
+  margin: 0.5rem 0;
+}
+
+/* Loading animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.loading {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Matrix rain effect for headers */
+@keyframes matrix-rain {
+  0% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+.matrix-char {
+  display: inline-block;
+  animation: matrix-rain 3s linear infinite;
+  animation-delay: calc(var(--i) * 0.1s);
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .soc-interface {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+  }
+  
+  .timeline {
+    padding-left: 1.5rem;
+  }
+  
+  .timeline-item::before {
+    left: -1.5rem;
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .soc-interface,
+  .cli {
+    background: white !important;
+    color: black !important;
+    border: 1px solid #ccc !important;
+  }
+}

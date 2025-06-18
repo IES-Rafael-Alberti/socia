@@ -1,17 +1,28 @@
 ---
 import { Image } from "astro:assets";
 import { Icon } from "astro-icon/components";
-import astronautImage from "~/assets/astronaut.png";
+import learnFloatingImage from "~/assets/learn-floating.png";
 import HeroImage from "~/components/hero-image.astro";
-import Starfield from "~/components/starfield.astro";
 import GitHubCorner from "./github-corner.astro";
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
 
 const widths = [450, 800];
 const sizes = "(min-width: 640px) 42vw, 67vw";
 ---
 
-<section class="relative h-full bg-black">
-  <Starfield />
+<section class="relative h-full bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
+  <!-- Matrix-style falling IPs -->
+  <div id="matrix-rain" class="absolute inset-0 overflow-hidden pointer-events-none">
+    <!-- These will be generated dynamically via JavaScript -->
+  </div>
+
   <GitHubCorner />
   <div id="splash-bg-fallback" class="absolute inset-0 hidden opacity-40">
     <HeroImage />
@@ -20,30 +31,178 @@ const sizes = "(min-width: 640px) 42vw, 67vw";
     <h2
       class="flex flex-col items-center gap-2 self-end sm:gap-4 sm:self-auto sm:justify-self-end"
     >
-      <Icon name="logomark" class="size-20 text-white md:size-32" />
       <div
-        class="gradient-text text-center font-extrabold tracking-tighter text-6xl md:text-8xl"
+        class="gradient-text text-center font-extrabold tracking-tighter text-4xl md:text-6xl lg:text-8xl"
       >
-        Build fast
-        <br /> websites,
-        <br /> faster.
+        {t('hero.title')}
+      </div>
+      <div
+        class="text-center text-white font-medium text-lg md:text-xl lg:text-2xl max-w-lg"
+      >
+        {t('hero.subtitle')}<br />
+        <span class="text-blue-400">{t('hero.cybersecurity')}</span> {t('hero.with')}<br />
+        <span class="text-purple-400">{t('hero.ai')}</span>
       </div>
     </h2>
+    
+    <!-- Floating Learning Image -->
     <div
-      id="astronaut"
+      id="floating-image"
       class="w-2/3 max-w-3xl self-start sm:w-10/12 sm:self-auto sm:justify-self-start"
     >
       <Image
         class="h-full w-full object-cover"
-        src={astronautImage}
+        src={learnFloatingImage}
         widths={widths}
         sizes={sizes}
         loading="eager"
-        alt="A floating astronaut in a space suit"
+        alt="SOCIA learning platform illustration"
       />
     </div>
   </div>
 </section>
+
+<script>
+  // Enhanced Matrix rain effect with real IPs
+  function createMatrixRain() {
+    const container = document.getElementById('matrix-rain');
+    if (!container) return;
+
+    // Real IPv4 and IPv6 addresses from threat intelligence and legitimate sources
+    const realIPs = [
+      // IPv4 - Known threat IPs and legitimate servers
+      '192.168.1.1', '10.0.0.1', '172.16.0.1', '8.8.8.8', '1.1.1.1',
+      '185.220.100.240', '185.220.101.1', '185.220.102.4', '185.129.61.1',
+      '94.142.241.194', '46.166.139.111', '91.219.236.166', '178.17.174.14',
+      '185.165.29.78', '185.165.29.83', '198.96.155.3', '199.87.154.255',
+      '104.244.72.7', '104.244.73.126', '104.244.74.57', '104.244.75.225',
+      '23.129.64.188', '23.129.64.191', '45.79.85.112', '45.79.85.227',
+      '185.220.100.241', '185.220.100.242', '185.220.100.243', '185.220.100.244',
+      '185.220.101.2', '185.220.101.3', '185.220.101.4', '185.220.101.5',
+      '77.247.181.163', '77.247.181.164', '77.247.181.165', '162.247.74.74',
+      '192.42.116.16', '199.58.81.140', '162.247.74.27', '192.42.116.17',
+      '134.195.196.26', '134.195.196.27', '134.195.196.28', '45.33.70.146',
+      '74.82.47.2', '74.82.47.3', '144.217.7.124', '144.217.7.125',
+      
+      // IPv6 addresses
+      '2001:db8::1', '2001:4860:4860::8888', '2606:4700:4700::1111',
+      '2a01:4f8:161:9402::2', '2001:67c:2e8:22::c100:68b', '2a03:2267:200::1',
+      '2001:ba8:1f1:f271::2', '2001:ba8:1f1:f0c9::2', '2001:ba8:1f1:f025::2',
+      '2a01:4f9:2a:1919::2', '2a01:4f9:2a:1bee::2', '2a01:4f9:2a:24b8::2',
+      '2a01:4f8:190:514a::2', '2a01:4f8:190:83c7::2', '2a01:4f8:190:926e::2',
+      '2001:470:70:467::2', '2001:470:1:117::2', '2001:470:26:307::2',
+      '2605:6400:10:593::2', '2605:6400:20:48a::2', '2605:6400:30:f2b::2',
+      '2a00:1450:4014:80c::200e', '2a00:1450:4014:80d::200e', '2606:2800:220:1:248:1893:25c8:1946',
+      '2001:41d0:8:e8ad::1', '2001:41d0:8:ccd6::1', '2001:41d0:8:7a9a::1',
+      '2a03:b0c0:3:d0::1af1:1', '2a03:b0c0:3:d0::1af2:1', '2400:6180:0:d0::af7:8001',
+      '2001:19f0:6c01:e76::1', '2001:19f0:5:5cc::1', '2001:19f0:7001:3259::1'
+    ];
+
+    const columnWidth = 20; // Increased width for IP addresses
+    const columns = Math.floor(window.innerWidth / columnWidth);
+    const streams = [];
+
+    class MatrixStream {
+      constructor(x) {
+        this.x = x;
+        this.y = -Math.random() * 100; // Start at random height above screen
+        this.speed = 1 + Math.random() * 3; // Variable speeds
+        this.length = 3 + Math.random() * 4; // Fewer IPs per column (3-6)
+        this.ips = [];
+        this.element = null;
+        this.active = false;
+        this.delay = Math.random() * 5000; // Random delay before starting
+        
+        this.init();
+      }
+
+      init() {
+        this.element = document.createElement('div');
+        this.element.className = 'matrix-column';
+        this.element.style.left = (this.x * columnWidth) + 'px';
+        this.element.style.animationDuration = (25 + Math.random() * 15) + 's'; // Slower for readability
+        this.element.style.animationDelay = (this.delay / 1000) + 's';
+        this.element.style.animation = 'matrix-fall linear infinite';
+        
+        // Generate IP string
+        for (let i = 0; i < this.length; i++) {
+          this.ips.push(realIPs[Math.floor(Math.random() * realIPs.length)]);
+        }
+        
+        this.updateDisplay();
+        container.appendChild(this.element);
+        
+        // Restart when animation completes
+        setTimeout(() => {
+          this.restart();
+        }, (25 + Math.random() * 15) * 1000 + this.delay);
+      }
+
+      updateDisplay() {
+        let html = '';
+        this.ips.forEach((ip, index) => {
+          const opacity = Math.max(0.1, 1 - (index / this.length));
+          const isBright = index < 2; // First two IPs are brighter
+          const isIPv6 = ip.includes(':');
+          html += `<div class="matrix-ip ${isBright ? 'bright' : ''} ${isIPv6 ? 'ipv6' : 'ipv4'}" style="opacity: ${opacity}">${ip}</div>`;
+        });
+        this.element.innerHTML = html;
+      }
+
+      restart() {
+        if (this.element && this.element.parentNode) {
+          this.element.parentNode.removeChild(this.element);
+        }
+        
+        // Reset properties
+        this.y = -Math.random() * 100;
+        this.speed = 1 + Math.random() * 3;
+        this.length = 3 + Math.random() * 4;
+        this.delay = Math.random() * 3000;
+        this.ips = [];
+        
+        // Generate new IPs
+        for (let i = 0; i < this.length; i++) {
+          this.ips.push(realIPs[Math.floor(Math.random() * realIPs.length)]);
+        }
+        
+        this.init();
+      }
+    }
+
+    // Create streams
+    for (let i = 0; i < columns; i++) {
+      // Only create streams for some columns (not all) for subtlety
+      if (Math.random() > 0.7) {
+        streams.push(new MatrixStream(i));
+      }
+    }
+
+    // Periodically add new streams to empty columns
+    setInterval(() => {
+      for (let i = 0; i < columns; i++) {
+        const hasStream = streams.some(stream => stream.x === i);
+        if (!hasStream && Math.random() > 0.95) {
+          streams.push(new MatrixStream(i));
+        }
+      }
+    }, 2000);
+  }
+
+  // Start matrix rain when page loads
+  if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', createMatrixRain);
+    
+    // Restart on resize to adjust columns
+    window.addEventListener('resize', () => {
+      const container = document.getElementById('matrix-rain');
+      if (container) {
+        container.innerHTML = '';
+        setTimeout(createMatrixRain, 100);
+      }
+    });
+  }
+</script>
 
 <noscript>
   <style>
@@ -58,23 +217,76 @@ const sizes = "(min-width: 640px) 42vw, 67vw";
     0% {
       transform: translate3d(0, 0, 0);
     }
-
     100% {
-      transform: translate3d(0, 30px, 0);
+      transform: translate3d(0, 20px, 0);
     }
   }
 
-  #astronaut {
-    animation: float linear 2.5s infinite alternate;
+  #floating-image {
+    animation: float linear 3s infinite alternate;
+  }
+
+  /* Matrix rain styles */
+  .matrix-column {
+    position: absolute;
+    top: -100vh;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: rgba(0, 255, 0, 0.2);
+    white-space: nowrap;
+    user-select: none;
+    pointer-events: none;
+    line-height: 1.8;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    letter-spacing: 0.05em;
+    transform: rotate(180deg);
+  }
+
+  .matrix-ip {
+    display: block;
+    opacity: 1;
+    transition: opacity 0.5s ease-out;
+    margin-bottom: 8px;
+    font-weight: 400;
+  }
+
+  .matrix-ip.bright {
+    color: rgba(0, 255, 0, 0.4);
+    text-shadow: 0 0 3px rgba(0, 255, 0, 0.3);
+    font-weight: 500;
+  }
+
+  .matrix-ip.ipv4 {
+    color: rgba(0, 255, 0, 0.25);
+  }
+
+  .matrix-ip.ipv6 {
+    color: rgba(0, 200, 255, 0.25);
+    font-size: 9px;
+  }
+
+  .matrix-ip.ipv6.bright {
+    color: rgba(0, 200, 255, 0.4);
+    text-shadow: 0 0 3px rgba(0, 200, 255, 0.3);
+  }
+
+  @keyframes matrix-fall {
+    from {
+      transform: translateY(-100vh);
+    }
+    to {
+      transform: translateY(100vh);
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    #astronaut {
+    #floating-image {
       @apply animate-none;
     }
 
-    :global(#starfield) {
-      @apply hidden;
+    .matrix-column {
+      display: none;
     }
 
     #splash-bg-fallback {

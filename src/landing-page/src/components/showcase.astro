@@ -1,31 +1,51 @@
 ---
-import { getCollection } from "astro:content";
 import ContentSection from "~/components/content-section.astro";
 import ShowcaseCard from "~/components/showcase-card.astro";
+import rafaelAlbertiLogo from "~/assets/Sello-Rafael-Alberti-Primario.svg";
+import rafaelAlbertiWhiteLogo from "~/assets/sello-safael-slberti-imago-blanco.svg";
+import cifpCuencaLogo from "~/assets/logo-cifp-cuenca.png";
+import aktiosLogo from "~/assets/atkios.svg";
+import aktiosWhiteLogo from "~/assets/atkios-white.svg";
+import { useTranslations, languages } from "~/i18n";
 
-const featuredSites = await getCollection(
-  "showcase",
-  ({ data }) => "featured" in data,
-);
-const orderedSites = featuredSites.sort(
-  (a, b) => a.data.featured! - b.data.featured!,
-);
+export interface Props {
+  lang: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
+
+const collaborators = [
+  {
+    data: {
+      title: "IES Rafael Alberti",
+      url: "https://iesrafaelalberti.es",
+      image: rafaelAlbertiLogo,
+      imageWhite: rafaelAlbertiWhiteLogo,
+    }
+  },
+  {
+    data: {
+      title: "CIFP Nº1 - Cuenca", 
+      url: "https://www.cifpcuenca.es",
+      image: cifpCuencaLogo,
+    }
+  },
+  {
+    data: {
+      title: "Aktios Security Services",
+      url: "https://www.aktios.com",
+      image: aktiosLogo,
+      imageWhite: aktiosWhiteLogo,
+    }
+  }
+];
 ---
 
-<ContentSection title="Showcase" id="showcase">
-  <Fragment slot="lead">
-    Astro is <span class="text-primary">versatile</span>.{" "}
-    <span class="text-primary">Explore</span> what's possible and get{" "}
-    <span class="text-primary">inspired</span>.
-  </Fragment>
-  <div class="max-w-6xl space-y-2">
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {orderedSites.map((site) => <ShowcaseCard site={site} />)}
+<ContentSection title={t('collaborators.title')} id="showcase">
+  <div class="max-w-4xl space-y-2">
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+      {collaborators.map((collaborator) => <ShowcaseCard site={collaborator} lang={lang} />)}
     </div>
-    <p class="text-right text-sm">
-      <a class="text-primary" href="https://astro.build/showcase/">
-        ...and more &rarr;
-      </a>
-    </p>
   </div>
 </ContentSection>

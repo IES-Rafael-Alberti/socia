@@ -4,13 +4,12 @@ import Features from "~/components/features.astro";
 import Footer from "~/components/footer.astro";
 import Header from "~/components/header.astro";
 import Intro from "~/components/intro.astro";
-import LanguageRedirect from "~/components/language-redirect.astro";
 import Showcase from "~/components/showcase.astro";
 import Splash from "~/components/splash.astro";
 import "~/styles/index.css";
 import { useTranslations } from "~/i18n";
 
-const lang = 'es'
+const lang = 'en'
 const t = useTranslations(lang)
 
 const { generator, site } = Astro;
@@ -19,7 +18,7 @@ const description = t('site.description')
 ---
 
 <!doctype html>
-<html lang="es" class="h-full motion-safe:scroll-smooth" data-theme="dark">
+<html lang="en" class="h-full motion-safe:scroll-smooth" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
@@ -69,7 +68,6 @@ const description = t('site.description')
   <body
     class="h-full overflow-x-hidden bg-default text-default text-base selection:bg-secondary selection:text-white"
   >
-    <LanguageRedirect />
     <Header lang={lang} />
     <Splash lang={lang} />
     <div class="space-y-24 px-8 py-32">

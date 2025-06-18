@@ -1,89 +1,84 @@
 ---
-import CompatibilityList from "~/components/compatibility-list.astro";
 import ContentSection from "~/components/content-section.astro";
-import type { CompatibilityItem } from "~/types";
-
-const frameworks: Array<CompatibilityItem> = [
-  {
-    title: "React",
-    icon: "frameworks/react",
-    url: "https://reactjs.org/",
-  },
-  {
-    title: "Preact",
-    icon: "frameworks/preact",
-    url: "https://preactjs.com/",
-  },
-  {
-    title: "Svelte",
-    icon: "frameworks/svelte",
-    url: "https://svelte.dev/",
-  },
-  {
-    title: "Vue",
-    icon: "frameworks/vue",
-    url: "https://vuejs.org/",
-  },
-  {
-    title: "Solid",
-    icon: "frameworks/solid",
-    url: "https://www.solidjs.com/",
-  },
-  {
-    title: "Lit",
-    icon: "frameworks/lit",
-    url: "https://lit.dev/",
-  },
-];
-
-const platforms: Array<CompatibilityItem> = [
-  {
-    title: "Netlify",
-    icon: "platforms/netlify",
-    url: "https://www.netlify.com/",
-  },
-  {
-    title: "Vercel",
-    icon: "platforms/vercel",
-    url: "https://vercel.com/",
-  },
-  {
-    title: "Cloudflare",
-    icon: "fa-brands:cloudflare",
-    url: "https://pages.cloudflare.com/",
-  },
-  {
-    title: "Render",
-    icon: "platforms/render",
-    url: "https://render.com/",
-  },
-  {
-    title: "GitHub",
-    icon: "fa-brands:github",
-    url: "https://pages.github.com/",
-  },
-  {
-    title: "GitLab",
-    icon: "fa-brands:gitlab",
-    url: "https://docs.gitlab.com/ee/user/project/pages/",
-  },
-];
+import { Icon } from "astro-icon/components";
 ---
 
-<ContentSection title="Compatibility" id="compatibility">
+<ContentSection title="Objetivos del Proyecto" id="objectives">
   <Fragment slot="lead">
-    Astro <span class="text-primary">plays nice</span>. Bring your own UI{" "}
-    <span class="text-primary">framework</span>
-    and deploy to your favorite <span class="text-primary">platform</span>.
+    SOCIA busca <span class="text-primary">revolucionar</span> la formación en ciberseguridad mediante 
+    <span class="text-primary">tecnologías innovadoras</span> y <span class="text-primary">colaboración</span> 
+    entre centros educativos y empresas del sector.
   </Fragment>
-  <CompatibilityList
-    items={frameworks}
-    title="Frameworks"
-    url="https://docs.astro.build/core-concepts/framework-components/"
-  />
-  <CompatibilityList
-    items={platforms}
-    title="Platforms"
-    url="https://docs.astro.build/guides/deploy/"
-  />
+  
+  <div class="grid gap-8 md:grid-cols-2">
+    <div class="space-y-6">
+      <h3 class="text-xl font-bold text-primary mb-4">Objetivos Generales</h3>
+      
+      <div class="flex gap-4 items-start">
+        <div class="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+          <Icon name="mdi:shield-check" class="size-4 text-white" />
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">SOC Simulado</h4>
+          <p class="text-sm text-offset">Implementar un Centro de Operaciones de Seguridad simulado con IA para formación práctica</p>
+        </div>
+      </div>
+      
+      <div class="flex gap-4 items-start">
+        <div class="flex-shrink-0 w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center">
+          <Icon name="mdi:handshake" class="size-4 text-white" />
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">Alianzas Estratégicas</h4>
+          <p class="text-sm text-offset">Establecer colaboraciones con empresas para intercambio de buenas prácticas</p>
+        </div>
+      </div>
+      
+      <div class="flex gap-4 items-start">
+        <div class="flex-shrink-0 w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+          <Icon name="mdi:trophy" class="size-4 text-white" />
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">Aprendizaje Basado en Retos</h4>
+          <p class="text-sm text-offset">Diseñar metodología innovadora con competencias transversales</p>
+        </div>
+      </div>
+      
+      <div class="flex gap-4 items-start">
+        <div class="flex-shrink-0 w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
+          <Icon name="mdi:network" class="size-4 text-white" />
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">Ecosistema Colaborativo</h4>
+          <p class="text-sm text-offset">Fomentar colaboración sostenible entre centros y empresas</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="space-y-6">
+      <h3 class="text-xl font-bold text-primary mb-4">Beneficiarios</h3>
+      
+      <div class="space-y-4">
+        <div class="bg-gray-800 p-4 rounded-lg">
+          <h4 class="font-semibold mb-2 text-blue-400">Alumnado</h4>
+          <p class="text-sm text-gray-300">Habilidades prácticas, aprendizaje personalizado con IA, experiencia con tecnologías de vanguardia</p>
+        </div>
+        
+        <div class="bg-gray-800 p-4 rounded-lg">
+          <h4 class="font-semibold mb-2 text-purple-400">Profesorado</h4>
+          <p class="text-sm text-gray-300">Herramientas innovadoras, formación continua, colaboración con expertos del sector</p>
+        </div>
+        
+        <div class="bg-gray-800 p-4 rounded-lg">
+          <h4 class="font-semibold mb-2 text-green-400">Centros Educativos</h4>
+          <p class="text-sm text-gray-300">Posicionamiento como referentes, metodologías replicables, espacios formativos adaptados</p>
+        </div>
+        
+        <div class="bg-gray-800 p-4 rounded-lg">
+          <h4 class="font-semibold mb-2 text-orange-400">Empresas</h4>
+          <p class="text-sm text-gray-300">Formación de futuros profesionales, intercambio de conocimientos, colaboración estratégica</p>
+        </div>
+      </div>
+    </div>
+  </div>
 </ContentSection>
