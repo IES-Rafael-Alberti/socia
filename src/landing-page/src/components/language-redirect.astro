@@ -3,13 +3,17 @@
 ---
 
 <script is:inline>
+  // Get the base path (for GitHub Pages deployment)
+  const basePath = '/socia';
+  const currentPath = window.location.pathname;
+  
   // Only run on the default page (Spanish)
-  if (window.location.pathname === '/') {
+  if (currentPath === basePath + '/' || currentPath === basePath) {
     // Check if user has a language preference stored
     const storedLang = localStorage.getItem('preferred-language');
     
     if (storedLang === 'en') {
-      window.location.href = '/en/';
+      window.location.href = basePath + '/en/';
     } else if (!storedLang) {
       // Detect browser language
       const browserLang = navigator.language || navigator.languages[0];
@@ -17,7 +21,7 @@
       // If browser is set to English, redirect to English version
       if (browserLang.startsWith('en')) {
         localStorage.setItem('preferred-language', 'en');
-        window.location.href = '/en/';
+        window.location.href = basePath + '/en/';
       } else {
         // Default to Spanish
         localStorage.setItem('preferred-language', 'es');
@@ -26,9 +30,9 @@
   }
   
   // Store language preference when user manually navigates
-  if (window.location.pathname.startsWith('/en/')) {
+  if (currentPath.startsWith(basePath + '/en/')) {
     localStorage.setItem('preferred-language', 'en');
-  } else {
+  } else if (currentPath.startsWith(basePath + '/')) {
     localStorage.setItem('preferred-language', 'es');
   }
 </script>

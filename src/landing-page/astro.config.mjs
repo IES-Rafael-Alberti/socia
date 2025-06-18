@@ -4,7 +4,8 @@ import { defineConfig } from "astro/config";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://socia-platform.netlify.app/",
+  site: "https://ies-rafael-alberti.github.io",
+  base: "/socia",
   integrations: [tailwind(), icon()],
   i18n: {
     defaultLocale: "es",
