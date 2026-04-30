@@ -30,10 +30,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: |
-            src/landing-page/package-lock.json
-            src/docs/package-lock.json
+          # No `cache: npm` here: package-lock.json is .gitignored, so the
+          # cache key can't be computed. CI installs are fresh each run.
 
       # ------------- Landing page -------------
       - name: Install landing dependencies
@@ -54,15 +52,15 @@ jobs:
         run: npm run build
 
       # ------------- Assemble final site -------------
-      # Both projects use base: "/socia[/docs]", which Astro encodes as a
-      # subfolder inside dist/. We copy everything into _site/ so Pages
-      # serves /socia/* (landing) and /socia/docs/* (Starlight).
+      # Astro outputs each project's dist/ ready to be served as the
+      # landing root (/socia/) or docs root (/socia/docs/). We assemble
+      # them under _site/socia/ so they line up with GitHub Pages' path.
       - name: Assemble site
         run: |
           rm -rf _site
           mkdir -p _site/socia/docs
-          cp -R src/landing-page/dist/socia/. _site/socia/
-          cp -R src/docs/dist/socia/docs/. _site/socia/docs/
+          cp -R src/landing-page/dist/. _site/socia/
+          cp -R src/docs/dist/. _site/socia/docs/
           # Friendly redirect from / to /socia/
           cat > _site/index.html <<'HTML'
           <!doctype html>
