@@ -1,51 +1,37 @@
 ---
 title: SOCIA
-description: Plataforma de entrenamiento en ciberseguridad con Inteligencia Artificial
+description: Documentación oficial de SOCIA — entrenamiento de SOC con IA. IES Rafael Alberti, CIFP N.º 1 Cuenca y Aktios.
 template: splash
 hero:
-  tagline: Plataforma para el entrenamiento de gestión de incidentes de ciberseguridad tutorizada con Inteligencia Artificial
+  title: SOCIA
+  tagline: Entrenamiento de SOC con IA. Un proyecto de IES Rafael Alberti, CIFP N.º 1 Cuenca y Aktios.
   image:
-    file: ../../assets/socia-hero.webp
+    file: ../../assets/socia-logo.svg
   actions:
-    - text: Comenzar
-      link: /intro/what-is-socia/
-      icon: right-arrow
+    - text: Ir a la web del proyecto
+      link: https://ies-rafael-alberti.github.io/socia/
+      icon: external
       variant: primary
-    - text: Ver en GitHub
+    - text: GitHub
       link: https://github.com/IES-Rafael-Alberti/socia
       icon: external
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-## ¿Qué es SOCIA?
+<Aside type="caution" title="Documentación en construcción">
+Estamos redactando la documentación oficial. Mientras tanto, las páginas que aparecen en el menú están vacías a propósito. Si quieres entender qué es SOCIA, visita la **[web del proyecto](https://ies-rafael-alberti.github.io/socia/)**.
+</Aside>
 
-SOCIA es una plataforma educativa innovadora que simula un **Centro de Operaciones de Seguridad (SOC)** en tiempo real, integrando tecnologías de **Inteligencia Artificial** para ofrecer una formación única en la gestión de incidentes de ciberseguridad.
+## ¿Qué encontrarás aquí cuando esté lista?
 
-## Características principales
+- **Cómo instalar la plataforma** en otro centro educativo.
+- **Componentes de IA** — guías de MENTORA, SOCIA y el panel del docente.
+- **Referentes del proyecto** — Universidad de Murcia y Tknika.
+- **Glosario** y **arquitectura** de alto nivel.
 
-<CardGrid stagger>
-	<Card title="Simulación SOC en tiempo real" icon="shield">
-		Entrenamiento práctico en un Centro de Operaciones de Seguridad simulado que replica escenarios reales de ciberseguridad.
-	</Card>
-	<Card title="Tutorización con IA" icon="rocket">
-		Asistente de Inteligencia Artificial que adapta su nivel de ayuda según tu histórico de respuestas.
-	</Card>
-	<Card title="Aprendizaje basado en retos" icon="trophy">
-		Metodología que permite aplicar conocimientos de manera práctica mediante la resolución de incidentes reales.
-	</Card>
-	<Card title="Código abierto" icon="open-book">
-		Plataforma open source que permite la replicación y adaptación en otros centros educativos y empresas.
-	</Card>
-</CardGrid>
+---
 
-## Colaboradores del proyecto
-
-Este proyecto es el resultado de la colaboración entre:
-
-- **IES Rafael Alberti** (Coordinador)
-- **CIFP Nº1 - Cuenca**
-- **Aktios Security Services, s.l.**
-
-Financiado por el **Ministerio de Educación y Formación Profesional**.
+> Un proyecto de **IES Rafael Alberti** (Cádiz), **CIFP N.º 1 Cuenca** y **Aktios Security Services**.
+> Innovación en Formación Profesional — Convocatoria 2023 del Ministerio de Educación, Formación Profesional y Deportes.

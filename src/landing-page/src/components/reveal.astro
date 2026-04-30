@@ -1,0 +1,79 @@
+---
+/*
+  <Reveal>: opt-in scroll-reveal wrapper.
+  Applies a soft fade + upward slide when the element enters the viewport,
+  Apple-style. Uses IntersectionObserver and respects prefers-reduced-motion.
+
+  Props
+    delay   – ms before the animation kicks in (used to stagger siblings)
+    offset  – initial Y offset in px (default 24)
+*/
+interface Props {
+  delay?: number;
+  offset?: number;
+  class?: string;
+  as?: string;
+}
+
+const { delay = 0, offset = 24, class: cls = '', as = 'div' } = Astro.props;
+const Tag = as as any;
+---
+
+<Tag
+  class:list={["reveal", cls]}
+  data-delay={delay}
+  style={`--reveal-offset: ${offset}px`}
+>
+  <slot />
+</Tag>
+
+<style is:global>
+  .reveal {
+    opacity: 0;
+    transform: translate3d(0, var(--reveal-offset, 24px), 0);
+    transition:
+      opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 800ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+  }
+  .reveal.is-in {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    if (typeof window === 'undefined') return;
+    if (!('IntersectionObserver' in window)) {
+      // Fallback: just show everything.
+      document.querySelectorAll('.reveal').forEach((el) => el.classList.add('is-in'));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const el = entry.target;
+            const delay = Number(el.getAttribute('data-delay') || 0);
+            window.setTimeout(() => el.classList.add('is-in'), delay);
+            io.unobserve(el);
+          }
+        }
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+    );
+    function arm() {
+      document.querySelectorAll('.reveal:not(.is-in)').forEach((el) => io.observe(el));
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', arm);
+    } else {
+      arm();
+    }
+  })();
+</script>

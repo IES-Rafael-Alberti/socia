@@ -1,8 +1,6 @@
 ---
-import { Icon } from "astro-icon/components";
 import { Image } from "astro:assets";
-import ministerioLogo from "~/assets/ministerio.svg";
-import type { FooterLink } from "~/types";
+import socialLogo from "~/assets/socia-logo.svg";
 import { useTranslations, languages } from "~/i18n";
 
 export interface Props {
@@ -11,59 +9,27 @@ export interface Props {
 
 const { lang = 'es' } = Astro.props;
 const t = useTranslations(lang);
-
-const links: Array<FooterLink> = [
-  {
-    url: "https://github.com/socia-platform",
-    description: "SOCIA en GitHub",
-    icon: "fa-brands:github-alt",
-  },
-  {
-    url: "https://iesrafaelalberti.es/",
-    description: "IES Rafael Alberti",
-    icon: "mdi:school",
-  },
-  {
-    url: "https://cifpcuenca.es/",
-    description: "CIFP Nº1 - Cuenca",
-    icon: "mdi:school",
-  },
-  {
-    url: "https://aktios.com/",
-    description: "Aktios Security Services",
-    icon: "mdi:shield-account",
-  },
-];
 ---
 
-<footer class="relative bg-gray-900 py-16">
-  <div class="container mx-auto px-8 text-center">
-  
+<footer class="relative overflow-hidden bg-primary text-white">
+  <div class="mx-auto flex max-w-7xl flex-col items-center gap-6 px-6 py-20 text-center">
+    <div class="grid size-16 place-items-center rounded-full bg-white/15 p-2 ring-1 ring-white/20">
+      <Image src={socialLogo} alt="" class="h-full w-full object-contain" widths={[120, 240]} sizes="48px" />
+    </div>
+    <div>
+      <p class="script text-3xl text-white">{t('footer.tag')}</p>
+      <p class="font-display mt-1 text-sm font-bold uppercase tracking-[0.14em] text-white">
+        {t('footer.tag2')}
+      </p>
+    </div>
+    <p class="max-w-xl text-sm leading-relaxed text-white/85">
+      {t('footer.legal')}
+    </p>
+  </div>
 
-      <div class="mb-4">
-        <p class="text-gray-400 text-sm mb-4">
-          {t('footer.funded')}
-        </p>
-        <div class="flex justify-center mb-4">
-          <Image
-            src={ministerioLogo}
-            alt="Ministerio de Educación y Formación Profesional"
-            class="h-16 w-auto"
-            widths={[200, 400]}
-            sizes="200px"
-          />
-        </div>
-        <p class="text-gray-400 text-sm">
-          {t('footer.project')}
-        </p>
-      </div>
-      
-      <div class="text-gray-500 text-sm">
-        <p>&copy; 2025 {t('footer.rights')}</p>
-        <p class="mt-1">
-          {t('footer.initiative')}
-        </p>
-      </div>
+  <div class="border-t border-white/20">
+    <div class="mx-auto flex max-w-7xl items-center justify-center px-6 py-5 text-center text-xs text-white/80">
+      <p>© {t('footer.year')} IES Rafael Alberti · CIFP N.º 1 Cuenca · Aktios Security Services</p>
     </div>
   </div>
 </footer>

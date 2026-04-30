@@ -1,0 +1,97 @@
+---
+import { Icon } from "astro-icon/components";
+import SociaPopup from "~/components/mocks/socia-popup.astro";
+import HintBulb from "~/components/mocks/hint-bulb.astro";
+import GitHubCorner from "~/components/github-corner.astro";
+import Reveal from "~/components/reveal.astro";
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
+
+const docsHref = lang === 'en' ? 'https://ies-rafael-alberti.github.io/socia/docs/en/' : 'https://ies-rafael-alberti.github.io/socia/docs/';
+---
+
+<section id="hero" class="relative overflow-hidden bg-white">
+  <!-- Diagonal red panel — the dípticos motif -->
+  <div class="absolute inset-y-0 right-0 hidden w-[42%] lg:block" aria-hidden="true">
+    <div class="diagonal-red h-full w-full"></div>
+  </div>
+  {/* Folded-paper GitHub corner anchored to the red panel of the hero.
+       Only shown on lg+ where the red panel exists; on mobile/tablet we
+       expose GitHub as an icon button in the header instead. */}
+  <GitHubCorner class="absolute right-0 top-0 z-10 hidden lg:block" />
+
+
+  <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-6 py-14 sm:py-20 lg:grid-cols-12 lg:gap-10 lg:py-24">
+    <Reveal class="lg:col-span-7" offset={32}>
+      <h1 class="hero-title">
+        <span class="block text-ink-800">{t('hero.title.line1')}</span>
+        <span class="block text-primary">{t('hero.title.line2')}</span>
+        <span class="block text-ink-800">{t('hero.title.line3')}</span>
+      </h1>
+
+      <p class="script mt-6 text-2xl text-ink-700">{t('hero.script')}</p>
+      <p class="font-display mt-1 text-sm font-bold uppercase tracking-[0.05em] text-ink-800">
+        {t('hero.school')}
+      </p>
+
+      <p class="mt-8 max-w-xl text-base leading-relaxed text-ink-600 sm:text-lg">
+        {t('hero.lead')}
+      </p>
+
+      <div class="mt-8 flex flex-wrap gap-4">
+        <a class="btn-primary" href={docsHref}>
+          <Icon name="mdi:book-open-variant" class="size-5" />
+          {t('hero.cta.docs')}
+        </a>
+      </div>
+
+    </Reveal>
+
+    {/* Hide the popup mock on mobile/tablet — it appears again in the
+        SOCIA card down in the Infraestructura section, no need to repeat. */}
+    <Reveal class="relative hidden lg:col-span-5 lg:block" delay={150}>
+      <!-- Real-shape mock of the SOCIA student popup mid-case.
+           Lifted from referencias/entrypoints/socia/popup/App.tsx, so what
+           a visitor sees here is what they'll actually load in their
+           browser. -->
+      <div class="relative mx-auto max-w-sm lg:ml-12 xl:ml-20">
+        <SociaPopup />
+        {/*
+          Floating hint bulb — the same control the alumnado sees on every
+          page during a case. It cycles automatically: idle pulse → click
+          flash → hint bubble fades in → bubble fades out → repeat (7s).
+          Positioned bottom-right of the popup, matching the real layout.
+        */}
+        <div class="absolute -bottom-4 -right-4 hidden sm:block">
+          <HintBulb />
+        </div>
+      </div>
+    </Reveal>
+  </div>
+</section>
+
+<style>
+  .hero-title {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.015em;
+    line-height: 0.95;
+    font-size: 3rem;
+  }
+  @media (min-width: 640px) {
+    .hero-title { font-size: 4.25rem; }
+  }
+  @media (min-width: 1024px) {
+    .hero-title { font-size: 5rem; }
+  }
+  @media (min-width: 1280px) {
+    .hero-title { font-size: 6rem; }
+  }
+</style>

@@ -1,0 +1,524 @@
+---
+import { Image } from "astro:assets";
+import socialLogo from "~/assets/socia-logo.svg";
+/*
+  Mock of the SOCIA Server live dashboard ("Seguimiento" page).
+  Tokens lifted 1:1 from referencias/socia-server/panel/src/styles/{app,pages}.css:
+    · Sidebar 248px wide, bg #0f1116, border-right #1d2028
+    · Brand: 40×40 white square with the actual SOCIA logo inside
+    · Active nav has rgba red 12% bg + 3px red bar on the left edge
+    · Live pulse is GREEN (#34d171), not red
+    · Page title in Caveat Brush 84px red, rotated -3deg (the script-accent)
+    · Live-hero gradient diagonal #0f1116 → #1d1018 → #2d0f1d, with a strong
+      red radial glow top-right (380×380 at 50% alpha)
+    · Stats values: 56px Montserrat 800 with /total in red accent
+    · Live-grid: 2-column, rows with light hover/state colour
+*/
+---
+
+<div class="server-mock">
+  {/* Sidebar */}
+  <aside class="server-mock__sidebar">
+    <div class="server-mock__brand">
+      <div class="server-mock__brand-logo">
+        <Image src={socialLogo} alt="SOCIA" class="server-mock__brand-logo-img" widths={[80, 160]} sizes="40px" />
+      </div>
+      <div>
+        <div class="server-mock__brand-name">SOCIA</div>
+        <div class="server-mock__brand-sub">Server</div>
+      </div>
+    </div>
+
+    <nav class="server-mock__nav">
+      <button class="server-mock__nav-item">
+        <span class="server-mock__nav-ico">⌂</span><span>Inicio</span>
+      </button>
+      <button class="server-mock__nav-item">
+        <span class="server-mock__nav-ico">◌</span><span>Clases</span>
+        <span class="server-mock__badge server-mock__badge--neutral">2</span>
+      </button>
+      <button class="server-mock__nav-item">
+        <span class="server-mock__nav-ico">≡</span><span>Casos</span>
+        <span class="server-mock__badge server-mock__badge--neutral">8</span>
+      </button>
+      <button class="server-mock__nav-item is-active">
+        <span class="server-mock__nav-ico">●</span><span>Seguimiento</span>
+        <span class="server-mock__pulse"></span>
+      </button>
+      <button class="server-mock__nav-item">
+        <span class="server-mock__nav-ico">★</span><span>Evaluaciones</span>
+        <span class="server-mock__badge server-mock__badge--neutral">12</span>
+      </button>
+    </nav>
+
+    <div class="server-mock__partners">
+      <div class="server-mock__partners-eyebrow">Un proyecto de</div>
+      <div>IES Rafael Alberti</div>
+      <div>CIFP Cuenca Nº1</div>
+      <div>Aktios</div>
+    </div>
+  </aside>
+
+  {/* Main content */}
+  <div class="server-mock__main">
+    <div class="server-mock__content">
+      <div class="server-mock__page-hero">
+        <h1>Seguimiento</h1>
+        <button class="server-mock__cta">▶ Lanzar caso</button>
+      </div>
+
+      {/* Live hero — diagonal dark gradient + corner red glow */}
+      <div class="server-mock__live-hero">
+        <div class="server-mock__live-class">2.º DAW · Mañana · 18 conectados</div>
+        <h2 class="server-mock__live-title">Fuerza bruta SSH desde 185.220.101.4</h2>
+        <div class="server-mock__live-stats">
+          <div>
+            <div class="server-mock__live-value">14<em>/18</em></div>
+            <div class="server-mock__live-label">Resolviendo</div>
+          </div>
+          <div>
+            <div class="server-mock__live-value" style="color:#5eea98">3</div>
+            <div class="server-mock__live-label">Cerrados</div>
+          </div>
+          <div>
+            <div class="server-mock__live-value" style="color:#f3a76a">1</div>
+            <div class="server-mock__live-label">Atascados</div>
+          </div>
+          <div>
+            <div class="server-mock__live-value">9</div>
+            <div class="server-mock__live-label">Pistas pedidas</div>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="server-mock__section-head">Progreso por estudiante</h3>
+
+      <div class="server-mock__rows">
+        {/* Row 1 — running */}
+        <div class="server-mock__row">
+          <div>
+            <h4 class="server-mock__name">Lucía Domínguez</h4>
+            <p class="server-mock__step-text"><strong>Paso 3</strong> de 5 · Inspeccionando Malcolm</p>
+            <div class="server-mock__track">
+              <span class="is-done"></span><span class="is-done"></span>
+              <span class="is-done"></span><span class="is-current"></span><span></span>
+            </div>
+          </div>
+          <div class="server-mock__row-meta">
+            <span class="server-mock__time">12:42</span>
+            <span class="server-mock__hints">💡 1 pista</span>
+          </div>
+        </div>
+
+        {/* Row 2 — finished */}
+        <div class="server-mock__row is-finished">
+          <div>
+            <h4 class="server-mock__name">Marcos Hernández</h4>
+            <p class="server-mock__step-text"><strong>Cerrado</strong> · 5 de 5</p>
+            <div class="server-mock__track">
+              <span class="is-done"></span><span class="is-done"></span>
+              <span class="is-done"></span><span class="is-done"></span><span class="is-done"></span>
+            </div>
+          </div>
+          <div class="server-mock__row-meta">
+            <span class="server-mock__time">09:14</span>
+            <span class="server-mock__hints">💡 0 pistas</span>
+          </div>
+        </div>
+
+        {/* Row 3 — stuck */}
+        <div class="server-mock__row is-stuck">
+          <div>
+            <h4 class="server-mock__name">Sara Quintero</h4>
+            <p class="server-mock__step-text"><strong>Atascada</strong> · sin avanzar 4 min</p>
+            <div class="server-mock__track">
+              <span class="is-done"></span><span class="is-current"></span>
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="server-mock__row-meta">
+            <span class="server-mock__time">13:08</span>
+            <span class="server-mock__hints">💡 4 pistas</span>
+          </div>
+        </div>
+
+        {/* Row 4 — running early */}
+        <div class="server-mock__row">
+          <div>
+            <h4 class="server-mock__name">Iván Cabrera</h4>
+            <p class="server-mock__step-text"><strong>Paso 2</strong> de 5 · Buscando IP en logs</p>
+            <div class="server-mock__track">
+              <span class="is-done"></span><span class="is-current"></span>
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="server-mock__row-meta">
+            <span class="server-mock__time">11:23</span>
+            <span class="server-mock__hints">💡 2 pistas</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .server-mock {
+    --s-accent: #e93456;
+    --s-accent-hover: #d42349;
+    --s-accent-tint: #fff1f4;
+    --s-ink-900: #0a0b0f;
+    --s-ink-800: #14161b;
+    --s-ink-700: #24272f;
+    --s-ink-500: #525866;
+    --s-ink-300: #a8aeb8;
+    --s-ink-200: #cfd3da;
+    --s-ink-100: #e6e8ec;
+    --s-ink-50: #f4f5f7;
+    --s-white: #ffffff;
+    --s-paper: #fafbfc;
+
+    /* Fixed reference width — the parent in landing scales the wrapper. */
+    width: 1100px;
+    height: 700px;
+    display: grid;
+    grid-template-columns: 248px 1fr;
+    background: var(--s-white);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(20, 22, 27, 0.18);
+    font-family: 'Montserrat', system-ui, sans-serif;
+    font-size: 14px;
+    color: var(--s-ink-800);
+  }
+
+  /* ─── Sidebar ─────────────────────────────────── */
+  .server-mock__sidebar {
+    background: #0f1116;
+    color: #e6e8ec;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #1d2028;
+  }
+
+  .server-mock__brand {
+    padding: 22px 22px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .server-mock__brand-logo {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--s-white);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .server-mock__brand-logo svg,
+  .server-mock__brand-logo .server-mock__brand-logo-img { width: 32px; height: 32px; object-fit: contain; }
+  .server-mock__brand-name {
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    font-size: 18px;
+    color: var(--s-white);
+    line-height: 1;
+  }
+  .server-mock__brand-sub {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    margin-top: 5px;
+    font-weight: 600;
+  }
+
+  .server-mock__nav {
+    display: flex; flex-direction: column;
+    padding: 14px 12px 4px; gap: 2px;
+  }
+  .server-mock__nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: rgba(255,255,255,0.78);
+    font-weight: 500; font-size: 14px;
+    border: none; background: transparent;
+    text-align: left; width: 100%;
+    font-family: inherit;
+    cursor: default;
+    position: relative;
+  }
+  .server-mock__nav-item.is-active {
+    background: rgba(233,52,86,0.12);
+    color: var(--s-white);
+  }
+  .server-mock__nav-item.is-active::before {
+    content: '';
+    position: absolute; left: -12px; top: 8px; bottom: 8px;
+    width: 3px; background: var(--s-accent);
+    border-radius: 0 3px 3px 0;
+  }
+  .server-mock__nav-ico {
+    width: 18px; flex-shrink: 0; text-align: center;
+    color: rgba(255,255,255,0.55);
+    font-size: 12px;
+  }
+  .server-mock__nav-item.is-active .server-mock__nav-ico { color: var(--s-accent); }
+  .server-mock__badge {
+    margin-left: auto;
+    font-size: 11px; font-weight: 700;
+    padding: 2px 7px; border-radius: 99px;
+  }
+  .server-mock__badge--neutral {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.7);
+  }
+  .server-mock__pulse {
+    margin-left: auto;
+    width: 8px; height: 8px;
+    border-radius: 99px; background: #34d171;
+    box-shadow: 0 0 0 4px rgba(52,209,113,0.2);
+  }
+
+  .server-mock__server-card {
+    margin: 14px 18px;
+    padding: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    font-size: 12px;
+  }
+  .server-mock__server-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 7px;
+  }
+  .server-mock__server-row:last-child { margin-bottom: 0; }
+  .server-mock__server-label {
+    color: rgba(255,255,255,0.5);
+    font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .server-mock__server-value {
+    color: var(--s-white);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+  }
+  .server-mock__server-status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-weight: 600; color: #5eea98;
+    font-size: 11px;
+  }
+  .server-mock__server-status::before {
+    content: ''; width: 7px; height: 7px;
+    border-radius: 99px; background: #34d171;
+  }
+
+  .server-mock__partners {
+    margin-top: auto;
+    padding: 14px 22px 16px;
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.88);
+    line-height: 1.6;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .server-mock__partners-eyebrow {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 6px;
+  }
+
+  /* ─── Main ────────────────────────────────────── */
+  .server-mock__main {
+    display: flex; flex-direction: column; min-width: 0;
+    background: var(--s-white);
+  }
+  .server-mock__topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 32px;
+    background: var(--s-white);
+    border-bottom: 1px solid var(--s-ink-100);
+  }
+  .server-mock__crumb {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--s-ink-400, #7a8090);
+    font-weight: 700;
+  }
+  .server-mock__crumb-sep { color: var(--s-ink-200); }
+
+  .server-mock__content { padding: 28px 36px 36px; }
+
+  .server-mock__page-hero {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 24px; margin-bottom: 24px;
+  }
+  .server-mock__page-hero h1 {
+    font-family: 'Caveat Brush', 'Kalam', cursive;
+    color: var(--s-accent);
+    font-size: 84px; font-weight: 400;
+    margin: 0;
+    line-height: 1;
+    display: inline-block;
+    transform: rotate(-3deg);
+    transform-origin: left center;
+  }
+  .server-mock__cta {
+    background: var(--s-accent);
+    color: var(--s-white);
+    border: 0;
+    padding: 14px 22px;
+    border-radius: 10px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800; font-size: 13px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: default;
+    box-shadow: 0 8px 22px rgba(233,52,86,0.35);
+  }
+
+  /* ─── Live hero ──────────────────────────────── */
+  .server-mock__live-hero {
+    background: linear-gradient(135deg, #0f1116 0%, #1d1018 60%, #2d0f1d 100%);
+    color: var(--s-white);
+    border-radius: 16px;
+    padding: 30px 36px;
+    margin-bottom: 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .server-mock__live-hero::after {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 380px; height: 380px;
+    background: radial-gradient(circle, rgba(233,52,86,0.5), transparent 70%);
+    pointer-events: none;
+  }
+  .server-mock__live-class {
+    position: relative;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 6px;
+  }
+  .server-mock__live-title {
+    position: relative;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0 0 22px;
+  }
+  .server-mock__live-stats {
+    position: relative;
+    display: flex; gap: 36px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .server-mock__live-value {
+    font-size: 50px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .server-mock__live-value em {
+    font-size: 22px;
+    font-style: normal;
+    color: var(--s-accent);
+    font-weight: 700;
+  }
+  .server-mock__live-label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    margin-top: 6px;
+    font-weight: 700;
+  }
+
+  /* ─── Section header + rows ──────────────────── */
+  .server-mock__section-head {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--s-ink-500);
+    margin: 0 0 14px;
+  }
+
+  .server-mock__rows {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .server-mock__row {
+    background: var(--s-white);
+    border: 1px solid var(--s-ink-100);
+    border-radius: 12px;
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: center;
+  }
+  .server-mock__row.is-stuck { border-color: #f3a76a; background: #fff9f1; }
+  .server-mock__row.is-finished { border-color: #b8e3c4; background: #f4faf5; }
+
+  .server-mock__name {
+    font-weight: 700; font-size: 16px;
+    margin: 0 0 3px;
+    letter-spacing: -0.01em;
+    color: var(--s-ink-800);
+  }
+  .server-mock__step-text {
+    font-size: 12px;
+    color: var(--s-ink-500);
+    margin: 0;
+    line-height: 1.4;
+  }
+  .server-mock__step-text strong { color: var(--s-ink-800); font-weight: 600; }
+
+  .server-mock__track {
+    display: flex; gap: 3px;
+    margin-top: 10px;
+  }
+  .server-mock__track > span {
+    flex: 1;
+    height: 6px;
+    border-radius: 99px;
+    background: var(--s-ink-100);
+    position: relative;
+    overflow: hidden;
+  }
+  .server-mock__track > span.is-done { background: var(--s-accent); }
+  .server-mock__track > span.is-current { background: var(--s-accent); position: relative; overflow: hidden; }
+  .server-mock__track > span.is-current::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+    animation: server-shimmer 1.4s infinite;
+  }
+  @keyframes server-shimmer {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(100%); }
+  }
+
+  .server-mock__row-meta {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    text-align: right;
+  }
+  .server-mock__time {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 16px; font-weight: 600;
+    color: var(--s-ink-800);
+    letter-spacing: 0.04em;
+  }
+  .server-mock__hints {
+    font-size: 11px;
+    color: var(--s-ink-500);
+  }
+</style>

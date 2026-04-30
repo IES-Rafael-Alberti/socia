@@ -1,0 +1,152 @@
+---
+/*
+  Floating hint bulb — the same lightbulb that appears on top of every page
+  while a SOCIA case is in progress. The student clicks it; a small bubble
+  pops up with the next hint from the LLM.
+  This component animates that interaction on a loop:
+    1) bulb sits idle, pulsing softly
+    2) "auto-click" — the bulb flashes
+    3) the hint bubble fades + slides in
+    4) bubble stays a few seconds
+    5) bubble fades out, cycle restarts
+
+  Pure CSS animation, no JS. The bulb is positioned absolutely by the parent
+  wrapper, so this component just paints itself in place.
+*/
+---
+
+<div class="bulb">
+  <button class="bulb__btn" type="button" aria-label="Pista">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 18h6m-5 3h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1.2 1.9.1.4.4.7.8.7h3c.4 0 .7-.3.8-.7.2-.7.6-1.4 1.2-1.9A6 6 0 0 0 12 3z"
+        stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+
+  <div class="bulb__bubble" role="status">
+    <p class="bulb__bubble-eyebrow">— Pista 3</p>
+    <p class="bulb__bubble-text">
+      El tráfico saliente es UDP, así que <strong>filtra por puerto en Malcolm</strong> antes de seguir.
+    </p>
+    <span class="bulb__bubble-tail" aria-hidden="true"></span>
+  </div>
+</div>
+
+<style>
+  .bulb {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    /* Animation cycle = 7s. Phases:
+        0–1s   idle pulse
+        1–1.4s click flash
+        1.4–4.5s bubble visible
+        4.5–7s  bubble fades out, cycle resets */
+  }
+
+  .bulb__btn {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    border: 2px solid #14161b;
+    background: #e93456;
+    color: #fff;
+    box-shadow:
+      0 0 0 1px rgba(20, 22, 27, 0.06),
+      0 10px 28px rgba(233, 52, 86, 0.45),
+      0 4px 10px rgba(20, 22, 27, 0.18);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    animation: bulb-cycle 7s ease-in-out infinite;
+  }
+  .bulb__btn::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 999px;
+    border: 2px solid rgba(233, 52, 86, 0.5);
+    animation: bulb-pulse 1.4s ease-out infinite;
+  }
+  .bulb__btn svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* Bulb breathing + click flash */
+  @keyframes bulb-cycle {
+    0%, 12%       { background: #e93456; transform: scale(1); }
+    14%           { background: #fff; color: #e93456; transform: scale(0.92); }
+    18%           { background: #e93456; color: #fff; transform: scale(1.06); }
+    24%, 100%     { background: #e93456; color: #fff; transform: scale(1); }
+  }
+
+  @keyframes bulb-pulse {
+    0%   { transform: scale(0.9); opacity: 0.7; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  /* Hint bubble */
+  .bulb__bubble {
+    position: absolute;
+    top: 50%;
+    right: calc(100% + 16px);
+    transform: translateY(-50%);
+    min-width: 240px;
+    max-width: 280px;
+    background: #fff;
+    color: #14161b;
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 16px 40px rgba(20, 22, 27, 0.18);
+    border: 1px solid #e6e8ec;
+    font-family: 'Montserrat', system-ui, sans-serif;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(8px, -50%);
+    animation: bubble-cycle 7s ease-in-out infinite;
+  }
+  .bulb__bubble-eyebrow {
+    margin: 0 0 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: #d42349;
+  }
+  .bulb__bubble-text {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #24272f;
+  }
+  .bulb__bubble-text strong { color: #14161b; }
+  .bulb__bubble-tail {
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 10px solid #fff;
+    filter: drop-shadow(1px 0 0 #e6e8ec);
+  }
+
+  @keyframes bubble-cycle {
+    0%, 18%   { opacity: 0; transform: translate(8px, -50%); }
+    24%       { opacity: 1; transform: translate(0, -50%); }
+    64%       { opacity: 1; transform: translate(0, -50%); }
+    72%, 100% { opacity: 0; transform: translate(8px, -50%); }
+  }
+
+  /* Respect prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    .bulb__btn { animation: none; }
+    .bulb__btn::before { animation: none; opacity: 0; }
+    .bulb__bubble { animation: none; opacity: 1; transform: translate(0, -50%); }
+  }
+</style>

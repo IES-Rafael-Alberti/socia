@@ -1,0 +1,33 @@
+---
+import Reveal from "~/components/reveal.astro";
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
+
+const lines = [
+  { lead: t('what.line1.lead'), accent: t('what.line1.accent'), tail: t('what.line1.tail') },
+  { lead: t('what.line2.lead'), accent: t('what.line2.accent'), tail: t('what.line2.tail') },
+  { lead: t('what.line3.lead'), accent: t('what.line3.accent'), tail: t('what.line3.tail') },
+];
+---
+
+<section id="what" class="bg-white py-28 sm:py-36">
+  <div class="mx-auto max-w-5xl px-6">
+    <div class="space-y-8 sm:space-y-10">
+      {
+        lines.map(({ lead, accent, tail }, i) => (
+          <Reveal delay={i * 180} offset={40}>
+            <p class="font-display text-3xl font-extrabold uppercase leading-[1.1] tracking-tight text-ink-800 sm:text-4xl lg:text-5xl">
+              {lead} <span class="text-primary">{accent}</span>{tail}
+            </p>
+          </Reveal>
+        ))
+      }
+    </div>
+  </div>
+</section>

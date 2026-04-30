@@ -1,0 +1,65 @@
+---
+import { Icon } from "astro-icon/components";
+import Reveal from "~/components/reveal.astro";
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
+
+const steps = [
+  { key: 's1', icon: 'mdi:docker' },
+  { key: 's2', icon: 'mdi:account-group' },
+  { key: 's3', icon: 'mdi:qrcode-scan' },
+  { key: 's4', icon: 'mdi:rocket-launch-outline' },
+  { key: 's5', icon: 'mdi:file-chart-outline' },
+];
+---
+
+<section id="flow" class="relative overflow-hidden bg-primary py-24 text-white sm:py-32">
+  <!-- Hint bulb — SOCIA's signature icon -->
+  <Icon
+    name="mdi:lightbulb-on"
+    class="pointer-events-none absolute right-6 top-6 size-10 text-white opacity-90 sm:right-10 sm:top-10 lg:size-14"
+    aria-hidden="true"
+  />
+
+
+  <div class="mx-auto max-w-7xl px-6">
+    <Reveal class="max-w-3xl">
+      <p class="text-xs font-bold uppercase tracking-[0.18em] text-white/80">— {t('flow.eyebrow')}</p>
+      <h2 class="headline mt-3 text-4xl text-white sm:text-5xl">
+        {t('flow.title')}
+      </h2>
+      <p class="mt-6 max-w-2xl text-lg leading-relaxed text-white/85">
+        {t('flow.lead')}
+      </p>
+    </Reveal>
+
+    <ol class="mt-16 grid gap-px overflow-hidden rounded-2xl bg-white/20 sm:grid-cols-2 lg:grid-cols-5">
+      {
+        steps.map(({ key, icon }, idx) => (
+          <Reveal as="li" delay={idx * 80} class="flex flex-col gap-3 bg-primary p-5">
+            <div class="flex items-center justify-between">
+              <span class="font-display text-3xl font-extrabold leading-none text-white/30">
+                0{idx + 1}
+              </span>
+              <span class="grid size-10 place-items-center rounded-full bg-white text-primary">
+                <Icon name={icon} class="size-5" />
+              </span>
+            </div>
+            <h3 class="font-display text-[15px] font-bold uppercase tracking-[0.02em] text-white">
+              {t(`flow.${key}.title` as any)}
+            </h3>
+            <p class="text-[13px] leading-snug text-white/85">
+              {t(`flow.${key}.body` as any)}
+            </p>
+          </Reveal>
+        ))
+      }
+    </ol>
+  </div>
+</section>

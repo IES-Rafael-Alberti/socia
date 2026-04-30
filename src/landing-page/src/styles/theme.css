@@ -1,19 +1,61 @@
+/* IES Rafael Alberti — brand tokens
+   Single rose-red on white. No second accent.
+   Source: design-system/colors_and_type.css */
+
+:root,
 [data-theme="light"] {
-  --color-primary: theme("colors.pink.500");
-  --color-secondary: theme("colors.indigo.500");
-  --color-text: theme("colors.gray.900");
-  --color-text-offset: theme("colors.gray.600");
-  --color-background: theme("colors.gray.50");
-  --color-background-offset: theme("colors.gray.100");
-  --color-border: theme("colors.gray.900" / 10%);
+  /* Primary — rose red */
+  --alberti-red-50:  #fff1f4;
+  --alberti-red-100: #ffd9e1;
+  --alberti-red-200: #ffb3c2;
+  --alberti-red-300: #ff8099;
+  --alberti-red-400: #f55573;
+  --alberti-red-500: #e93456;
+  --alberti-red-600: #d42349;
+  --alberti-red-700: #b01a3c;
+  --alberti-red-800: #861330;
+  --alberti-red-900: #5c0d22;
+
+  /* Cool neutrals */
+  --alberti-white:   #ffffff;
+  --alberti-paper:   #fafbfc;
+  --alberti-ink-50:  #f4f5f7;
+  --alberti-ink-100: #e6e8ec;
+  --alberti-ink-200: #cfd3da;
+  --alberti-ink-300: #a8aeb8;
+  --alberti-ink-400: #7a8090;
+  --alberti-ink-500: #525866;
+  --alberti-ink-600: #363b47;
+  --alberti-ink-700: #24272f;
+  --alberti-ink-800: #14161b;
+  --alberti-ink-900: #0a0b0f;
+
+  /* Semantic */
+  --color-primary: var(--alberti-red-500);
+  --color-secondary: var(--alberti-red-600);
+  --color-text: var(--alberti-ink-800);
+  --color-text-offset: var(--alberti-ink-500);
+  --color-background: var(--alberti-white);
+  --color-background-offset: var(--alberti-paper);
+  --color-border: var(--alberti-ink-100);
+
+  --rule-on-red: rgba(255, 255, 255, 0.55);
+  --focus-ring: 0 0 0 3px rgba(233, 52, 86, 0.35);
+  --shadow-sm: 0 1px 2px rgba(20, 22, 27, 0.06);
+  --shadow-md: 0 4px 12px rgba(20, 22, 27, 0.08);
+  --shadow-lg: 0 12px 32px rgba(20, 22, 27, 0.12);
 }
 
 [data-theme="dark"] {
-  --color-primary: theme("colors.pink.400");
-  --color-secondary: theme("colors.indigo.400");
-  --color-text: theme("colors.gray.50");
-  --color-text-offset: theme("colors.gray.400");
-  --color-background: theme("colors.gray.900");
-  --color-background-offset: theme("colors.gray.800");
-  --color-border: theme("colors.gray.50" / 10%);
+  /* Dark mode keeps the same red on a near-black ground.
+     The Alberti brand is print-first and white-dominant; dark mode
+     only inverts the surfaces so links, hover and focus states keep
+     the same anchor color. */
+  --color-primary: var(--alberti-red-400);
+  --color-secondary: var(--alberti-red-500);
+  --color-text: var(--alberti-ink-50);
+  --color-text-offset: var(--alberti-ink-300);
+  --color-background: var(--alberti-ink-900);
+  --color-background-offset: var(--alberti-ink-800);
+  --color-border: rgba(255, 255, 255, 0.1);
 }

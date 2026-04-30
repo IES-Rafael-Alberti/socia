@@ -1,0 +1,200 @@
+---
+/*
+  Mock of the MENTORA teacher extension popup mid-recording.
+  Tokens & DOM lifted 1:1 from referencias/entrypoints/mentora/popup/style.css
+  to match the real popup pixel-by-pixel:
+    · 8px rec dot pulsing next to the wordmark (not a chunky 10px ring)
+    · Live card with the same dark gradient + corner red glow as SOCIA
+    · Timer in Montserrat 800 at 40px
+    · 2-column stat grid (Acciones / Capturas)
+    · Pausar (secondary) + Detener (danger red) buttons
+*/
+---
+
+<div class="mock mentora-mock">
+  <header class="mock__header">
+    <h1>MENTORA</h1>
+    <span class="mock__rec-dot" aria-label="Grabando"></span>
+  </header>
+
+  <div class="mock__body">
+    {/* Live card — same pattern as SOCIA */}
+    <div class="mock__live">
+      <div class="mock__timer">04:18</div>
+      <div class="mock__live-stats">
+        <div class="mock__live-stat"><span class="mock__stat-value">62</span><span class="mock__stat-label">Acciones</span></div>
+        <div class="mock__live-stat"><span class="mock__stat-value">14</span><span class="mock__stat-label">Capturas</span></div>
+      </div>
+    </div>
+
+    <div>
+      <p class="mock__eyebrow">Grabando</p>
+      <h2 class="mock__title">La sesión se está capturando.</h2>
+    </div>
+
+    <div class="mock__controls">
+      <button class="mock__btn mock__btn--secondary" type="button">Pausar</button>
+      <button class="mock__btn mock__btn--danger" type="button">Detener</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .mentora-mock {
+    --m-accent: #e93456;
+    --m-danger: #b01a3c;
+    --m-ink-800: #14161b;
+    --m-ink-700: #24272f;
+    --m-ink-500: #525866;
+    --m-ink-200: #cfd3da;
+    --m-ink-100: #e6e8ec;
+    --m-ink-50: #f4f5f7;
+    --m-white: #ffffff;
+  }
+
+  .mock {
+    width: 100%;
+    max-width: 380px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--m-white);
+    box-shadow: 0 24px 60px rgba(20, 22, 27, 0.18);
+    font-family: 'Montserrat', system-ui, sans-serif;
+    color: var(--m-ink-800);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Header */
+  .mock__header {
+    background: var(--m-ink-800);
+    color: var(--m-white);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--m-ink-700);
+  }
+  .mock__header h1 {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    margin: 0;
+  }
+  .mock__rec-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-accent);
+    animation: mock-rec-pulse 1.4s infinite;
+  }
+  @keyframes mock-rec-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .mock__body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Live card — same gradient + glow as SOCIA */
+  .mock__live {
+    position: relative;
+    background: linear-gradient(140deg, var(--m-ink-800) 0%, #1d1018 100%);
+    color: var(--m-white);
+    border-radius: 12px;
+    padding: 18px 20px 16px;
+    overflow: hidden;
+  }
+  .mock__live::after {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(233,52,86,0.35), transparent 70%);
+    pointer-events: none;
+  }
+
+  .mock__timer {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .mock__live-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    position: relative;
+  }
+  .mock__live-stat { text-align: left; display: block; }
+  .mock__stat-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .mock__stat-label {
+    display: block;
+    margin-top: 6px;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: rgba(255,255,255,0.55);
+  }
+
+  .mock__eyebrow {
+    margin: 0 0 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--m-accent);
+  }
+  .mock__title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+  }
+
+  /* Controls — Pausar (secondary) + Detener (danger red) */
+  .mock__controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .mock__btn {
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: default;
+  }
+  .mock__btn--secondary {
+    background: var(--m-white);
+    color: var(--m-ink-700);
+    border-color: var(--m-ink-200);
+  }
+  .mock__btn--danger {
+    background: var(--m-danger);
+    color: var(--m-white);
+    border-color: var(--m-danger);
+  }
+</style>

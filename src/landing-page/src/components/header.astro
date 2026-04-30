@@ -1,7 +1,8 @@
 ---
 import { Icon } from "astro-icon/components";
-import ThemeSwitcher from "~/components/theme-switcher.astro";
+import { Image } from "astro:assets";
 import LanguagePicker from "~/components/language-picker.astro";
+import socialLogo from "~/assets/socia-logo.svg";
 import type { NavItem } from "~/types";
 import { useTranslations, languages } from "~/i18n";
 
@@ -13,28 +14,32 @@ const { lang = 'es' } = Astro.props;
 const t = useTranslations(lang);
 
 const navItems: Array<NavItem> = [
-  { title: t('nav.home'), url: "#intro" },
-  { title: t('nav.features'), url: "#features" },
-  { title: t('nav.collaborators'), url: "#showcase" },
+  { title: t('nav.what'), url: "#what" },
+  { title: t('nav.stack'), url: "#stack" },
+  { title: t('nav.classroom'), url: "#flow" },
+  { title: t('nav.partners'), url: "#partners" },
 ];
+
+const docsHref = lang === 'en' ? 'https://ies-rafael-alberti.github.io/socia/docs/en/' : 'https://ies-rafael-alberti.github.io/socia/docs/';
 ---
 
 <header
   id="page-header"
-  class="absolute bottom-0 z-20 flex w-full items-center justify-between border-b border-transparent px-8 py-4 text-white"
+  class="sticky top-0 z-30 w-full border-b border-default/40 bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/70"
 >
-  <a class="flex items-center gap-3 hover:!text-default" href="#">
-    <h1 class="sr-only">SOCIA</h1>
-    <span class="hidden font-bold text-xl sm:block">SOCIA</span>
-  </a>
-  <div>
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+    <a class="flex items-center gap-3 text-ink-800" href="#">
+      <Image src={socialLogo} alt="SOCIA" class="h-9 w-9" widths={[72, 144]} sizes="36px" />
+      <span class="font-display text-base font-extrabold uppercase tracking-[0.06em] text-ink-800">SOCIA</span>
+    </a>
+
     <div class="flex items-center gap-6">
-      <nav class="hidden sm:block">
-        <ul class="flex items-center gap-6">
+      <nav class="hidden md:block">
+        <ul class="flex items-center gap-7">
           {
             navItems.map(({ title, url }) => (
               <li>
-                <a class="text-sm" href={url}>
+                <a class="text-sm font-semibold text-ink-700 hover:text-primary" href={url}>
                   {title}
                 </a>
               </li>
@@ -42,44 +47,56 @@ const navItems: Array<NavItem> = [
           }
         </ul>
       </nav>
+      <a class="hidden md:inline-flex btn-primary" href={docsHref}>
+        {t('nav.docs')}
+      </a>
+      {/* GitHub icon — visible only on mobile/tablet, since on lg+ the
+          GitHub Corner already lives on the red hero panel. */}
+      <a
+        href="https://github.com/IES-Rafael-Alberti/socia"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex size-9 items-center justify-center rounded-full text-ink-700 hover:text-primary lg:hidden"
+        aria-label="Ver SOCIA en GitHub"
+      >
+        <Icon name="fa-brands:github-alt" class="size-6" />
+      </a>
       <LanguagePicker currentLang={lang} />
       <button
         id="open-nav-button"
         type="button"
-        class="btn sm:hidden"
+        class="md:hidden"
         aria-label="Navigation"
       >
-        <Icon name="mdi:menu" class="size-8" />
+        <Icon name="mdi:menu" class="size-7 text-ink-800" />
       </button>
-      <ThemeSwitcher />
     </div>
+
     <div id="menu-modal" class="modal hidden" aria-hidden="true">
-      <div class="fixed inset-0 bg-default px-8 py-4 text-default">
+      <div class="fixed inset-0 z-40 bg-white px-6 py-4 text-ink-800">
         <div class="space-y-4" role="dialog" aria-modal="true">
-          <header class="text-right">
-            <button
-              id="close-nav-button"
-              type="button"
-              class="btn"
-              aria-label="Close navigation"
-            >
-              <Icon name="mdi:close" class="size-8" />
+          <header class="flex items-center justify-between">
+            <span class="font-display text-xs font-bold uppercase tracking-[0.18em] text-primary">SOCIA</span>
+            <button id="close-nav-button" type="button" aria-label="Close navigation">
+              <Icon name="mdi:close" class="size-7" />
             </button>
           </header>
-          <div class="flex justify-center">
-            <Icon name="mdi:shield-check" class="size-16" />
-          </div>
           <nav>
             <ul class="flex flex-col">
               {
                 navItems.map(({ title, url }) => (
                   <li>
-                    <a class="block py-4 text-center text-xl" href={url}>
+                    <a class="block border-b border-ink-100 py-4 text-lg font-semibold uppercase tracking-wide" href={url}>
                       {title}
                     </a>
                   </li>
                 ))
               }
+              <li class="pt-4">
+                <a class="btn-primary w-full justify-center" href={docsHref}>
+                  {t('nav.docs')}
+                </a>
+              </li>
             </ul>
           </nav>
         </div>
@@ -93,55 +110,24 @@ const navItems: Array<NavItem> = [
   import invariant from "tiny-invariant";
 
   const menuModalId = "menu-modal";
-
-  const header = document.querySelector("#page-header") as HTMLElement;
-  const page = document.documentElement;
   const menu = document.querySelector(`#${menuModalId} ul`);
   const openNavButton = document.querySelector("#open-nav-button");
   const closeNavButton = document.querySelector("#close-nav-button");
 
-  invariant(header, "header should not be null");
   invariant(menu, "menu should not be null");
   invariant(openNavButton, "openNavButton should not be null");
   invariant(closeNavButton, "closeNavButton should not be null");
 
-  const openMenu = () => {
-    MicroModal.show(menuModalId, { disableScroll: true });
-  };
-
-  const closeMenu = () => {
-    MicroModal.close(menuModalId);
-  };
-
-  openNavButton.addEventListener("click", openMenu);
-  closeNavButton.addEventListener("click", closeMenu);
-
-  document.addEventListener("scroll", () => {
-    const d = page.clientHeight - page.scrollTop - header.offsetHeight;
-    header.classList.toggle("fixed-header", d < 0);
-  });
+  openNavButton.addEventListener("click", () => MicroModal.show(menuModalId, { disableScroll: true }));
+  closeNavButton.addEventListener("click", () => MicroModal.close(menuModalId));
 
   menu.addEventListener("click", (event) => {
     if ((event.target as HTMLElement).tagName === "A") {
-      closeMenu();
+      MicroModal.close(menuModalId);
     }
   });
 </script>
 
-<noscript>
-  <style>
-    #open-nav-button {
-      display: none;
-    }
-  </style>
-</noscript>
-
 <style>
-  .fixed-header {
-    @apply fixed bottom-auto top-0;
-    @apply border-default bg-default text-default;
-  }
-  .modal.is-open {
-    @apply block;
-  }
+  .modal.is-open { display: block; }
 </style>

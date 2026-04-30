@@ -1,12 +1,13 @@
 ---
-import "@fontsource-variable/inter";
-import Features from "~/components/features.astro";
-import Footer from "~/components/footer.astro";
 import Header from "~/components/header.astro";
-import Intro from "~/components/intro.astro";
+import Hero from "~/components/hero.astro";
+import What from "~/components/what.astro";
+import Stack from "~/components/stack.astro";
+import Flow from "~/components/flow.astro";
+import Partners from "~/components/partners.astro";
+import Funding from "~/components/funding.astro";
+import Footer from "~/components/footer.astro";
 import LanguageRedirect from "~/components/language-redirect.astro";
-import Showcase from "~/components/showcase.astro";
-import Splash from "~/components/splash.astro";
 import "~/styles/index.css";
 import { useTranslations } from "~/i18n";
 
@@ -19,7 +20,7 @@ const description = t('site.description')
 ---
 
 <!doctype html>
-<html lang="es" class="h-full motion-safe:scroll-smooth" data-theme="dark">
+<html lang="es" class="h-full motion-safe:scroll-smooth" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
@@ -45,38 +46,26 @@ const description = t('site.description')
     <!-- initialize theme -->
     <script is:inline>
       const themeSaved = localStorage.getItem("theme");
-
       if (themeSaved) {
         document.documentElement.dataset.theme = themeSaved;
       } else {
-        const prefersDark = window.matchMedia(
-          "(prefers-color-scheme: dark)",
-        ).matches;
-        document.documentElement.dataset.theme = prefersDark ? "dark" : "light";
+        document.documentElement.dataset.theme = "light";
       }
-
-      window
-        .matchMedia("(prefers-color-scheme: dark)")
-        .addEventListener("change", (event) => {
-          if (!localStorage.getItem("theme")) {
-            document.documentElement.dataset.theme = event.matches
-              ? "dark"
-              : "light";
-          }
-        });
     </script>
   </head>
   <body
-    class="h-full overflow-x-hidden bg-default text-default text-base selection:bg-secondary selection:text-white"
+    class="h-full overflow-x-hidden bg-default text-default selection:bg-primary selection:text-white"
   >
     <LanguageRedirect />
     <Header lang={lang} />
-    <Splash lang={lang} />
-    <div class="space-y-24 px-8 py-32">
-      <Intro lang={lang} />
-      <Features lang={lang} />
-      <Showcase lang={lang} />
-    </div>
+    <main>
+      <Hero lang={lang} />
+      <What lang={lang} />
+      <Stack lang={lang} />
+      <Flow lang={lang} />
+      <Partners lang={lang} />
+      <Funding lang={lang} />
+    </main>
     <Footer lang={lang} />
   </body>
 </html>

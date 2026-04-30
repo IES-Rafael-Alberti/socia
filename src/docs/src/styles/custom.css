@@ -1,303 +1,442 @@
-/* Custom styles for SOCIA documentation */
+/* SOCIA docs · IES Rafael Alberti theme.
+   Brand language: rose-red #E93456 anchor, Montserrat + Caveat Brush,
+   white-dominant surfaces, single-accent discipline.
+   Tokens lifted from the Alberti design system. */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Caveat+Brush&family=Kalam:wght@400;700&display=swap');
 
 :root {
-  --socia-primary: #3b82f6;
-  --socia-secondary: #8b5cf6;
-  --socia-accent: #06b6d4;
-  --socia-success: #10b981;
-  --socia-warning: #f59e0b;
-  --socia-error: #ef4444;
+  /* Alberti red scale */
+  --alberti-red-50:  #fff1f4;
+  --alberti-red-100: #ffd9e1;
+  --alberti-red-200: #ffb3c2;
+  --alberti-red-300: #ff8099;
+  --alberti-red-400: #f55573;
+  --alberti-red-500: #e93456;
+  --alberti-red-600: #d42349;
+  --alberti-red-700: #b01a3c;
+  --alberti-red-800: #861330;
+  --alberti-red-900: #5c0d22;
+
+  --alberti-paper:  #fafbfc;
+  --alberti-ink-50: #f4f5f7;
+  --alberti-ink-100:#e6e8ec;
+  --alberti-ink-200:#cfd3da;
+  --alberti-ink-300:#a8aeb8;
+  --alberti-ink-400:#7a8090;
+  --alberti-ink-500:#525866;
+  --alberti-ink-700:#24272f;
+  --alberti-ink-800:#14161b;
+  --alberti-ink-900:#0a0b0f;
 }
 
-/* Custom color scheme */
-[data-theme='light'] {
-  --sl-color-accent: var(--socia-primary);
-  --sl-color-accent-low: #dbeafe;
-  --sl-color-accent-high: #1d4ed8;
+/* Starlight token overrides — light theme */
+:root[data-theme='light'] {
+  --sl-color-accent-low:   var(--alberti-red-50);
+  --sl-color-accent:       var(--alberti-red-500);
+  --sl-color-accent-high:  var(--alberti-red-700);
+
+  --sl-color-white:        #ffffff;
+  --sl-color-gray-1:       var(--alberti-ink-100);
+  --sl-color-gray-2:       var(--alberti-ink-200);
+  --sl-color-gray-3:       var(--alberti-ink-300);
+  --sl-color-gray-4:       var(--alberti-ink-500);
+  --sl-color-gray-5:       var(--alberti-ink-700);
+  --sl-color-gray-6:       var(--alberti-ink-800);
+  --sl-color-black:        var(--alberti-ink-900);
+
+  --sl-color-bg:           #ffffff;
+  --sl-color-bg-nav:       var(--alberti-paper);
+  --sl-color-bg-sidebar:   var(--alberti-paper);
+  --sl-color-text:         var(--alberti-ink-800);
+  --sl-color-text-accent:  var(--alberti-red-600);
+  --sl-color-hairline:     var(--alberti-ink-100);
+  --sl-color-hairline-light: var(--alberti-ink-100);
+  --sl-color-hairline-shade: var(--alberti-ink-200);
 }
 
-[data-theme='dark'] {
-  --sl-color-accent: var(--socia-accent);
-  --sl-color-accent-low: #164e63;
-  --sl-color-accent-high: #67e8f9;
+/* Dark theme — same red anchor, deep neutrals */
+:root[data-theme='dark'] {
+  --sl-color-accent-low:   #2a0e16;
+  --sl-color-accent:       var(--alberti-red-400);
+  --sl-color-accent-high:  var(--alberti-red-200);
+
+  --sl-color-white:        #ffffff;
+  --sl-color-gray-1:       #d8dadf;
+  --sl-color-gray-2:       #b6b9c0;
+  --sl-color-gray-3:       #8b8f99;
+  --sl-color-gray-4:       #5a5e6a;
+  --sl-color-gray-5:       #2c2f37;
+  --sl-color-gray-6:       #20232a;
+  --sl-color-black:        #0a0b0f;
+
+  --sl-color-bg:           var(--alberti-ink-900);
+  --sl-color-bg-nav:       var(--alberti-ink-800);
+  --sl-color-bg-sidebar:   var(--alberti-ink-800);
+  --sl-color-text:         #f4f5f7;
+  --sl-color-text-accent:  var(--alberti-red-300);
+  --sl-color-hairline:     rgba(255, 255, 255, 0.08);
+  --sl-color-hairline-light: rgba(255, 255, 255, 0.08);
+  --sl-color-hairline-shade: rgba(255, 255, 255, 0.14);
 }
 
-/* Hero section customization */
-.hero {
-  background: linear-gradient(135deg, var(--socia-primary) 0%, var(--socia-secondary) 100%);
+/* Typography */
+:root {
+  --sl-font: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+  --sl-font-system: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* Custom cards for features */
-.feature-card {
-  border: 1px solid var(--sl-color-gray-5);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  background: var(--sl-color-bg-nav);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+body, .sl-markdown-content, .site-title {
+  font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
 }
 
-.feature-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-/* Code block enhancements */
-pre {
-  border-radius: 0.5rem;
-  border: 1px solid var(--sl-color-gray-5);
-}
-
-/* Custom badges */
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 0.25rem;
+.site-title {
+  font-weight: 800 !important;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.badge.critical {
-  background-color: var(--socia-error);
-  color: white;
+/* Headings get the brand discipline: H1 ink, H2 red, both uppercase-leaning */
+.sl-markdown-content h1 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-size: 2.5rem;
+}
+.sl-markdown-content h2 {
+  font-weight: 700;
+  color: var(--sl-color-text-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 1.4rem;
+  border-top: 1px solid var(--sl-color-hairline);
+  padding-top: 1.5rem;
+  margin-top: 2.5rem;
+}
+.sl-markdown-content h3 {
+  font-weight: 700;
+  color: var(--sl-color-text-accent);
+  font-size: 1.15rem;
+  margin-top: 2rem;
 }
 
-.badge.high {
-  background-color: var(--socia-warning);
-  color: white;
+/* Page H1 — both the splash hero and the regular doc page header use
+   color: var(--sl-color-white) by default, which is white-on-white in
+   the light theme. Force the brand-correct colour everywhere. */
+.hero h1,
+h1#_top,
+.sl-container h1,
+.content-panel h1 {
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: var(--alberti-ink-800) !important;
+}
+:root[data-theme='dark'] .hero h1,
+:root[data-theme='dark'] h1#_top,
+:root[data-theme='dark'] .sl-container h1,
+:root[data-theme='dark'] .content-panel h1 {
+  color: var(--alberti-ink-50) !important;
+}
+.hero .tagline {
+  color: var(--sl-color-gray-4);
+  font-size: 1.05rem;
+  line-height: 1.5;
 }
 
-.badge.medium {
-  background-color: var(--socia-accent);
-  color: white;
+/* Header right-side controls — theme switcher & language picker.
+   Starlight defaults their text to var(--sl-color-text-invert); since we
+   inverted that to alberti-ink-100, the labels become unreadable. Restore
+   a high-contrast text colour and a soft hover background. */
+starlight-theme-select select,
+starlight-lang-select select,
+.social-icons a {
+  color: var(--alberti-ink-700) !important;
+}
+:root[data-theme='dark'] starlight-theme-select select,
+:root[data-theme='dark'] starlight-lang-select select,
+:root[data-theme='dark'] .social-icons a {
+  color: var(--alberti-ink-50) !important;
+}
+starlight-theme-select select:hover,
+starlight-lang-select select:hover {
+  background: var(--alberti-red-50);
+}
+:root[data-theme='dark'] starlight-theme-select select:hover,
+:root[data-theme='dark'] starlight-lang-select select:hover {
+  background: rgba(233, 52, 86, 0.14);
+}
+/* Caret next to the select */
+starlight-theme-select label svg,
+starlight-lang-select label svg {
+  color: var(--alberti-ink-500) !important;
+}
+:root[data-theme='dark'] starlight-theme-select label svg,
+:root[data-theme='dark'] starlight-lang-select label svg {
+  color: var(--alberti-ink-200) !important;
 }
 
-.badge.low {
-  background-color: var(--socia-success);
-  color: white;
+/* Splash CTAs — Starlight uses .sl-link-button which inherits text colour from
+   --sl-color-accent-high. Force a white-on-red primary and red-on-white
+   secondary so the labels are always legible. */
+.sl-link-button.primary {
+  background: var(--alberti-red-500) !important;
+  color: #fff !important;
+  border-color: var(--alberti-red-500) !important;
+}
+.sl-link-button.primary:hover {
+  background: var(--alberti-red-600) !important;
+  border-color: var(--alberti-red-600) !important;
+}
+.sl-link-button.secondary {
+  color: var(--alberti-red-700) !important;
+  border-color: var(--alberti-red-500) !important;
+}
+:root[data-theme='dark'] .sl-link-button.secondary {
+  color: var(--alberti-red-200) !important;
+}
+.sl-link-button.minimal {
+  color: var(--alberti-red-600) !important;
+}
+:root[data-theme='dark'] .sl-link-button.minimal {
+  color: var(--alberti-red-300) !important;
 }
 
-/* Alert boxes */
-.alert {
-  padding: 1rem;
-  margin: 1rem 0;
-  border-radius: 0.5rem;
-  border-left: 4px solid;
+/* Sidebar group titles ("Introducción", "Instala la plataforma"…)
+   Starlight ships them as .large in white; on a paper-coloured sidebar they
+   disappear. Force a high-contrast eyebrow style. */
+.sidebar .large,
+[data-theme='light'] .sidebar .large {
+  color: var(--alberti-red-600) !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.78rem !important;
+}
+:root[data-theme='dark'] .sidebar .large {
+  color: var(--alberti-red-300) !important;
 }
 
-.alert-info {
-  background-color: #dbeafe;
-  border-color: var(--socia-primary);
-  color: #1e40af;
+/* Inline accents */
+strong { color: var(--sl-color-text); font-weight: 700; }
+
+/* Code & links — use the brand red rather than generic blue */
+.sl-markdown-content :not(pre) > code {
+  background: var(--alberti-red-50);
+  color: var(--alberti-red-700);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+}
+:root[data-theme='dark'] .sl-markdown-content :not(pre) > code {
+  background: rgba(233, 52, 86, 0.16);
+  color: var(--alberti-red-200);
 }
 
-.alert-warning {
-  background-color: #fef3c7;
-  border-color: var(--socia-warning);
-  color: #92400e;
+a {
+  color: var(--sl-color-text-accent);
 }
 
-.alert-error {
-  background-color: #fecaca;
-  border-color: var(--socia-error);
-  color: #991b1b;
+/* Tables — header in brand red, cool hairline rules */
+.sl-markdown-content table {
+  border-collapse: collapse;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sl-markdown-content thead {
+  background: var(--alberti-red-500);
+}
+.sl-markdown-content thead th {
+  color: #fff !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+  padding: 0.75rem 1.1rem;
+  text-align: left;
+}
+.sl-markdown-content tbody td,
+.sl-markdown-content tbody th {
+  border-top: 1px solid var(--sl-color-hairline);
+  padding: 0.7rem 1.1rem;
+  vertical-align: top;
+}
+.sl-markdown-content tbody tr:nth-child(even) td {
+  background: var(--alberti-paper);
+}
+:root[data-theme='dark'] .sl-markdown-content tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.025);
 }
 
-.alert-success {
-  background-color: #d1fae5;
-  border-color: var(--socia-success);
-  color: #065f46;
+/* Blockquotes */
+.sl-markdown-content blockquote {
+  border-left: 3px solid var(--alberti-red-500);
+  padding-left: 1rem;
+  color: var(--sl-color-gray-3);
 }
 
-/* SOC interface styling */
-.soc-interface {
-  background: #1a1a1a;
-  color: #00ff00;
-  font-family: 'Courier New', monospace;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid #333;
+/* Asides — overhauled to Alberti style: paper background, thick left rule
+   in the variant colour, title coloured, body in regular ink. The default
+   Starlight palette is too saturated and breaks our single-red discipline. */
+.sl-markdown-content .starlight-aside {
+  background: var(--alberti-paper) !important;
+  border: 1px solid var(--alberti-ink-100) !important;
+  border-left: 4px solid var(--alberti-ink-300) !important;
+  border-radius: 8px !important;
+  padding: 1rem 1.25rem !important;
+  color: var(--alberti-ink-700) !important;
+}
+.sl-markdown-content .starlight-aside__title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem !important;
+  color: var(--alberti-ink-700) !important;
+  margin-bottom: 0.4rem !important;
+}
+.sl-markdown-content .starlight-aside__icon {
+  color: inherit !important;
+}
+.sl-markdown-content .starlight-aside p {
+  color: var(--alberti-ink-700);
+  margin-bottom: 0.5rem;
+}
+.sl-markdown-content .starlight-aside p:last-child { margin-bottom: 0; }
+
+/* Variant colours — tip uses the brand red; the others stay quiet
+   (note in cool ink, caution in amber, danger in deep red). */
+.sl-markdown-content .starlight-aside--tip {
+  border-left-color: var(--alberti-red-500) !important;
+}
+.sl-markdown-content .starlight-aside--tip .starlight-aside__title {
+  color: var(--alberti-red-600) !important;
 }
 
-.soc-alert {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  margin: 0.25rem 0;
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
+.sl-markdown-content .starlight-aside--note {
+  border-left-color: var(--alberti-ink-500) !important;
+}
+.sl-markdown-content .starlight-aside--note .starlight-aside__title {
+  color: var(--alberti-ink-700) !important;
 }
 
-.soc-alert.critical {
-  background: rgba(239, 68, 68, 0.1);
-  border-left: 3px solid #ef4444;
+.sl-markdown-content .starlight-aside--caution {
+  border-left-color: #c97a0c !important;
+  background: #fff7eb !important;
+}
+.sl-markdown-content .starlight-aside--caution .starlight-aside__title {
+  color: #8a4f00 !important;
 }
 
-.soc-alert.high {
-  background: rgba(245, 158, 11, 0.1);
-  border-left: 3px solid #f59e0b;
+.sl-markdown-content .starlight-aside--danger {
+  border-left-color: var(--alberti-red-700) !important;
+  background: #fff1f4 !important;
+}
+.sl-markdown-content .starlight-aside--danger .starlight-aside__title {
+  color: var(--alberti-red-700) !important;
 }
 
-.soc-alert.medium {
-  background: rgba(6, 182, 212, 0.1);
-  border-left: 3px solid #06b6d4;
+/* Dark theme: invert the soft backgrounds */
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: var(--alberti-ink-50) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside__title {
+  color: var(--alberti-ink-50) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--tip .starlight-aside__title {
+  color: var(--alberti-red-300) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--caution {
+  background: rgba(201, 122, 12, 0.12) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--caution .starlight-aside__title {
+  color: #f0b85b !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--danger {
+  background: rgba(233, 52, 86, 0.12) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--danger .starlight-aside__title {
+  color: var(--alberti-red-300) !important;
 }
 
-.soc-alert.low {
-  background: rgba(16, 185, 129, 0.1);
-  border-left: 3px solid #10b981;
+/* Force all Starlight icons inside cards to brand red — keeps the
+   single-accent discipline of the Alberti design system. */
+.card .icon,
+.card svg,
+.sl-link-card .icon,
+.sl-link-card svg,
+.sl-markdown-content .card .icon,
+.sl-markdown-content .card svg {
+  color: var(--alberti-red-500) !important;
 }
 
-/* Timeline styling */
-.timeline {
-  position: relative;
-  padding-left: 2rem;
+/* The decorative icon container Starlight ships uses --sl-color-icon
+   variants for background tint — neutralise to a soft alberti-50 wash. */
+.card .icon {
+  background: var(--alberti-red-50) !important;
+  border-color: var(--alberti-red-100) !important;
+}
+:root[data-theme='dark'] .card .icon {
+  background: rgba(233, 52, 86, 0.12) !important;
+  border-color: rgba(233, 52, 86, 0.28) !important;
 }
 
-.timeline::before {
-  content: '';
-  position: absolute;
-  left: 0.5rem;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--sl-color-accent);
+/* Cards from @astrojs/starlight/components — both <Card> and <LinkCard> */
+.card,
+.sl-link-card {
+  border: 1px solid var(--sl-color-hairline) !important;
+  border-radius: 12px !important;
+  background: var(--sl-color-bg) !important;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+.card:hover,
+.sl-link-card:hover {
+  border-color: var(--alberti-red-500) !important;
+  box-shadow: 0 4px 16px rgba(20, 22, 27, 0.08);
+  transform: translateY(-1px);
+}
+.card .title,
+.sl-link-card .title {
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--sl-color-text-accent) !important;
+  display: block !important;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+.sl-link-card .description {
+  color: var(--sl-color-gray-3);
 }
 
-.timeline-item {
-  position: relative;
-  margin-bottom: 2rem;
+/* Sidebar items — brand accent on the active item */
+.sidebar a[aria-current='page'] {
+  color: var(--alberti-red-600);
+  background: var(--alberti-red-50);
+}
+:root[data-theme='dark'] .sidebar a[aria-current='page'] {
+  color: var(--alberti-red-200);
+  background: rgba(233, 52, 86, 0.14);
 }
 
-.timeline-item::before {
-  content: '';
-  position: absolute;
-  left: -2rem;
-  top: 0.5rem;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  background: var(--sl-color-accent);
-  border: 3px solid var(--sl-color-bg);
+/* Top navigation */
+header.header {
+  border-bottom: 1px solid var(--sl-color-hairline);
 }
 
-/* Responsive tables */
-.table-responsive {
-  overflow-x: auto;
+/* Inline checklist used in adopcion.md (markdown task lists) */
+.sl-markdown-content ul li input[type="checkbox"] {
+  accent-color: var(--alberti-red-500);
+  margin-right: 0.5rem;
 }
 
-.table-responsive table {
-  min-width: 600px;
-}
+/* Nice scrollbar in sidebar */
+.sidebar-content::-webkit-scrollbar { width: 6px; }
+.sidebar-content::-webkit-scrollbar-thumb { background: var(--alberti-red-500); border-radius: 3px; }
 
-/* Custom navigation enhancements */
-.sidebar-content {
-  scrollbar-width: thin;
-  scrollbar-color: var(--sl-color-accent) transparent;
-}
-
-.sidebar-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.sidebar-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sidebar-content::-webkit-scrollbar-thumb {
-  background: var(--sl-color-accent);
-  border-radius: 3px;
-}
-
-/* Command line interface styling */
-.cli {
-  background: #000;
-  color: #00ff00;
-  font-family: 'Courier New', monospace;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  overflow-x: auto;
-}
-
-.cli-prompt::before {
-  content: '$ ';
-  color: #00ff00;
-  font-weight: bold;
-}
-
-.cli-output {
-  color: #ccc;
-  margin: 0.5rem 0;
-}
-
-/* Loading animations */
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-.loading {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Matrix rain effect for headers */
-@keyframes matrix-rain {
-  0% {
-    opacity: 0;
-    transform: translateY(-100%);
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-}
-
-.matrix-char {
-  display: inline-block;
-  animation: matrix-rain 3s linear infinite;
-  animation-delay: calc(var(--i) * 0.1s);
-}
-
-/* Mobile optimizations */
-@media (max-width: 768px) {
-  .soc-interface {
-    font-size: 0.75rem;
-    padding: 0.5rem;
-  }
-  
-  .timeline {
-    padding-left: 1.5rem;
-  }
-  
-  .timeline-item::before {
-    left: -1.5rem;
-    width: 0.75rem;
-    height: 0.75rem;
-  }
-}
-
-/* Print styles */
-@media print {
-  .no-print {
-    display: none !important;
-  }
-  
-  .soc-interface,
-  .cli {
-    background: white !important;
-    color: black !important;
-    border: 1px solid #ccc !important;
-  }
+/* Script-accent helper, e.g. for "Un proyecto del" */
+.script {
+  font-family: 'Caveat Brush', 'Kalam', cursive;
+  color: var(--alberti-red-500);
 }
