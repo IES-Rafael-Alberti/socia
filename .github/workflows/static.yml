@@ -1,43 +1,92 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+# Build the landing + docs Astro projects and publish to GitHub Pages.
+# Published at https://ies-rafael-alberti.github.io/socia/.
+# Both projects are configured with `base: "/socia"` (or "/socia/docs"),
+# so we just assemble their dist/ outputs into a single _site/ root.
+
+name: Build & deploy SOCIA site
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            src/landing-page/package-lock.json
+            src/docs/package-lock.json
+
+      # ------------- Landing page -------------
+      - name: Install landing dependencies
+        working-directory: src/landing-page
+        run: npm ci || npm install
+
+      - name: Build landing
+        working-directory: src/landing-page
+        run: npm run build
+
+      # ------------- Docs (Starlight) -------------
+      - name: Install docs dependencies
+        working-directory: src/docs
+        run: npm ci || npm install
+
+      - name: Build docs
+        working-directory: src/docs
+        run: npm run build
+
+      # ------------- Assemble final site -------------
+      # Both projects use base: "/socia[/docs]", which Astro encodes as a
+      # subfolder inside dist/. We copy everything into _site/ so Pages
+      # serves /socia/* (landing) and /socia/docs/* (Starlight).
+      - name: Assemble site
+        run: |
+          rm -rf _site
+          mkdir -p _site/socia/docs
+          cp -R src/landing-page/dist/socia/. _site/socia/
+          cp -R src/docs/dist/socia/docs/. _site/socia/docs/
+          # Friendly redirect from / to /socia/
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>SOCIA</title>
+          <meta http-equiv="refresh" content="0; url=/socia/">
+          <link rel="canonical" href="/socia/">
+          HTML
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
   deploy:
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          # Upload entire repository
-          path: '.'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
