@@ -52,23 +52,17 @@ jobs:
         run: npm run build
 
       # ------------- Assemble final site -------------
-      # Astro outputs each project's dist/ ready to be served as the
-      # landing root (/socia/) or docs root (/socia/docs/). We assemble
-      # them under _site/socia/ so they line up with GitHub Pages' path.
+      # GitHub Pages already serves this repo at /socia/, so the artifact
+      # we upload IS the /socia/ root. Landing content goes flat into
+      # _site/, and the docs site goes into _site/docs/. Astro built each
+      # project with the right `base`, so internal links already point at
+      # /socia/... and resolve correctly.
       - name: Assemble site
         run: |
           rm -rf _site
-          mkdir -p _site/socia/docs
-          cp -R src/landing-page/dist/. _site/socia/
-          cp -R src/docs/dist/. _site/socia/docs/
-          # Friendly redirect from / to /socia/
-          cat > _site/index.html <<'HTML'
-          <!doctype html>
-          <meta charset="utf-8">
-          <title>SOCIA</title>
-          <meta http-equiv="refresh" content="0; url=/socia/">
-          <link rel="canonical" href="/socia/">
-          HTML
+          mkdir -p _site/docs
+          cp -R src/landing-page/dist/. _site/
+          cp -R src/docs/dist/. _site/docs/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
