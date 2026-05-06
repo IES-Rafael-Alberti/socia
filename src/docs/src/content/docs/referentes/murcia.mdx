@@ -1,12 +1,119 @@
 ---
 title: Universidad de Murcia
-description: Página en construcción.
+description: El Cyber Range Scorpion de la Universidad de Murcia — arquitectura, metodología pedagógica y lecciones para SOCIA.
 sidebar:
   order: 2
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+# El Cyber Range Scorpion de la Universidad de Murcia
 
-<Aside type="caution" title="En construcción">
-Esta página está en preparación. Mientras tanto, puedes consultar la **[web del proyecto](https://socia.fpciberseguridad.com/)** para una visión general de SOCIA.
-</Aside>
+En el marco del proyecto SOCIA, durante los meses de enero y marzo de 2025, mantuvimos una serie de reuniones por videoconferencia con el equipo de [SCORPION Cyber Range](https://scorpioncybertech.com/) de la Universidad de Murcia. El propósito era conocer su plataforma de entrenamiento en ciberseguridad, comprender su arquitectura técnica, analizar su metodología pedagógica y extraer conocimiento aplicable a nuestra iniciativa. Queremos agradecer especialmente a **Félix Gómez Mármol** y **José Antonio Ruipérez Valiente** por su tiempo, transparencia y disposición a compartir los detalles técnicos y las lecciones aprendidas en el desarrollo de su plataforma.
+
+## Contexto del proyecto
+
+**Scorpion Cyber Range** es el resultado del know-how adquirido durante años de experiencia en proyectos de ciberseguridad entre la Universidad de Murcia y diversas empresas y organismos, destacando la colaboración con el **Mando Conjunto del Ciberespacio** del Ministerio de Defensa. Este proyecto propone una solución comercial que busca democratizar el acceso a la formación avanzada en ciberseguridad.
+
+Durante nuestras conversaciones, el equipo nos confirmó que están en proceso de constituir una **spin-off universitaria** llamada **Scorpion Cybertech** (a día de hoy ya es una realidad), lo que demuestra la madurez y viabilidad comercial de su propuesta. Esta transición del ámbito académico al sector civil representa un caso ejemplar de transferencia de conocimiento desde la universidad hacia el tejido empresarial.
+
+## Arquitectura técnica del Cyber Range
+
+### Enfoque híbrido: máquinas virtuales + contenedores
+
+La arquitectura de Scorpion se basa en un **enfoque híbrido** que combina máquinas virtuales con contenedores Docker. Cada nodo de la topología es una **máquina virtual** que ejecuta plantillas base (Ubuntu, Windows, Kali, etc.) sobre las cuales se despliegan **contenedores Docker** con servicios específicos.
+
+Esta aproximación ofrece ventajas significativas:
+
+- **Flexibilidad**: Separación entre sistema operativo base y servicios específicos.
+- **Reutilización**: Las plantillas se pueden combinar con cualquier servicio dockerizado.
+- **Escalabilidad**: Facilita el despliegue y la gestión de escenarios complejos.
+- **Eficiencia**: Evita la necesidad de mantener múltiples máquinas virtuales preconfiguradas.
+
+### Infraestructura y despliegue
+
+El sistema funciona completamente en sus **propios centros de procesamiento de datos (CPD)** en la Universidad de Murcia, evitando dependencias de servicios cloud externos. Esta decisión les proporciona:
+
+- Control total sobre la infraestructura.
+- Seguridad y aislamiento de los datos.
+- Costes predecibles sin sorpresas de facturación cloud.
+- Cumplimiento de requisitos de soberanía de datos.
+
+La plataforma es **completamente web**, requiriendo únicamente un navegador para su uso. Los estudiantes acceden a las máquinas virtuales a través de **escritorio remoto renderizado como web**, eliminando la necesidad de instalaciones locales o configuraciones complejas.
+
+## Metodología y funcionalidades pedagógicas
+
+### Sistema de roles jerárquicos
+
+Scorpion implementa un **sistema de cuatro roles jerárquicos**: estudiante, instructor, administrador y superadministrador. La jerarquía permite que roles superiores hereden las funcionalidades de los inferiores, facilitando que instructores puedan participar también como estudiantes en ejercicios formativos.
+
+### Tipos de ciber ejercicios
+
+La plataforma soporta múltiples modalidades de entrenamiento:
+
+**Jeopardy Individual/Colaborativo**: Estudiantes resuelven secuencias de retos sobre escenarios virtualizados. Cada estudiante (o equipo) dispone de su propia instancia aislada del escenario, garantizando que no haya interferencias entre participantes.
+
+**King of the Hill**: Todos los participantes compiten en el mismo escenario, comenzando desde diferentes nodos de la topología. El objetivo es alcanzar la bandera antes que los demás, permitiendo tanto cooperación como competición directa.
+
+**Attack-Defense** (en desarrollo): Modalidad avanzada donde los equipos deben atacar y defender simultáneamente, replicando escenarios de ciberguerra más realistas.
+
+### Simulación avanzada con APTs y NPCs
+
+Una de las características más innovadoras de Scorpion es su capacidad para simular **Advanced Persistent Threats (APTs)** y **Non-Player Characters (NPCs)**. Estos agentes pueden:
+
+- Ejecutar ataques programados siguiendo la matriz MITRE ATT&CK.
+- Generar tráfico benévolo para aumentar el realismo.
+- Proporcionar movimiento y actividad en las máquinas virtuales.
+- Crear escenarios dinámicos que evolucionan durante el ejercicio.
+
+### Gamificación y analítica del aprendizaje
+
+El sistema incorpora elementos de **gamificación** (puntos, medallas, rankings) y un avanzado sistema de **analítica del aprendizaje**. Esta funcionalidad permite:
+
+- Seguimiento en tiempo real del progreso de estudiantes.
+- Análisis del histórico de comandos ejecutados en cada máquina.
+- Identificación de patrones de resolución y errores comunes.
+- Detección de posibles copias o soluciones no auténticas.
+- Retroalimentación personalizada basada en el comportamiento del usuario.
+
+### Acciones modificables por el instructor
+
+Los instructores pueden modificar las condiciones del ejercicio **en tiempo real** mediante "acciones en caliente":
+
+- Apagar, reiniciar o pausar nodos del escenario.
+- Ejecutar scripts personalizados en máquinas específicas.
+- Modificar la configuración de servicios durante la ejecución.
+- Introducir elementos sorpresa para desafiar a los estudiantes.
+
+Esta funcionalidad busca replicar la **impredecibilidad de los entornos reales**, donde los profesionales deben adaptarse a condiciones cambiantes y eventos inesperados.
+
+## Integración con sistemas de gestión del aprendizaje
+
+El equipo de Scorpion ha desarrollado **conectores transparentes con sistemas LMS** como Moodle o Sakai. Esta integración permite:
+
+- Asignación automática de tareas desde el LMS hacia Scorpion.
+- Volcado automático de resultados, puntuaciones y progreso de vuelta al LMS.
+- Experiencia unificada para estudiantes e instructores.
+- Integración del cyber range en el flujo normal de clases teóricas.
+
+## Lecciones aprendidas para el desarrollo de SOCIA
+
+La interacción con el equipo de Scorpion nos ha proporcionado valiosas perspectivas que influirán en el desarrollo de SOCIA:
+
+### 1. Importancia de la arquitectura híbrida
+
+La combinación de máquinas virtuales con contenedores Docker que utiliza Scorpion ofrece un equilibrio óptimo entre realismo y eficiencia. SOCIA debe considerar una arquitectura similar que permita plantillas base reutilizables combinadas con servicios modulares.
+
+### 2. Valor de la analítica del aprendizaje
+
+El sistema de seguimiento de comandos y análisis de comportamiento de Scorpion demuestra el potencial de la analítica para mejorar la experiencia educativa. SOCIA debe incorporar desde el diseño capacidades similares de monitorización y retroalimentación.
+
+### 3. Importancia del realismo dinámico
+
+Las funcionalidades de APTs, NPCs y acciones en caliente de Scorpion demuestran la importancia de crear escenarios que evolucionen durante su ejecución. SOCIA debe contemplar mecanismos similares para aumentar el realismo y la impredecibilidad.
+
+### 4. Flexibilidad en las modalidades de ejercicio
+
+La capacidad de Scorpion para soportar diferentes tipos de ejercicios (Jeopardy, King of the Hill, Attack-Defense) demuestra la importancia de la versatilidad pedagógica. SOCIA debe diseñarse con flexibilidad suficiente para adaptarse a diferentes metodologías.
+
+### 5. Escalabilidad de la infraestructura
+
+La experiencia de Scorpion trabajando con despliegues individuales para cada estudiante nos enseña la importancia de considerar la escalabilidad desde el diseño inicial. SOCIA debe planificar cuidadosamente los requisitos de infraestructura.
