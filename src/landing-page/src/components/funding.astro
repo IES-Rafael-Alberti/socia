@@ -18,12 +18,14 @@ const t = useTranslations(lang);
     1. Ministerio de Educación, Formación Profesional y Deportes (MEFPD)
     2. "Financiado por la Unión Europea — NextGenerationEU"
     3. Plan de Recuperación, Transformación y Resiliencia (PRTR)
-  Order kept exactly as provided in referencias/financiacion.
+  PRTR's source has a near-square aspect ratio (1920×1080), while the other
+  two are much wider; we give it extra height so all three read at a similar
+  visual weight.
 */
 const logos = [
-  { src: ministerioLogo, alt: 'Ministerio de Educación, Formación Profesional y Deportes' },
-  { src: euLogo,         alt: 'Financiado por la Unión Europea — NextGenerationEU' },
-  { src: prtrLogo,       alt: 'Plan de Recuperación, Transformación y Resiliencia' },
+  { src: ministerioLogo, alt: 'Ministerio de Educación, Formación Profesional y Deportes', heightClass: 'h-14 sm:h-16' },
+  { src: euLogo,         alt: 'Financiado por la Unión Europea — NextGenerationEU',        heightClass: 'h-14 sm:h-16' },
+  { src: prtrLogo,       alt: 'Plan de Recuperación, Transformación y Resiliencia',        heightClass: 'h-24 sm:h-28' },
 ];
 ---
 
@@ -39,11 +41,11 @@ const logos = [
 
     <div class="mt-4 flex flex-col items-center justify-center gap-8 sm:flex-row sm:gap-12">
       {
-        logos.map(({ src, alt }) => (
+        logos.map(({ src, alt, heightClass }) => (
           <Image
             src={src}
             alt={alt}
-            class="h-14 w-auto object-contain sm:h-16"
+            class:list={["w-auto object-contain", heightClass]}
             widths={[240, 480]}
             sizes="240px"
           />
