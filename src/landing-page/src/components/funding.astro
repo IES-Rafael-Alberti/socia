@@ -1,6 +1,8 @@
 ---
 import { Image } from "astro:assets";
-import ministerioLogo from "~/assets/ministerio.svg";
+import ministerioLogo from "~/assets/funding/ministerio.png";
+import euLogo from "~/assets/funding/eu.png";
+import prtrLogo from "~/assets/funding/prtr.png";
 import Reveal from "~/components/reveal.astro";
 import { useTranslations, languages } from "~/i18n";
 
@@ -10,6 +12,19 @@ export interface Props {
 
 const { lang = 'es' } = Astro.props;
 const t = useTranslations(lang);
+
+/*
+  The three logos required by the funding entities:
+    1. Ministerio de Educación, Formación Profesional y Deportes (MEFPD)
+    2. "Financiado por la Unión Europea — NextGenerationEU"
+    3. Plan de Recuperación, Transformación y Resiliencia (PRTR)
+  Order kept exactly as provided in referencias/financiacion.
+*/
+const logos = [
+  { src: ministerioLogo, alt: 'Ministerio de Educación, Formación Profesional y Deportes' },
+  { src: euLogo,         alt: 'Financiado por la Unión Europea — NextGenerationEU' },
+  { src: prtrLogo,       alt: 'Plan de Recuperación, Transformación y Resiliencia' },
+];
 ---
 
 <section id="funding" class="bg-alberti-paper py-20 sm:py-24">
@@ -21,12 +36,19 @@ const t = useTranslations(lang);
     <p class="max-w-2xl text-base leading-relaxed text-ink-500">
       {t('funding.body')}
     </p>
-    <Image
-      src={ministerioLogo}
-      alt="Ministerio de Educación, Formación Profesional y Deportes"
-      class="mt-2 h-16 w-auto"
-      widths={[240, 480]}
-      sizes="240px"
-    />
+
+    <div class="mt-4 flex flex-col items-center justify-center gap-8 sm:flex-row sm:gap-12">
+      {
+        logos.map(({ src, alt }) => (
+          <Image
+            src={src}
+            alt={alt}
+            class="h-14 w-auto object-contain sm:h-16"
+            widths={[240, 480]}
+            sizes="240px"
+          />
+        ))
+      }
+    </div>
   </Reveal>
 </section>
