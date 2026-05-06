@@ -3,36 +3,30 @@
 ---
 
 <script is:inline>
-  // Get the base path (for GitHub Pages deployment)
-  const basePath = '/socia';
+  // The site lives at the apex of socia.fpciberseguridad.com — no base path.
   const currentPath = window.location.pathname;
-  
-  // Only run on the default page (Spanish)
-  if (currentPath === basePath + '/' || currentPath === basePath) {
-    // Check if user has a language preference stored
+
+  // Only run on the Spanish home.
+  if (currentPath === '/' || currentPath === '') {
     const storedLang = localStorage.getItem('preferred-language');
-    
+
     if (storedLang === 'en') {
-      window.location.href = basePath + '/en/';
+      window.location.href = '/en/';
     } else if (!storedLang) {
-      // Detect browser language
-      const browserLang = navigator.language || navigator.languages[0];
-      
-      // If browser is set to English, redirect to English version
+      const browserLang = navigator.language || (navigator.languages && navigator.languages[0]) || '';
       if (browserLang.startsWith('en')) {
         localStorage.setItem('preferred-language', 'en');
-        window.location.href = basePath + '/en/';
+        window.location.href = '/en/';
       } else {
-        // Default to Spanish
         localStorage.setItem('preferred-language', 'es');
       }
     }
   }
-  
-  // Store language preference when user manually navigates
-  if (currentPath.startsWith(basePath + '/en/')) {
+
+  // Remember manual language navigation so future visits land on the right one.
+  if (currentPath.startsWith('/en/')) {
     localStorage.setItem('preferred-language', 'en');
-  } else if (currentPath.startsWith(basePath + '/')) {
+  } else if (currentPath === '/' || currentPath === '') {
     localStorage.setItem('preferred-language', 'es');
   }
 </script>

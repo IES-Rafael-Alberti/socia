@@ -1,7 +1,6 @@
 # Build the landing + docs Astro projects and publish to GitHub Pages.
-# Published at https://ies-rafael-alberti.github.io/socia/.
-# Both projects are configured with `base: "/socia"` (or "/socia/docs"),
-# so we just assemble their dist/ outputs into a single _site/ root.
+# Published at https://socia.fpciberseguridad.com/.
+# Landing has no base; docs uses base "/docs".
 
 name: Build & deploy SOCIA site
 
@@ -52,17 +51,17 @@ jobs:
         run: npm run build
 
       # ------------- Assemble final site -------------
-      # GitHub Pages already serves this repo at /socia/, so the artifact
-      # we upload IS the /socia/ root. Landing content goes flat into
-      # _site/, and the docs site goes into _site/docs/. Astro built each
-      # project with the right `base`, so internal links already point at
-      # /socia/... and resolve correctly.
+      # On the custom domain (socia.fpciberseguridad.com) the artifact root
+      # IS the apex. Landing's dist/ goes flat into _site/, and the docs
+      # dist/ — built with base "/docs" — goes under _site/docs/.
       - name: Assemble site
         run: |
           rm -rf _site
           mkdir -p _site/docs
           cp -R src/landing-page/dist/. _site/
           cp -R src/docs/dist/. _site/docs/
+          # Custom domain — keep CNAME so GitHub Pages serves the apex.
+          echo "socia.fpciberseguridad.com" > _site/CNAME
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

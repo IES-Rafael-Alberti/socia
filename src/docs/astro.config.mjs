@@ -4,8 +4,9 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
-	site: "https://ies-rafael-alberti.github.io",
-	base: "/socia/docs",
+	// Hosted on the project's custom domain. Docs live at /docs/.
+	site: "https://socia.fpciberseguridad.com",
+	base: "/docs",
 	integrations: [
 		starlight({
 			title: 'SOCIA',
