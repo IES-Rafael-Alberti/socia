@@ -66,7 +66,7 @@ const pieces = [
         <div>
           <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">01 · {t('stack.soc.subtitle')}</p>
           <h3 class="mt-1 font-display text-2xl font-extrabold uppercase tracking-tight text-ink-800">
-            Un SOC real sobre Proxmox
+            {t('stack.soc.heading')}
           </h3>
         </div>
         <p class="hidden max-w-md text-sm text-ink-500 sm:block">{t('stack.soc.desc')}</p>
@@ -138,7 +138,7 @@ const pieces = [
         <div>
           <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">02 · {t('stack.ai.subtitle')}</p>
           <h3 class="mt-1 font-display text-2xl font-extrabold uppercase tracking-tight text-ink-800">
-            Dos extensiones, un panel
+            {t('stack.ai.heading')}
           </h3>
         </div>
         <p class="hidden max-w-md text-sm text-ink-500 sm:block">{t('stack.ai.desc')}</p>
@@ -161,7 +161,7 @@ const pieces = [
           </p>
         </Reveal>
         <Reveal class="flex justify-center lg:col-span-7 lg:justify-start" delay={140}>
-          <MentoraPopup />
+          <MentoraPopup lang={lang} />
         </Reveal>
       </div>
 
@@ -169,11 +169,11 @@ const pieces = [
       <div class="mt-24 grid items-center gap-12 lg:grid-cols-12 lg:gap-16">
         <Reveal class="relative flex justify-center lg:col-span-7 lg:justify-end lg:order-1">
           <div class="relative">
-            <SociaPopup />
+            <SociaPopup lang={lang} />
             {/* Floating hint bulb — same control the alumnado sees.
                 Visible in every viewport since it's the headline interaction. */}
             <div class="pointer-events-none absolute -bottom-4 -right-4">
-              <HintBulb />
+              <HintBulb lang={lang} />
             </div>
           </div>
         </Reveal>
@@ -197,19 +197,19 @@ const pieces = [
       <div class="mt-24">
         <Reveal class="flex flex-wrap items-baseline justify-between gap-4 border-b border-ink-200 pb-4">
           <div>
-            <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">— Panel del docente</p>
+            <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">— {t('stack.server.eyebrow')}</p>
             <h4 class="mt-1 font-display text-2xl font-extrabold uppercase tracking-tight text-ink-800">
-              SOCIA Server
+              {t('stack.server.title')}
             </h4>
           </div>
           <p class="max-w-md text-sm text-ink-500">
-            Las extensiones se coordinan a través de un panel web que se despliega como contenedor Docker en el centro: clases, casos, dashboard en directo y evaluaciones.
+            {t('stack.server.body')}
           </p>
         </Reveal>
 
         <Reveal class="mt-8 overflow-hidden rounded-2xl ring-1 ring-ink-100" delay={120}>
           <div class="server-panel-frame">
-            <ServerPanel />
+            <ServerPanel lang={lang} />
           </div>
         </Reveal>
       </div>

@@ -2,21 +2,21 @@
 /*
   Floating hint bulb — the same lightbulb that appears on top of every page
   while a SOCIA case is in progress. The student clicks it; a small bubble
-  pops up with the next hint from the LLM.
-  This component animates that interaction on a loop:
-    1) bulb sits idle, pulsing softly
-    2) "auto-click" — the bulb flashes
-    3) the hint bubble fades + slides in
-    4) bubble stays a few seconds
-    5) bubble fades out, cycle restarts
-
-  Pure CSS animation, no JS. The bulb is positioned absolutely by the parent
-  wrapper, so this component just paints itself in place.
+  pops up with the next hint from the LLM. Cycles automatically (CSS only).
+  All copy localised through the i18n table.
 */
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang?: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
 ---
 
 <div class="bulb">
-  <button class="bulb__btn" type="button" aria-label="Pista">
+  <button class="bulb__btn" type="button" aria-label={t('mock.bulb.label')}>
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M9 18h6m-5 3h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1.2 1.9.1.4.4.7.8.7h3c.4 0 .7-.3.8-.7.2-.7.6-1.4 1.2-1.9A6 6 0 0 0 12 3z"
         stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -24,9 +24,9 @@
   </button>
 
   <div class="bulb__bubble" role="status">
-    <p class="bulb__bubble-eyebrow">— Pista 3</p>
+    <p class="bulb__bubble-eyebrow">— {t('mock.bulb.eyebrow')}</p>
     <p class="bulb__bubble-text">
-      El tráfico saliente es UDP, así que <strong>filtra por puerto en Malcolm</strong> antes de seguir.
+      {t('mock.bulb.body.lead')} <strong>{t('mock.bulb.body.accent')}</strong> {t('mock.bulb.body.tail')}
     </p>
     <span class="bulb__bubble-tail" aria-hidden="true"></span>
   </div>

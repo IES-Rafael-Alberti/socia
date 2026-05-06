@@ -61,7 +61,7 @@ const docsHref = lang === 'en' ? 'https://socia.fpciberseguridad.com/docs/en/' :
            a visitor sees here is what they'll actually load in their
            browser. -->
       <div class="relative mx-auto max-w-sm lg:ml-12 xl:ml-20">
-        <SociaPopup />
+        <SociaPopup lang={lang} />
         {/*
           Floating hint bulb — the same control the alumnado sees on every
           page during a case. It cycles automatically: idle pulse → click
@@ -69,7 +69,7 @@ const docsHref = lang === 'en' ? 'https://socia.fpciberseguridad.com/docs/en/' :
           Positioned bottom-right of the popup, matching the real layout.
         */}
         <div class="absolute -bottom-4 -right-4 hidden sm:block">
-          <HintBulb />
+          <HintBulb lang={lang} />
         </div>
       </div>
     </Reveal>

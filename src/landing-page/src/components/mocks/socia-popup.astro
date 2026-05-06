@@ -1,14 +1,17 @@
 ---
 /*
   Mock of the SOCIA student extension popup mid-case.
-  Tokens & DOM lifted 1:1 from referencias/entrypoints/socia/popup/style.css
-  so the visual is the same one the alumnado sees in their browser:
-    · Montserrat 800 timer at 40px with -0.03em tracking (no JetBrains Mono!)
-    · Live card has a 140deg dark gradient and a soft red glow in the corner
-    · Progress current step shimmers
-    · Phase items have a circle icon (filled red on active, success green w/ ✓ on past)
-    · Past phases have strike-through text and paper background
+  Tokens & DOM lifted 1:1 from referencias/entrypoints/socia/popup/style.css.
+  All in-image labels are localised through the i18n table.
 */
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang?: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
 ---
 
 <div class="mock socia-mock">
@@ -22,15 +25,15 @@
     <div class="mock__live">
       <div class="mock__timer">12:42</div>
       <div class="mock__live-stats">
-        <div class="mock__live-stat"><span class="mock__stat-value">87</span><span class="mock__stat-label">Acciones</span></div>
-        <div class="mock__live-stat"><span class="mock__stat-value">142</span><span class="mock__stat-label">Red</span></div>
-        <div class="mock__live-stat"><span class="mock__stat-value">3/5</span><span class="mock__stat-label">Hitos</span></div>
+        <div class="mock__live-stat"><span class="mock__stat-value">87</span><span class="mock__stat-label">{t('mock.socia.actions')}</span></div>
+        <div class="mock__live-stat"><span class="mock__stat-value">142</span><span class="mock__stat-label">{t('mock.socia.network')}</span></div>
+        <div class="mock__live-stat"><span class="mock__stat-value">3/5</span><span class="mock__stat-label">{t('mock.socia.milestones')}</span></div>
       </div>
     </div>
 
     <div>
-      <p class="mock__eyebrow">Caso en curso</p>
-      <h2 class="mock__case-title">Fuerza bruta SSH desde 185.220.101.4</h2>
+      <p class="mock__eyebrow">{t('mock.socia.case')}</p>
+      <h2 class="mock__case-title">{t('mock.socia.title')}</h2>
     </div>
 
     {/* Segmented 5-step progress with shimmer on the current step */}
@@ -42,30 +45,30 @@
         <div class="mock__progress-step is-current"></div>
         <div class="mock__progress-step"></div>
       </div>
-      <div class="mock__progress-label"><span>Hitos</span><strong>3/5</strong></div>
+      <div class="mock__progress-label"><span>{t('mock.socia.milestones')}</span><strong>3/5</strong></div>
     </div>
 
     {/* Phase list — past, active, future */}
     <ul class="mock__phases">
       <li class="mock__phase is-past">
         <span class="mock__phase-icon"></span>
-        <span class="mock__phase-name">Abrir alerta en Wazuh</span>
+        <span class="mock__phase-name">{t('mock.socia.phase1')}</span>
       </li>
       <li class="mock__phase is-past">
         <span class="mock__phase-icon"></span>
-        <span class="mock__phase-name">Buscar IP origen en logs</span>
+        <span class="mock__phase-name">{t('mock.socia.phase2')}</span>
       </li>
       <li class="mock__phase is-active">
         <span class="mock__phase-icon"></span>
-        <span class="mock__phase-name">Inspeccionar tráfico en Malcolm</span>
+        <span class="mock__phase-name">{t('mock.socia.phase3')}</span>
       </li>
       <li class="mock__phase is-future">
         <span class="mock__phase-icon"></span>
-        <span class="mock__phase-name">Bloquear IP en OPNsense</span>
+        <span class="mock__phase-name">{t('mock.socia.phase4')}</span>
       </li>
       <li class="mock__phase is-future">
         <span class="mock__phase-icon"></span>
-        <span class="mock__phase-name">Cerrar caso con informe</span>
+        <span class="mock__phase-name">{t('mock.socia.phase5')}</span>
       </li>
     </ul>
   </div>

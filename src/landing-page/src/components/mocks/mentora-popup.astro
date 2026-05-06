@@ -1,20 +1,23 @@
 ---
 /*
   Mock of the MENTORA teacher extension popup mid-recording.
-  Tokens & DOM lifted 1:1 from referencias/entrypoints/mentora/popup/style.css
-  to match the real popup pixel-by-pixel:
-    · 8px rec dot pulsing next to the wordmark (not a chunky 10px ring)
-    · Live card with the same dark gradient + corner red glow as SOCIA
-    · Timer in Montserrat 800 at 40px
-    · 2-column stat grid (Acciones / Capturas)
-    · Pausar (secondary) + Detener (danger red) buttons
+  Tokens lifted 1:1 from referencias/entrypoints/mentora/popup/style.css.
+  All in-image labels are localised through the i18n table.
 */
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang?: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
 ---
 
 <div class="mock mentora-mock">
   <header class="mock__header">
     <h1>MENTORA</h1>
-    <span class="mock__rec-dot" aria-label="Grabando"></span>
+    <span class="mock__rec-dot" aria-label={t('mock.mentora.recording')}></span>
   </header>
 
   <div class="mock__body">
@@ -22,19 +25,19 @@
     <div class="mock__live">
       <div class="mock__timer">04:18</div>
       <div class="mock__live-stats">
-        <div class="mock__live-stat"><span class="mock__stat-value">62</span><span class="mock__stat-label">Acciones</span></div>
-        <div class="mock__live-stat"><span class="mock__stat-value">14</span><span class="mock__stat-label">Capturas</span></div>
+        <div class="mock__live-stat"><span class="mock__stat-value">62</span><span class="mock__stat-label">{t('mock.mentora.actions')}</span></div>
+        <div class="mock__live-stat"><span class="mock__stat-value">14</span><span class="mock__stat-label">{t('mock.mentora.captures')}</span></div>
       </div>
     </div>
 
     <div>
-      <p class="mock__eyebrow">Grabando</p>
-      <h2 class="mock__title">La sesión se está capturando.</h2>
+      <p class="mock__eyebrow">{t('mock.mentora.recording')}</p>
+      <h2 class="mock__title">{t('mock.mentora.title')}</h2>
     </div>
 
     <div class="mock__controls">
-      <button class="mock__btn mock__btn--secondary" type="button">Pausar</button>
-      <button class="mock__btn mock__btn--danger" type="button">Detener</button>
+      <button class="mock__btn mock__btn--secondary" type="button">{t('mock.mentora.pause')}</button>
+      <button class="mock__btn mock__btn--danger" type="button">{t('mock.mentora.stop')}</button>
     </div>
   </div>
 </div>

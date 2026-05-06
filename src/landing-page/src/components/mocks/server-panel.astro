@@ -1,18 +1,18 @@
 ---
 import { Image } from "astro:assets";
 import socialLogo from "~/assets/socia-logo.svg";
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang?: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
 /*
-  Mock of the SOCIA Server live dashboard ("Seguimiento" page).
-  Tokens lifted 1:1 from referencias/socia-server/panel/src/styles/{app,pages}.css:
-    · Sidebar 248px wide, bg #0f1116, border-right #1d2028
-    · Brand: 40×40 white square with the actual SOCIA logo inside
-    · Active nav has rgba red 12% bg + 3px red bar on the left edge
-    · Live pulse is GREEN (#34d171), not red
-    · Page title in Caveat Brush 84px red, rotated -3deg (the script-accent)
-    · Live-hero gradient diagonal #0f1116 → #1d1018 → #2d0f1d, with a strong
-      red radial glow top-right (380×380 at 50% alpha)
-    · Stats values: 56px Montserrat 800 with /total in red accent
-    · Live-grid: 2-column, rows with light hover/state colour
+  Mock of the SOCIA Server live dashboard ("Live"/"Seguimiento" page).
+  Tokens lifted from referencias/socia-server/panel/src/styles/{app,pages}.css.
+  All in-image labels are localised through the i18n table.
 */
 ---
 
@@ -25,34 +25,34 @@ import socialLogo from "~/assets/socia-logo.svg";
       </div>
       <div>
         <div class="server-mock__brand-name">SOCIA</div>
-        <div class="server-mock__brand-sub">Server</div>
+        <div class="server-mock__brand-sub">{t('mock.server.brand.sub')}</div>
       </div>
     </div>
 
     <nav class="server-mock__nav">
       <button class="server-mock__nav-item">
-        <span class="server-mock__nav-ico">⌂</span><span>Inicio</span>
+        <span class="server-mock__nav-ico">⌂</span><span>{t('mock.server.nav.home')}</span>
       </button>
       <button class="server-mock__nav-item">
-        <span class="server-mock__nav-ico">◌</span><span>Clases</span>
+        <span class="server-mock__nav-ico">◌</span><span>{t('mock.server.nav.classes')}</span>
         <span class="server-mock__badge server-mock__badge--neutral">2</span>
       </button>
       <button class="server-mock__nav-item">
-        <span class="server-mock__nav-ico">≡</span><span>Casos</span>
+        <span class="server-mock__nav-ico">≡</span><span>{t('mock.server.nav.cases')}</span>
         <span class="server-mock__badge server-mock__badge--neutral">8</span>
       </button>
       <button class="server-mock__nav-item is-active">
-        <span class="server-mock__nav-ico">●</span><span>Seguimiento</span>
+        <span class="server-mock__nav-ico">●</span><span>{t('mock.server.nav.live')}</span>
         <span class="server-mock__pulse"></span>
       </button>
       <button class="server-mock__nav-item">
-        <span class="server-mock__nav-ico">★</span><span>Evaluaciones</span>
+        <span class="server-mock__nav-ico">★</span><span>{t('mock.server.nav.evals')}</span>
         <span class="server-mock__badge server-mock__badge--neutral">12</span>
       </button>
     </nav>
 
     <div class="server-mock__partners">
-      <div class="server-mock__partners-eyebrow">Un proyecto de</div>
+      <div class="server-mock__partners-eyebrow">{t('mock.server.partners.eyebrow')}</div>
       <div>IES Rafael Alberti</div>
       <div>CIFP Cuenca Nº1</div>
       <div>Aktios</div>
@@ -63,42 +63,42 @@ import socialLogo from "~/assets/socia-logo.svg";
   <div class="server-mock__main">
     <div class="server-mock__content">
       <div class="server-mock__page-hero">
-        <h1>Seguimiento</h1>
-        <button class="server-mock__cta">▶ Lanzar caso</button>
+        <h1>{t('mock.server.title')}</h1>
+        <button class="server-mock__cta">{t('mock.server.cta')}</button>
       </div>
 
       {/* Live hero — diagonal dark gradient + corner red glow */}
       <div class="server-mock__live-hero">
-        <div class="server-mock__live-class">2.º DAW · Mañana · 18 conectados</div>
-        <h2 class="server-mock__live-title">Fuerza bruta SSH desde 185.220.101.4</h2>
+        <div class="server-mock__live-class">{t('mock.server.classLabel')}</div>
+        <h2 class="server-mock__live-title">{t('mock.server.caseTitle')}</h2>
         <div class="server-mock__live-stats">
           <div>
             <div class="server-mock__live-value">14<em>/18</em></div>
-            <div class="server-mock__live-label">Resolviendo</div>
+            <div class="server-mock__live-label">{t('mock.server.stat.running')}</div>
           </div>
           <div>
             <div class="server-mock__live-value" style="color:#5eea98">3</div>
-            <div class="server-mock__live-label">Cerrados</div>
+            <div class="server-mock__live-label">{t('mock.server.stat.finished')}</div>
           </div>
           <div>
             <div class="server-mock__live-value" style="color:#f3a76a">1</div>
-            <div class="server-mock__live-label">Atascados</div>
+            <div class="server-mock__live-label">{t('mock.server.stat.stuck')}</div>
           </div>
           <div>
             <div class="server-mock__live-value">9</div>
-            <div class="server-mock__live-label">Pistas pedidas</div>
+            <div class="server-mock__live-label">{t('mock.server.stat.hints')}</div>
           </div>
         </div>
       </div>
 
-      <h3 class="server-mock__section-head">Progreso por estudiante</h3>
+      <h3 class="server-mock__section-head">{t('mock.server.section')}</h3>
 
       <div class="server-mock__rows">
         {/* Row 1 — running */}
         <div class="server-mock__row">
           <div>
             <h4 class="server-mock__name">Lucía Domínguez</h4>
-            <p class="server-mock__step-text"><strong>Paso 3</strong> de 5 · Inspeccionando Malcolm</p>
+            <p class="server-mock__step-text"><strong>{t('mock.server.step')} 3</strong> {t('mock.server.stepOf')} 5 · {t('mock.server.row.lucia.step')}</p>
             <div class="server-mock__track">
               <span class="is-done"></span><span class="is-done"></span>
               <span class="is-done"></span><span class="is-current"></span><span></span>
@@ -106,7 +106,7 @@ import socialLogo from "~/assets/socia-logo.svg";
           </div>
           <div class="server-mock__row-meta">
             <span class="server-mock__time">12:42</span>
-            <span class="server-mock__hints">💡 1 pista</span>
+            <span class="server-mock__hints">💡 {t('mock.server.row.lucia.hints')}</span>
           </div>
         </div>
 
@@ -114,7 +114,7 @@ import socialLogo from "~/assets/socia-logo.svg";
         <div class="server-mock__row is-finished">
           <div>
             <h4 class="server-mock__name">Marcos Hernández</h4>
-            <p class="server-mock__step-text"><strong>Cerrado</strong> · 5 de 5</p>
+            <p class="server-mock__step-text"><strong>{t('mock.server.row.marcos.label')}</strong> · {t('mock.server.row.marcos.detail')}</p>
             <div class="server-mock__track">
               <span class="is-done"></span><span class="is-done"></span>
               <span class="is-done"></span><span class="is-done"></span><span class="is-done"></span>
@@ -122,7 +122,7 @@ import socialLogo from "~/assets/socia-logo.svg";
           </div>
           <div class="server-mock__row-meta">
             <span class="server-mock__time">09:14</span>
-            <span class="server-mock__hints">💡 0 pistas</span>
+            <span class="server-mock__hints">💡 {t('mock.server.row.marcos.hints')}</span>
           </div>
         </div>
 
@@ -130,7 +130,7 @@ import socialLogo from "~/assets/socia-logo.svg";
         <div class="server-mock__row is-stuck">
           <div>
             <h4 class="server-mock__name">Sara Quintero</h4>
-            <p class="server-mock__step-text"><strong>Atascada</strong> · sin avanzar 4 min</p>
+            <p class="server-mock__step-text"><strong>{t('mock.server.row.sara.label')}</strong> · {t('mock.server.row.sara.detail')}</p>
             <div class="server-mock__track">
               <span class="is-done"></span><span class="is-current"></span>
               <span></span><span></span><span></span>
@@ -138,7 +138,7 @@ import socialLogo from "~/assets/socia-logo.svg";
           </div>
           <div class="server-mock__row-meta">
             <span class="server-mock__time">13:08</span>
-            <span class="server-mock__hints">💡 4 pistas</span>
+            <span class="server-mock__hints">💡 {t('mock.server.row.sara.hints')}</span>
           </div>
         </div>
 
@@ -146,7 +146,7 @@ import socialLogo from "~/assets/socia-logo.svg";
         <div class="server-mock__row">
           <div>
             <h4 class="server-mock__name">Iván Cabrera</h4>
-            <p class="server-mock__step-text"><strong>Paso 2</strong> de 5 · Buscando IP en logs</p>
+            <p class="server-mock__step-text"><strong>{t('mock.server.step')} 2</strong> {t('mock.server.stepOf')} 5 · {t('mock.server.row.ivan.step')}</p>
             <div class="server-mock__track">
               <span class="is-done"></span><span class="is-current"></span>
               <span></span><span></span><span></span>
@@ -154,7 +154,7 @@ import socialLogo from "~/assets/socia-logo.svg";
           </div>
           <div class="server-mock__row-meta">
             <span class="server-mock__time">11:23</span>
-            <span class="server-mock__hints">💡 2 pistas</span>
+            <span class="server-mock__hints">💡 {t('mock.server.row.ivan.hints')}</span>
           </div>
         </div>
       </div>
