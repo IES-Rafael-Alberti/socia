@@ -435,6 +435,59 @@ header.header {
 .sidebar-content::-webkit-scrollbar { width: 6px; }
 .sidebar-content::-webkit-scrollbar-thumb { background: var(--alberti-red-500); border-radius: 3px; }
 
+/* Prev/Next pagination — Starlight defaults each link to flex:1 so they
+   stretch edge-to-edge. Shrink them to content width with a quiet card
+   look that matches the Alberti brand. */
+.pagination-links {
+  gap: 0.75rem !important;
+  margin-top: 2rem;
+}
+.pagination-links > a {
+  flex: 0 1 auto !important;
+  max-width: 18rem;
+  padding: 0.7rem 1rem !important;
+  border: 1px solid var(--sl-color-hairline) !important;
+  border-radius: 10px !important;
+  background: var(--sl-color-bg);
+  color: var(--alberti-ink-700);
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+.pagination-links > a:hover {
+  border-color: var(--alberti-red-500) !important;
+  background: var(--alberti-red-50);
+  transform: translateY(-1px);
+}
+:root[data-theme='dark'] .pagination-links > a {
+  color: var(--alberti-ink-50);
+}
+:root[data-theme='dark'] .pagination-links > a:hover {
+  background: rgba(233, 52, 86, 0.12);
+}
+.pagination-links > a svg {
+  color: var(--alberti-red-500);
+  flex-shrink: 0;
+}
+.pagination-links > a .link-title {
+  color: var(--sl-color-text);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+/* The small label above the title ("Siguiente página" / "Página anterior") */
+.pagination-links > a > span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sl-color-gray-3);
+  font-weight: 600;
+}
+.pagination-links > a > span .link-title {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.95rem;
+  text-transform: none;
+  letter-spacing: -0.005em;
+}
+
 /* Script-accent helper, e.g. for "Un proyecto del" */
 .script {
   font-family: 'Caveat Brush', 'Kalam', cursive;
