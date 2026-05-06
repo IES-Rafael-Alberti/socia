@@ -62,9 +62,9 @@ export default defineConfig({
 					label: 'Referentes',
 					translations: { en: 'References' },
 					items: [
-						{ label: 'Por qué miramos fuera', translations: { en: 'Why we looked outward' }, link: '/referentes/intro/' },
-						{ label: 'Universidad de Murcia', link: '/referentes/murcia/' },
-						{ label: 'Tknika (País Vasco)', translations: { en: 'Tknika (Basque Country)' }, link: '/referentes/tknika/' },
+						{ label: 'Iniciativas previas', translations: { en: 'Why we looked outward' }, link: '/referentes/intro/' },
+						{ label: 'SCORPION', link: '/referentes/murcia/' },
+						{ label: 'Tknika', translations: { en: 'Tknika)' }, link: '/referentes/tknika/' },
 					],
 				},
 			],
