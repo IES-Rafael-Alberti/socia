@@ -1,0 +1,63 @@
+/* SOCIA — design tokens for the public landing.
+   Single rose-red accent on white. No second accent.
+   Institutional brands (IES Rafael Alberti, CIFP N.º 1 Cuenca…) live in
+   `packages/socia-branding` and apply only to generated PDFs, not to this
+   site's chrome. */
+
+:root,
+[data-theme="light"] {
+  /* Primary — rose red */
+  --socia-red-50:  #fff1f4;
+  --socia-red-100: #ffd9e1;
+  --socia-red-200: #ffb3c2;
+  --socia-red-300: #ff8099;
+  --socia-red-400: #f55573;
+  --socia-red-500: #e93456;
+  --socia-red-600: #d42349;
+  --socia-red-700: #b01a3c;
+  --socia-red-800: #861330;
+  --socia-red-900: #5c0d22;
+
+  /* Cool neutrals */
+  --socia-white:   #ffffff;
+  --socia-paper:   #fafbfc;
+  --socia-ink-50:  #f4f5f7;
+  --socia-ink-100: #e6e8ec;
+  --socia-ink-200: #cfd3da;
+  --socia-ink-300: #a8aeb8;
+  --socia-ink-400: #7a8090;
+  --socia-ink-500: #525866;
+  --socia-ink-600: #363b47;
+  --socia-ink-700: #24272f;
+  --socia-ink-800: #14161b;
+  --socia-ink-900: #0a0b0f;
+
+  /* Semantic */
+  --color-primary: var(--socia-red-500);
+  --color-secondary: var(--socia-red-600);
+  --color-text: var(--socia-ink-800);
+  --color-text-offset: var(--socia-ink-500);
+  --color-background: var(--socia-white);
+  --color-background-offset: var(--socia-paper);
+  --color-border: var(--socia-ink-100);
+
+  --rule-on-red: rgba(255, 255, 255, 0.55);
+  --focus-ring: 0 0 0 3px rgba(233, 52, 86, 0.35);
+  --shadow-sm: 0 1px 2px rgba(20, 22, 27, 0.06);
+  --shadow-md: 0 4px 12px rgba(20, 22, 27, 0.08);
+  --shadow-lg: 0 12px 32px rgba(20, 22, 27, 0.12);
+}
+
+[data-theme="dark"] {
+  /* Dark mode keeps the same red on a near-black ground.
+     The SOCIA palette is print-first and white-dominant; dark mode
+     only inverts the surfaces so links, hover and focus states keep
+     the same anchor color. */
+  --color-primary: var(--socia-red-400);
+  --color-secondary: var(--socia-red-500);
+  --color-text: var(--socia-ink-50);
+  --color-text-offset: var(--socia-ink-300);
+  --color-background: var(--socia-ink-900);
+  --color-background-offset: var(--socia-ink-800);
+  --color-border: rgba(255, 255, 255, 0.1);
+}

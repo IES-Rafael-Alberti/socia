@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@socia/branding": ["packages/socia-branding/src/index.ts"],
+      "@socia/branding/*": ["packages/socia-branding/src/*"],
+      "@socia/eval": ["packages/socia-eval/src/index.ts"],
+      "@socia/eval/*": ["packages/socia-eval/src/*"],
+      "@socia/runtime": ["packages/socia-runtime/src/index.ts"],
+      "@socia/runtime/*": ["packages/socia-runtime/src/*"]
+    }
+  }
+}

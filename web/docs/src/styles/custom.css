@@ -1,0 +1,497 @@
+/* SOCIA docs — Starlight theme override.
+   Visual language for the docs site: rose-red #E93456 anchor, Montserrat +
+   Caveat Brush, white-dominant surfaces, single-accent discipline. Tokens
+   are aligned with the SOCIA landing's design tokens (web/landing/src/styles/
+   theme.css) so docs and landing read as one product. Institutional brands
+   for generated PDFs live in `packages/socia-branding`, not here. */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Caveat+Brush&family=Kalam:wght@400;700&display=swap');
+
+:root {
+  /* Red scale */
+  --socia-red-50:  #fff1f4;
+  --socia-red-100: #ffd9e1;
+  --socia-red-200: #ffb3c2;
+  --socia-red-300: #ff8099;
+  --socia-red-400: #f55573;
+  --socia-red-500: #e93456;
+  --socia-red-600: #d42349;
+  --socia-red-700: #b01a3c;
+  --socia-red-800: #861330;
+  --socia-red-900: #5c0d22;
+
+  --socia-paper:  #fafbfc;
+  --socia-ink-50: #f4f5f7;
+  --socia-ink-100:#e6e8ec;
+  --socia-ink-200:#cfd3da;
+  --socia-ink-300:#a8aeb8;
+  --socia-ink-400:#7a8090;
+  --socia-ink-500:#525866;
+  --socia-ink-700:#24272f;
+  --socia-ink-800:#14161b;
+  --socia-ink-900:#0a0b0f;
+}
+
+/* Starlight token overrides — light theme */
+:root[data-theme='light'] {
+  --sl-color-accent-low:   var(--socia-red-50);
+  --sl-color-accent:       var(--socia-red-500);
+  --sl-color-accent-high:  var(--socia-red-700);
+
+  --sl-color-white:        #ffffff;
+  --sl-color-gray-1:       var(--socia-ink-100);
+  --sl-color-gray-2:       var(--socia-ink-200);
+  --sl-color-gray-3:       var(--socia-ink-300);
+  --sl-color-gray-4:       var(--socia-ink-500);
+  --sl-color-gray-5:       var(--socia-ink-700);
+  --sl-color-gray-6:       var(--socia-ink-800);
+  --sl-color-black:        var(--socia-ink-900);
+
+  --sl-color-bg:           #ffffff;
+  --sl-color-bg-nav:       var(--socia-paper);
+  --sl-color-bg-sidebar:   var(--socia-paper);
+  --sl-color-text:         var(--socia-ink-800);
+  --sl-color-text-accent:  var(--socia-red-600);
+  --sl-color-hairline:     var(--socia-ink-100);
+  --sl-color-hairline-light: var(--socia-ink-100);
+  --sl-color-hairline-shade: var(--socia-ink-200);
+}
+
+/* Dark theme — same red anchor, deep neutrals */
+:root[data-theme='dark'] {
+  --sl-color-accent-low:   #2a0e16;
+  --sl-color-accent:       var(--socia-red-400);
+  --sl-color-accent-high:  var(--socia-red-200);
+
+  --sl-color-white:        #ffffff;
+  --sl-color-gray-1:       #d8dadf;
+  --sl-color-gray-2:       #b6b9c0;
+  --sl-color-gray-3:       #8b8f99;
+  --sl-color-gray-4:       #5a5e6a;
+  --sl-color-gray-5:       #2c2f37;
+  --sl-color-gray-6:       #20232a;
+  --sl-color-black:        #0a0b0f;
+
+  --sl-color-bg:           var(--socia-ink-900);
+  --sl-color-bg-nav:       var(--socia-ink-800);
+  --sl-color-bg-sidebar:   var(--socia-ink-800);
+  --sl-color-text:         #f4f5f7;
+  --sl-color-text-accent:  var(--socia-red-300);
+  --sl-color-hairline:     rgba(255, 255, 255, 0.08);
+  --sl-color-hairline-light: rgba(255, 255, 255, 0.08);
+  --sl-color-hairline-shade: rgba(255, 255, 255, 0.14);
+}
+
+/* Typography */
+:root {
+  --sl-font: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+  --sl-font-system: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+}
+
+body, .sl-markdown-content, .site-title {
+  font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.site-title {
+  font-weight: 800 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Headings get the brand discipline: H1 ink, H2 red, both uppercase-leaning */
+.sl-markdown-content h1 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-size: 2.5rem;
+}
+.sl-markdown-content h2 {
+  font-weight: 700;
+  color: var(--sl-color-text-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 1.4rem;
+  border-top: 1px solid var(--sl-color-hairline);
+  padding-top: 1.5rem;
+  margin-top: 2.5rem;
+}
+.sl-markdown-content h3 {
+  font-weight: 700;
+  color: var(--sl-color-text-accent);
+  font-size: 1.15rem;
+  margin-top: 2rem;
+}
+
+/* Page H1 — both the splash hero and the regular doc page header use
+   color: var(--sl-color-white) by default, which is white-on-white in
+   the light theme. Force the brand-correct colour everywhere. */
+.hero h1,
+h1#_top,
+.sl-container h1,
+.content-panel h1 {
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  color: var(--socia-ink-800) !important;
+}
+:root[data-theme='dark'] .hero h1,
+:root[data-theme='dark'] h1#_top,
+:root[data-theme='dark'] .sl-container h1,
+:root[data-theme='dark'] .content-panel h1 {
+  color: var(--socia-ink-50) !important;
+}
+.hero .tagline {
+  color: var(--sl-color-gray-4);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+/* Header right-side controls — theme switcher & language picker.
+   Starlight defaults their text to var(--sl-color-text-invert); since we
+   inverted that to socia-ink-100, the labels become unreadable. Restore
+   a high-contrast text colour and a soft hover background. */
+starlight-theme-select select,
+starlight-lang-select select,
+.social-icons a {
+  color: var(--socia-ink-700) !important;
+}
+:root[data-theme='dark'] starlight-theme-select select,
+:root[data-theme='dark'] starlight-lang-select select,
+:root[data-theme='dark'] .social-icons a {
+  color: var(--socia-ink-50) !important;
+}
+starlight-theme-select select:hover,
+starlight-lang-select select:hover {
+  background: var(--socia-red-50);
+}
+:root[data-theme='dark'] starlight-theme-select select:hover,
+:root[data-theme='dark'] starlight-lang-select select:hover {
+  background: rgba(233, 52, 86, 0.14);
+}
+/* Caret next to the select */
+starlight-theme-select label svg,
+starlight-lang-select label svg {
+  color: var(--socia-ink-500) !important;
+}
+:root[data-theme='dark'] starlight-theme-select label svg,
+:root[data-theme='dark'] starlight-lang-select label svg {
+  color: var(--socia-ink-200) !important;
+}
+
+/* Splash CTAs — Starlight uses .sl-link-button which inherits text colour from
+   --sl-color-accent-high. Force a white-on-red primary and red-on-white
+   secondary so the labels are always legible. */
+.sl-link-button.primary {
+  background: var(--socia-red-500) !important;
+  color: #fff !important;
+  border-color: var(--socia-red-500) !important;
+}
+.sl-link-button.primary:hover {
+  background: var(--socia-red-600) !important;
+  border-color: var(--socia-red-600) !important;
+}
+.sl-link-button.secondary {
+  color: var(--socia-red-700) !important;
+  border-color: var(--socia-red-500) !important;
+}
+:root[data-theme='dark'] .sl-link-button.secondary {
+  color: var(--socia-red-200) !important;
+}
+.sl-link-button.minimal {
+  color: var(--socia-red-600) !important;
+}
+:root[data-theme='dark'] .sl-link-button.minimal {
+  color: var(--socia-red-300) !important;
+}
+
+/* Sidebar group titles ("Introducción", "Instala la plataforma"…)
+   Starlight ships them as .large in white; on a paper-coloured sidebar they
+   disappear. Force a high-contrast eyebrow style. */
+.sidebar .large,
+[data-theme='light'] .sidebar .large {
+  color: var(--socia-red-600) !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.78rem !important;
+}
+:root[data-theme='dark'] .sidebar .large {
+  color: var(--socia-red-300) !important;
+}
+
+/* Inline accents */
+strong { color: var(--sl-color-text); font-weight: 700; }
+
+/* Code & links — use the brand red rather than generic blue */
+.sl-markdown-content :not(pre) > code {
+  background: var(--socia-red-50);
+  color: var(--socia-red-700);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+}
+:root[data-theme='dark'] .sl-markdown-content :not(pre) > code {
+  background: rgba(233, 52, 86, 0.16);
+  color: var(--socia-red-200);
+}
+
+a {
+  color: var(--sl-color-text-accent);
+}
+
+/* Tables — header in brand red, cool hairline rules */
+.sl-markdown-content table {
+  border-collapse: collapse;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sl-markdown-content thead {
+  background: var(--socia-red-500);
+}
+.sl-markdown-content thead th {
+  color: #fff !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+  padding: 0.75rem 1.1rem;
+  text-align: left;
+}
+.sl-markdown-content tbody td,
+.sl-markdown-content tbody th {
+  border-top: 1px solid var(--sl-color-hairline);
+  padding: 0.7rem 1.1rem;
+  vertical-align: top;
+}
+.sl-markdown-content tbody tr:nth-child(even) td {
+  background: var(--socia-paper);
+}
+:root[data-theme='dark'] .sl-markdown-content tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Blockquotes */
+.sl-markdown-content blockquote {
+  border-left: 3px solid var(--socia-red-500);
+  padding-left: 1rem;
+  color: var(--sl-color-gray-3);
+}
+
+/* Asides — overhauled to SOCIA style: paper background, thick left rule
+   in the variant colour, title coloured, body in regular ink. The default
+   Starlight palette is too saturated and breaks our single-red discipline. */
+.sl-markdown-content .starlight-aside {
+  background: var(--socia-paper) !important;
+  border: 1px solid var(--socia-ink-100) !important;
+  border-left: 4px solid var(--socia-ink-300) !important;
+  border-radius: 8px !important;
+  padding: 1rem 1.25rem !important;
+  color: var(--socia-ink-700) !important;
+}
+.sl-markdown-content .starlight-aside__title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem !important;
+  color: var(--socia-ink-700) !important;
+  margin-bottom: 0.4rem !important;
+}
+.sl-markdown-content .starlight-aside__icon {
+  color: inherit !important;
+}
+.sl-markdown-content .starlight-aside p {
+  color: var(--socia-ink-700);
+  margin-bottom: 0.5rem;
+}
+.sl-markdown-content .starlight-aside p:last-child { margin-bottom: 0; }
+
+/* Variant colours — tip uses the brand red; the others stay quiet
+   (note in cool ink, caution in amber, danger in deep red). */
+.sl-markdown-content .starlight-aside--tip {
+  border-left-color: var(--socia-red-500) !important;
+}
+.sl-markdown-content .starlight-aside--tip .starlight-aside__title {
+  color: var(--socia-red-600) !important;
+}
+
+.sl-markdown-content .starlight-aside--note {
+  border-left-color: var(--socia-ink-500) !important;
+}
+.sl-markdown-content .starlight-aside--note .starlight-aside__title {
+  color: var(--socia-ink-700) !important;
+}
+
+.sl-markdown-content .starlight-aside--caution {
+  border-left-color: #c97a0c !important;
+  background: #fff7eb !important;
+}
+.sl-markdown-content .starlight-aside--caution .starlight-aside__title {
+  color: #8a4f00 !important;
+}
+
+.sl-markdown-content .starlight-aside--danger {
+  border-left-color: var(--socia-red-700) !important;
+  background: #fff1f4 !important;
+}
+.sl-markdown-content .starlight-aside--danger .starlight-aside__title {
+  color: var(--socia-red-700) !important;
+}
+
+/* Dark theme: invert the soft backgrounds */
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: var(--socia-ink-50) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside__title {
+  color: var(--socia-ink-50) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--tip .starlight-aside__title {
+  color: var(--socia-red-300) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--caution {
+  background: rgba(201, 122, 12, 0.12) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--caution .starlight-aside__title {
+  color: #f0b85b !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--danger {
+  background: rgba(233, 52, 86, 0.12) !important;
+}
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside--danger .starlight-aside__title {
+  color: var(--socia-red-300) !important;
+}
+
+/* Force all Starlight icons inside cards to brand red — keeps the
+   single-accent discipline of the SOCIA palette. */
+.card .icon,
+.card svg,
+.sl-link-card .icon,
+.sl-link-card svg,
+.sl-markdown-content .card .icon,
+.sl-markdown-content .card svg {
+  color: var(--socia-red-500) !important;
+}
+
+/* The decorative icon container Starlight ships uses --sl-color-icon
+   variants for background tint — neutralise to a soft socia-red-50 wash. */
+.card .icon {
+  background: var(--socia-red-50) !important;
+  border-color: var(--socia-red-100) !important;
+}
+:root[data-theme='dark'] .card .icon {
+  background: rgba(233, 52, 86, 0.12) !important;
+  border-color: rgba(233, 52, 86, 0.28) !important;
+}
+
+/* Cards from @astrojs/starlight/components — both <Card> and <LinkCard> */
+.card,
+.sl-link-card {
+  border: 1px solid var(--sl-color-hairline) !important;
+  border-radius: 12px !important;
+  background: var(--sl-color-bg) !important;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+.card:hover,
+.sl-link-card:hover {
+  border-color: var(--socia-red-500) !important;
+  box-shadow: 0 4px 16px rgba(20, 22, 27, 0.08);
+  transform: translateY(-1px);
+}
+.card .title,
+.sl-link-card .title {
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--sl-color-text-accent) !important;
+  display: block !important;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+.sl-link-card .description {
+  color: var(--sl-color-gray-3);
+}
+
+/* Sidebar items — brand accent on the active item */
+.sidebar a[aria-current='page'] {
+  color: var(--socia-red-600);
+  background: var(--socia-red-50);
+}
+:root[data-theme='dark'] .sidebar a[aria-current='page'] {
+  color: var(--socia-red-200);
+  background: rgba(233, 52, 86, 0.14);
+}
+
+/* Top navigation */
+header.header {
+  border-bottom: 1px solid var(--sl-color-hairline);
+}
+
+/* Inline checklist used in adopcion.md (markdown task lists) */
+.sl-markdown-content ul li input[type="checkbox"] {
+  accent-color: var(--socia-red-500);
+  margin-right: 0.5rem;
+}
+
+/* Nice scrollbar in sidebar */
+.sidebar-content::-webkit-scrollbar { width: 6px; }
+.sidebar-content::-webkit-scrollbar-thumb { background: var(--socia-red-500); border-radius: 3px; }
+
+/* Prev/Next pagination — Starlight defaults each link to flex:1 so they
+   stretch edge-to-edge. Shrink them to content width with a quiet card
+   look that matches the SOCIA palette. */
+.pagination-links {
+  gap: 0.75rem !important;
+  margin-top: 2rem;
+}
+.pagination-links > a {
+  flex: 0 1 auto !important;
+  max-width: 18rem;
+  padding: 0.7rem 1rem !important;
+  border: 1px solid var(--sl-color-hairline) !important;
+  border-radius: 10px !important;
+  background: var(--sl-color-bg);
+  color: var(--socia-ink-700);
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+.pagination-links > a:hover {
+  border-color: var(--socia-red-500) !important;
+  background: var(--socia-red-50);
+  transform: translateY(-1px);
+}
+:root[data-theme='dark'] .pagination-links > a {
+  color: var(--socia-ink-50);
+}
+:root[data-theme='dark'] .pagination-links > a:hover {
+  background: rgba(233, 52, 86, 0.12);
+}
+.pagination-links > a svg {
+  color: var(--socia-red-500);
+  flex-shrink: 0;
+}
+.pagination-links > a .link-title {
+  color: var(--sl-color-text);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+/* The small label above the title ("Siguiente página" / "Página anterior") */
+.pagination-links > a > span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sl-color-gray-3);
+  font-weight: 600;
+}
+.pagination-links > a > span .link-title {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.95rem;
+  text-transform: none;
+  letter-spacing: -0.005em;
+}
+
+/* Script-accent helper, e.g. for "Un proyecto del" */
+.script {
+  font-family: 'Caveat Brush', 'Kalam', cursive;
+  color: var(--socia-red-500);
+}

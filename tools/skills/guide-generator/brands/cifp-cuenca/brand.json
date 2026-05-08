@@ -1,0 +1,20 @@
+{
+  "id": "cifp-cuenca",
+  "name": {
+    "short": "CIFP N.º 1 Cuenca",
+    "eyebrow": "CIFP N.º 1 Cuenca · Ciberseguridad",
+    "location": "Cuenca"
+  },
+  "palette": {
+    "primary": "#e86b1c",
+    "primaryDark": "#b85410",
+    "tint": "#fdf3eb",
+    "dark": "#333333",
+    "muted": "#666666",
+    "border": "#e5e5e5"
+  },
+  "copy": {
+    "pageFooter": "CIFP N.º 1 Cuenca · Ciberseguridad",
+    "guideCreditBox": "Guía generada automáticamente usando MENTORA, desarrollada por el equipo educativo de ciberseguridad del CIFP N.º 1 Cuenca. MENTORA graba las acciones del profesor sobre las herramientas reales del SOC y produce automáticamente este material didáctico, garantizando que la documentación coincide con la práctica actual del aula."
+  }
+}

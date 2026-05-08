@@ -1,0 +1,20 @@
+{
+  "id": "ies-rafael-alberti",
+  "name": {
+    "short": "IES Rafael Alberti",
+    "eyebrow": "IES Rafael Alberti · Ciberseguridad",
+    "location": "Cádiz"
+  },
+  "palette": {
+    "primary": "#e93456",
+    "primaryDark": "#c42847",
+    "tint": "#fff5f7",
+    "dark": "#222220",
+    "muted": "#9ca3af",
+    "border": "#e5e5e5"
+  },
+  "copy": {
+    "pageFooter": "IES Rafael Alberti · Ciberseguridad",
+    "guideCreditBox": "Guía generada automáticamente usando MENTORA, desarrollada por el equipo educativo de ciberseguridad del IES Rafael Alberti (Cádiz). MENTORA graba las acciones del profesor sobre las herramientas reales del SOC y produce automáticamente este material didáctico, garantizando que la documentación coincide con la práctica actual del aula."
+  }
+}

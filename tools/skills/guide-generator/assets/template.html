@@ -1,0 +1,125 @@
+<!--
+  HTML template for SOCIA / MENTORA SOC case guides.
+
+  Placeholder convention:
+    {{CASE_*}}, {{PHASE_*}}, {{STEP_*}}      → case-specific content (always replaced)
+    {{BRAND_*}}                              → brand-specific values (palette, copy)
+                                               replaced from `brands/<id>/brand.json`
+    {{INLINE_CSS}}                           → contents of styles.css, inlined verbatim
+
+  The brand override block at the top of <style> redefines the CSS custom
+  properties declared in styles.css for the chosen brand, so the rest of the
+  stylesheet picks them up via var(--brand-*).
+
+  Logos: copy `imago.png` and `sello.png` from `brands/<id>/` into the output's
+  `assets/` folder (the only two files the template references by filename).
+
+  Screenshots go in an adjacent `images/` folder next to the HTML. weasyprint
+  resolves all paths relative to this file.
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>{{CASE_TITLE}}</title>
+<style>
+/* Brand override — substituted from brands/<id>/brand.json */
+:root {
+  --brand-primary:      {{BRAND_PRIMARY}};
+  --brand-primary-dark: {{BRAND_PRIMARY_DARK}};
+  --brand-tint:         {{BRAND_TINT}};
+  --brand-dark:         {{BRAND_DARK}};
+  --brand-muted:        {{BRAND_MUTED}};
+  --brand-border:       {{BRAND_BORDER}};
+  --brand-page-footer:  "{{BRAND_PAGE_FOOTER}}";
+}
+
+/* Paste the contents of assets/styles.css here — inline so the document is
+   self-contained when rendered. */
+{{INLINE_CSS}}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover-page">
+  <img class="cover-imago" src="assets/imago.png" alt="">
+  <div class="cover-eyebrow">{{BRAND_EYEBROW}}</div>
+  <h1>{{COVER_TITLE}}</h1>
+  <div class="subtitle">{{COVER_SUBTITLE_1}}</div>
+  <div class="case-subtitle">{{COVER_SUBTITLE_2}}</div>
+
+  <div class="cover-meta-block">
+    {{COVER_META_LINES}}
+  </div>
+
+  <div class="cover-footer">
+    {{BRAND_GUIDE_CREDIT_BOX}}
+  </div>
+</div>
+
+<!-- Optional context paragraph right after cover -->
+<div class="context-box">
+  <b>Contexto del caso:</b> {{CASE_CONTEXT}}
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <h2>Índice de contenidos</h2>
+
+  <!-- Repeat per phase -->
+  <div class="phase-title">{{PHASE_TOC_TITLE}}</div>
+  <div class="step">{{STEP_TOC_LINE}}</div>
+  <!-- ... -->
+</div>
+
+<!-- PHASE BLOCK (repeat per phase) -->
+<div class="phase-header" style="page-break-before: always;">
+  <div class="phase-num">{{PHASE_NUM_LABEL}}</div>
+  <div class="phase-info">
+    <div class="phase-role">{{PHASE_ROLE}}</div>
+    <div class="phase-title">{{PHASE_TITLE}}</div>
+  </div>
+</div>
+
+<!-- STEP (repeat per step) -->
+<h3>{{STEP_HEADING}}</h3>
+<p>{{STEP_PARAGRAPH}}</p>
+<!-- Optional figure -->
+<figure>
+  <img src="images/{{SCREENSHOT_FILENAME}}">
+  <figcaption>{{SCREENSHOT_CAPTION}}</figcaption>
+</figure>
+<!-- Optional note -->
+<div class="note-box"><b>Nota:</b> {{NOTE_TEXT}}</div>
+
+<!-- SUMMARY (always at the end) -->
+<div class="summary">
+  <h2>Resumen del flujo de trabajo</h2>
+  <table>
+    <thead>
+      <tr><th>Fase</th><th>Rol</th><th>Herramienta</th><th>Acciones clave</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>{{N}}</td><td>{{ROLE}}</td><td>{{TOOL}}</td><td>{{ACTIONS}}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="context-box">
+    <b>Conclusión:</b> {{CONCLUSION}}
+  </div>
+
+  <div class="credit-box">
+    <img src="assets/sello.png" alt="{{BRAND_NAME_SHORT}}">
+    <div>
+      {{BRAND_GUIDE_CREDIT_BOX}}
+    </div>
+  </div>
+
+  <div class="footer-meta">
+    Grabación MENTORA del {{RECORDING_DATE}} · Duración total: {{DURATION}} · {{STEP_COUNT}} pasos documentados
+  </div>
+</div>
+
+</body>
+</html>

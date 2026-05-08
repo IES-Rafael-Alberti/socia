@@ -1,0 +1,56 @@
+---
+import { Image } from "astro:assets";
+import ministerioLogo from "~/assets/funding/ministerio.png";
+import euLogo from "~/assets/funding/eu.png";
+import prtrLogo from "~/assets/funding/prtr.png";
+import Reveal from "~/components/reveal.astro";
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
+
+/*
+  The three logos required by the funding entities:
+    1. Ministerio de Educación, Formación Profesional y Deportes (MEFPD)
+    2. "Financiado por la Unión Europea — NextGenerationEU"
+    3. Plan de Recuperación, Transformación y Resiliencia (PRTR)
+  PRTR's source has a near-square aspect ratio (1920×1080), while the other
+  two are much wider; we give it extra height so all three read at a similar
+  visual weight.
+*/
+const logos = [
+  { src: ministerioLogo, alt: 'Ministerio de Educación, Formación Profesional y Deportes', heightClass: 'h-14 sm:h-16' },
+  { src: euLogo,         alt: 'Financiado por la Unión Europea — NextGenerationEU',        heightClass: 'h-14 sm:h-16' },
+  { src: prtrLogo,       alt: 'Plan de Recuperación, Transformación y Resiliencia',        heightClass: 'h-32 sm:h-36' },
+];
+---
+
+<section id="funding" class="bg-socia-paper py-20 sm:py-24">
+  <Reveal class="mx-auto flex max-w-5xl flex-col items-center gap-8 px-6 text-center">
+    <p class="eyebrow">— {t('funding.eyebrow')}</p>
+    <h2 class="font-display text-2xl font-bold uppercase tracking-tight text-ink-800 sm:text-3xl">
+      {t('funding.title')}
+    </h2>
+    <p class="max-w-2xl text-base leading-relaxed text-ink-500">
+      {t('funding.body')}
+    </p>
+
+    <div class="mt-4 flex flex-col items-center justify-center gap-8 sm:flex-row sm:gap-12">
+      {
+        logos.map(({ src, alt, heightClass }) => (
+          <Image
+            src={src}
+            alt={alt}
+            class:list={["w-auto object-contain", heightClass]}
+            widths={[240, 480]}
+            sizes="240px"
+          />
+        ))
+      }
+    </div>
+  </Reveal>
+</section>

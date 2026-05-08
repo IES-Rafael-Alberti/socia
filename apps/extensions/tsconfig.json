@@ -1,0 +1,27 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["chrome"],
+    "paths": {
+      "@socia/branding": ["../../packages/socia-branding/src/index.ts"],
+      "@socia/branding/*": ["../../packages/socia-branding/src/*"],
+      "@socia/eval": ["../../packages/socia-eval/src/index.ts"],
+      "@socia/eval/*": ["../../packages/socia-eval/src/*"],
+      "@socia/runtime": ["../../packages/socia-runtime/src/index.ts"],
+      "@socia/runtime/*": ["../../packages/socia-runtime/src/*"]
+    }
+  },
+  "include": [
+    "entrypoints/**/*",
+    "utils/**/*",
+    "../../packages/socia-runtime/src/**/*",
+    "../../packages/socia-eval/src/**/*",
+    "../../packages/socia-branding/src/**/*",
+    ".wxt/wxt.d.ts"
+  ]
+}

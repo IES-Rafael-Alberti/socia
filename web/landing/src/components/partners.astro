@@ -1,0 +1,99 @@
+---
+import { Image } from "astro:assets";
+import { Icon } from "astro-icon/components";
+import rafaelAlbertiLogo from "~/assets/Sello-Rafael-Alberti-Primario.svg";
+import cifpCuencaLogo from "~/assets/logo-cifp-cuenca.png";
+import aktiosLogo from "~/assets/atkios.svg";
+import Reveal from "~/components/reveal.astro";
+import { useTranslations, languages } from "~/i18n";
+
+export interface Props {
+  lang: keyof typeof languages;
+}
+
+const { lang = 'es' } = Astro.props;
+const t = useTranslations(lang);
+
+const partners = [
+  {
+    role: t('partners.role.alberti'),
+    title: 'IES Rafael Alberti',
+    contribution: t('partners.contribution.alberti'),
+    url: 'https://iesrafaelalberti.es',
+    image: rafaelAlbertiLogo,
+    logoClass: 'h-56 max-w-[260px]',  // square seal — needs height
+  },
+  {
+    role: t('partners.role.cuenca'),
+    title: 'CIFP N.º 1 Cuenca',
+    contribution: t('partners.contribution.cuenca'),
+    url: 'https://www.cifpcuenca.es',
+    image: cifpCuencaLogo,
+    logoClass: 'h-44 max-w-[300px]',  // medium aspect
+  },
+  {
+    role: t('partners.role.aktios'),
+    title: 'Aktios Security Services',
+    contribution: t('partners.contribution.aktios'),
+    url: 'https://www.aktios.com',
+    image: aktiosLogo,
+    logoClass: 'h-24 max-w-[260px]',  // wide wordmark — needs less height
+  },
+];
+---
+
+<section id="partners" class="bg-white py-24 sm:py-32">
+  <div class="mx-auto max-w-7xl px-6">
+    <Reveal class="max-w-3xl">
+      <p class="eyebrow">— {t('partners.eyebrow')}</p>
+      <h2 class="headline mt-3 text-4xl text-ink-800 sm:text-5xl">
+        {t('partners.title')}
+      </h2>
+      <p class="mt-6 text-lg leading-relaxed text-ink-500">
+        {t('partners.lead')}
+      </p>
+    </Reveal>
+
+    <ul class="mt-16 grid gap-px overflow-hidden rounded-2xl bg-ink-100 lg:grid-cols-3">
+      {
+        partners.map((p, i) => (
+          <Reveal as="li" delay={i * 100} class="bg-white">
+            <a
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="group relative flex aspect-[4/3] items-center justify-center overflow-hidden p-10 transition-colors hover:bg-socia-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label={`${p.title} — ${p.role}`}
+            >
+              {/* Logo, dimmed slightly on hover. Each partner has its own
+                  display class so logos with different aspect ratios — square
+                  seal vs. wide wordmark — read at a similar weight. */}
+              <Image
+                src={p.image}
+                alt={p.title}
+                class:list={["w-auto object-contain transition-all duration-300 group-hover:scale-95 group-hover:opacity-15", p.logoClass]}
+                widths={[320, 640]}
+                sizes="320px"
+              />
+
+              {/* Hover overlay with role + contribution */}
+              <div class="absolute inset-0 flex flex-col justify-between p-8 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">{p.role}</p>
+                <div>
+                  <h3 class="font-display text-lg font-extrabold uppercase leading-tight tracking-tight text-ink-800">
+                    {p.title}
+                  </h3>
+                  <p class="mt-2 text-sm leading-snug text-ink-600">{p.contribution}</p>
+                  <p class="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-primary">
+                    {t('partners.visit')}
+                    <Icon name="mdi:arrow-top-right" class="size-3.5" />
+                  </p>
+                </div>
+              </div>
+            </a>
+          </Reveal>
+        ))
+      }
+    </ul>
+  </div>
+</section>

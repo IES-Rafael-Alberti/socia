@@ -1,0 +1,34 @@
+{
+  "name": "socia-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SOCIA — entrenamiento práctico de ciberseguridad SOC con verificación automática y evaluación por LLM. Monorepo: extensiones MENTORA + SOCIA, servidor + panel docente. La web pública (landing + docs) vive en /web con su propio install.",
+  "scripts": {
+    "build": "pnpm -r --filter='./apps/*' --filter='./packages/*' build",
+    "build:extensions": "pnpm --filter @socia/extensions build",
+    "build:extensions:socia": "pnpm --filter @socia/extensions build:socia",
+    "build:extensions:mentora": "pnpm --filter @socia/extensions build:mentora",
+    "build:server": "pnpm --filter @socia/server build",
+    "dev:extensions:socia": "pnpm --filter @socia/extensions dev:socia",
+    "dev:extensions:mentora": "pnpm --filter @socia/extensions dev:mentora",
+    "dev:server": "pnpm --filter @socia/server dev",
+    "dev:server:panel": "pnpm --filter @socia/server dev:panel",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "core-js",
+      "esbuild",
+      "sharp"
+    ]
+  }
+}

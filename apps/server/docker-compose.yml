@@ -1,0 +1,25 @@
+services:
+  socia-server:
+    build:
+      # Build context is the repo root — the Dockerfile needs the full pnpm
+      # workspace (apps/server depends on @socia/eval and @socia/branding).
+      context: ../..
+      dockerfile: apps/server/Dockerfile
+    container_name: socia-server
+    restart: unless-stopped
+    ports:
+      - "4318:4317"
+    environment:
+      PORT: 4317
+      DATA_DIR: /data
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASS: ${ADMIN_PASS:-changeme}
+      SESSION_SECRET: ${SESSION_SECRET:-change-this-please-to-a-long-random-string}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL_HINTS: ${OPENROUTER_MODEL_HINTS:-google/gemma-2-9b-it}
+      OPENROUTER_MODEL_EVAL: ${OPENROUTER_MODEL_EVAL:-google/gemma-2-27b-it}
+    volumes:
+      - socia-data:/data
+
+volumes:
+  socia-data:

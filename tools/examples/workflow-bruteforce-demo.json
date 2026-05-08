@@ -1,0 +1,166 @@
+{
+  "case": {
+    "id": "brute-force-debianvuln01",
+    "title": "Brute Force a debianvuln01 desde 172.31.0.2",
+    "description": "Se ha detectado una alerta de fuerza bruta SSH contra el servidor debianvuln01. El estudiante debe triagear la alerta en TheHive, investigar los logs en Graylog y ejecutar análisis de reputación sobre la IP atacante.",
+    "difficulty": "beginner",
+    "estimated_minutes": 15
+  },
+  "variables": {
+    "attacker_ip": "172.31.0.2",
+    "victim_host": "debianvuln01",
+    "thehive_host": "172.17.33.104:9000",
+    "graylog_host": "172.17.33.153:9000",
+    "alert_title": "Brute Force",
+    "rule_ids": "5710 OR 5711 OR 5712 OR 5763"
+  },
+  "context": {
+    "tools": {
+      "TheHive": "Plataforma SIRP (Security Incident Response Platform) para gestión de casos e incidentes. Permite crear casos desde alertas, gestionar observables (IPs, hashes, dominios) y ejecutar analizadores de reputación vía Cortex.",
+      "Graylog": "Plataforma de gestión de logs centralizada. Permite buscar y filtrar eventos de seguridad usando consultas tipo Elasticsearch. Los logs de OSSEC/Wazuh se ingestan aquí con campos como rule_id y data_srcip."
+    },
+    "pedagogy": {
+      "triage": "El estudiante aprende a evaluar la severidad de una alerta y a convertirla en un caso para su investigación formal.",
+      "investigation": "El estudiante aprende a investigar el incidente desde dos ángulos complementarios: correlacionar la alerta con los logs originales en Graylog (análisis de eventos) y enriquecer los observables con información de reputación externa (análisis de indicadores). Ambas tareas son independientes y pueden hacerse en cualquier orden."
+    },
+    "notes": "Este caso es introductorio. La IP 172.31.0.2 es interna de laboratorio. Los rule_id 5710-5763 corresponden a reglas OSSEC de autenticación SSH fallida. No se espera que el estudiante contenga o cierre el incidente en este ejercicio. Después de crear el caso, el estudiante puede investigar en Graylog o enriquecer observables en cualquier orden — ambas ramas son paralelas."
+  },
+  "phases": [
+    {
+      "id": "triage",
+      "title": "Triaje de la alerta",
+      "description": "Accede a TheHive, revisa la alerta de fuerza bruta y crea un caso para investigarla.",
+      "role": "Analista SOC N1",
+      "order": 1,
+      "tool_hosts": ["172.17.33.104:9000"],
+      "milestones": [
+        {
+          "id": "thehive-login",
+          "label": "Iniciar sesión en TheHive",
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/login",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [200]
+          },
+          "hint_examples": [
+            "Para empezar, necesitas acceder a la plataforma de gestión de incidentes. ¿Sabes cuál es?",
+            "Abre TheHive en tu navegador e inicia sesión con tus credenciales de analista.",
+            "Ve a http://{{thehive_host}} e introduce tu usuario y contraseña para entrar en TheHive."
+          ]
+        },
+        {
+          "id": "view-alert",
+          "label": "Revisar los detalles de la alerta",
+          "depends_on": ["thehive-login"],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/query",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [200],
+            "request_body_contains": ["getAlert", "extraData"]
+          },
+          "hint_examples": [
+            "Ahora que estás dentro, busca las alertas pendientes. ¿Dónde se listan las alertas en TheHive?",
+            "Ve a la sección de Alertas en el menú lateral y busca la alerta relacionada con '{{alert_title}}'.",
+            "Haz clic en 'Alerts' en el menú lateral izquierdo y luego abre la alerta '{{alert_title}} to {{victim_host}} from {{attacker_ip}}' para ver sus detalles."
+          ]
+        },
+        {
+          "id": "create-case",
+          "label": "Crear un caso a partir de la alerta",
+          "depends_on": ["view-alert"],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/alert/",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [200, 201],
+            "request_body_contains": "severity",
+            "response_body_contains": "\"_type\":\"Case\""
+          },
+          "hint_examples": [
+            "Has revisado la alerta. El siguiente paso es formalizarla para su investigación. ¿Cómo se formaliza una alerta en un SIRP?",
+            "Necesitas crear un caso a partir de esta alerta. Busca el botón o icono que te permita convertir la alerta en caso.",
+            "En la vista de detalle de la alerta, haz clic en el icono de 'crear caso' (folder con +), selecciona 'Empty case', elige una severidad y confirma."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "investigation",
+      "title": "Investigación y enriquecimiento",
+      "description": "Investiga el incidente desde dos ángulos: busca los logs originales en Graylog y enriquece los observables en TheHive con análisis de reputación. Puedes hacerlo en cualquier orden.",
+      "role": "Analista SOC N1",
+      "order": 2,
+      "tool_hosts": ["172.17.33.104:9000", "172.17.33.153:9000"],
+      "milestones": [
+        {
+          "id": "graylog-login",
+          "label": "Iniciar sesión en Graylog",
+          "after_milestone": "create-case",
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/system/sessions",
+            "host_contains": "{{graylog_host}}",
+            "response_status": [200]
+          },
+          "hint_examples": [
+            "Necesitas investigar los logs originales del ataque. ¿Qué herramienta del laboratorio centraliza los logs?",
+            "Accede a Graylog para buscar los eventos de seguridad relacionados con esta alerta de fuerza bruta.",
+            "Abre http://{{graylog_host}} en otra pestaña e inicia sesión con tus credenciales de Graylog."
+          ]
+        },
+        {
+          "id": "search-brute-force-logs",
+          "label": "Buscar los logs de fuerza bruta por IP de origen",
+          "depends_on": ["graylog-login"],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": ["/api/views/search/", "/execute"],
+            "host_contains": "{{graylog_host}}",
+            "response_status": [200, 201],
+            "request_body_contains": "{{attacker_ip}}"
+          },
+          "hint_examples": [
+            "Estás en Graylog. Necesitas buscar los eventos que generaron la alerta. ¿Qué datos tienes para filtrar?",
+            "Usa la barra de búsqueda para filtrar por la IP de origen del ataque ({{attacker_ip}}) y los identificadores de regla de fuerza bruta SSH.",
+            "En el dashboard o la búsqueda de Graylog, introduce una query como: rule_id:({{rule_ids}}) AND data_srcip:\"{{attacker_ip}}\" y pulsa Enter para ejecutarla."
+          ]
+        },
+        {
+          "id": "view-observable-ip",
+          "label": "Abrir el observable de la IP atacante en el caso",
+          "after_milestone": "create-case",
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/query",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [200],
+            "request_body_contains": ["getObservable", "extraData"]
+          },
+          "hint_examples": [
+            "También necesitas analizar la IP del atacante. ¿Dónde se gestionan los indicadores (IPs, hashes, dominios) en TheHive?",
+            "Ve a la pestaña 'Observables' del caso y abre el observable correspondiente a la IP {{attacker_ip}}.",
+            "En TheHive, abre tu caso, haz clic en la pestaña 'Observables' y luego en la IP '172[.]31[.]0[.]2' para ver sus detalles."
+          ]
+        },
+        {
+          "id": "run-analyzers",
+          "label": "Ejecutar analizadores de reputación sobre la IP",
+          "depends_on": ["view-observable-ip"],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/connector/cortex/job",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [200, 201]
+          },
+          "hint_examples": [
+            "Tienes el observable abierto. ¿Cómo podemos obtener más información sobre esta IP de fuentes externas?",
+            "Ejecuta los analizadores disponibles (AbuseIPDB, VirusTotal, etc.) sobre este observable para obtener información de reputación.",
+            "Haz clic en el menú de acciones (⋯) del observable, selecciona 'Run analyzers', marca 'Select all' y confirma con 'Run Selected Analyzers'."
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+# Run on every push and PR.
+#
+# Two independent jobs:
+#   - core: workspace pnpm (apps/extensions + apps/server + packages/*).
+#     Build + typecheck. This is what most contributions touch.
+#   - web: only when web/ changes. Each web app installs and builds on its
+#     own (web/ is outside the workspace by design).
+#
+# `--frozen-lockfile` (the pnpm install default) is strict: CI fails if the
+# lockfile is out of sync with package.json. Anyone adding a dependency must
+# commit the updated `pnpm-lock.yaml`. This is the right tradeoff for an
+# open-source repo where reproducibility matters more than convenience.
+
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  core:
+    name: Build core (extensions + server + packages)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (all packages + apps)
+        run: pnpm typecheck
+
+      - name: Build extensions
+        run: pnpm build:extensions
+
+      - name: Build server (panel + backend)
+        run: pnpm build:server
+
+  web:
+    name: Build web (landing + docs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # web/ is a self-contained pnpm sub-workspace.
+      - name: Install web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build landing + docs
+        working-directory: web
+        run: pnpm build

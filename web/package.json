@@ -1,0 +1,24 @@
+{
+  "name": "@socia/web",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SOCIA public sites — landing + docs. Sub-workspace, independent of the main repo workspace.",
+  "scripts": {
+    "build": "pnpm --filter @socia/landing build && pnpm --filter @socia/docs build",
+    "build:landing": "pnpm --filter @socia/landing build",
+    "build:docs": "pnpm --filter @socia/docs build",
+    "dev:landing": "pnpm --filter @socia/landing dev",
+    "dev:docs": "pnpm --filter @socia/docs dev",
+    "clean": "pnpm -r clean"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  }
+}

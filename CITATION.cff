@@ -1,0 +1,92 @@
+# Citation metadata. GitHub renders a "Cite this repository" widget from this
+# file. Format: https://citation-file-format.github.io/
+#
+# Validate before pushing:
+#   pip install cffconvert && cffconvert --validate
+# or with `pre-commit` hook `python-jsonschema/check-jsonschema --schemafile <CFF schema>`.
+
+cff-version: 1.2.0
+message: >-
+  If you use SOCIA in your teaching, your research or any derived work,
+  please cite it using the metadata in this file.
+
+title: "SOCIA — Plataforma para el entrenamiento de gestión de incidentes de Ciberseguridad tutorizada con Inteligencia Artificial"
+
+abstract: >-
+  SOCIA is an open-source platform that lets vocational-training students
+  resolve realistic Security Operations Centre (SOC) cases against actual
+  tooling (TheHive, Graylog, OPNsense, Wazuh, Velociraptor, Malcolm). It
+  records the student's actions, verifies progress automatically by matching
+  HTTP network signatures against pedagogical milestones, offers progressive
+  AI-tutored hints and produces a final evaluation PDF. It supports a
+  standalone mode (a student loads a workflow.json locally) and a managed
+  mode (a teacher launches cases for a class from a self-hosted server with
+  a web admin panel). The project is led by IES Rafael Alberti (Cádiz) in
+  collaboration with CIFP N.º 1 Cuenca and Aktios Security Services, and is
+  funded by the Spanish Ministry of Education, Vocational Training and
+  Sports under the Recovery, Transformation and Resilience Plan (PRTR) /
+  NextGenerationEU.
+
+type: software
+
+# Authors are the collaborating institutions. CFF distinguishes "entity"
+# authors (organisations) from "person" authors by the use of `name` instead
+# of `given-names`/`family-names`. The order matters: IES Rafael Alberti is
+# the coordinating centre and is listed first. Individual contributors who
+# want to be cited by name can be added before/between/after the entity
+# entries — citation tools render the list in order.
+authors:
+  - name: "IES Rafael Alberti"
+    city: "Cádiz"
+    country: ES
+    website: "https://iesrafaelalberti.es"
+  - name: "CIFP N.º 1 Cuenca"
+    city: "Cuenca"
+    country: ES
+    website: "https://www.cifpcuenca.es"
+  - name: "Aktios Security Services, S.L."
+    country: ES
+    website: "https://www.aktios.com"
+
+repository-code: "https://github.com/IES-Rafael-Alberti/socia"
+url: "https://socia.fpciberseguridad.com"
+
+license: MIT
+
+keywords:
+  - cybersecurity
+  - security operations center
+  - SOC
+  - incident response
+  - vocational education
+  - educational technology
+  - AI tutoring
+  - large language models
+  - llm-as-judge
+  - automated assessment
+  - browser extension
+  - network forensics
+  - digital forensics
+
+# Update on each tagged release (pnpm version <…> + git tag).
+version: "1.0.0"
+# date-released: 2026-XX-XX   # uncomment and fill on first public release
+
+# When the project is archived to Zenodo to obtain a DOI, add it here. The
+# Zenodo–GitHub integration produces a DOI per release; pick the
+# "concept DOI" (cross-version) for general citation.
+# identifiers:
+#   - type: doi
+#     value: "10.5281/zenodo.XXXXXXX"
+#     description: "Concept DOI (all versions)"
+
+# If you publish a paper or thesis describing SOCIA, point to it as the
+# preferred citation so academic citation tools surface the paper instead
+# of the software metadata.
+# preferred-citation:
+#   type: article
+#   title: "..."
+#   authors: [...]
+#   year: 2026
+#   journal: "..."
+#   doi: "10.xxxx/xxxxx"
