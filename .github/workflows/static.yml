@@ -6,6 +6,9 @@
 # workspace of the rest of the repo (so contributors who only care about
 # extensions / server don't have to install Astro / Starlight). Each one
 # is installed and built independently here.
+#
+# Note on pnpm version: we let `pnpm/action-setup` read it from the
+# `packageManager` field in package.json instead of pinning it again here.
 
 name: Build & deploy SOCIA site
 
@@ -28,17 +31,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # web/ is a self-contained pnpm sub-workspace (own pnpm-workspace.yaml,
       # own lockfile). One install, one build for both sites.

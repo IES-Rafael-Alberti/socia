@@ -10,6 +10,10 @@
 # lockfile is out of sync with package.json. Anyone adding a dependency must
 # commit the updated `pnpm-lock.yaml`. This is the right tradeoff for an
 # open-source repo where reproducibility matters more than convenience.
+#
+# Note on pnpm version: we let `pnpm/action-setup` read it from the
+# `packageManager` field in package.json (the canonical source) instead of
+# pinning it again here. Setting both is now an error in the action.
 
 name: CI
 
@@ -25,17 +29,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install workspace dependencies
@@ -55,17 +57,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # web/ is a self-contained pnpm sub-workspace.
       - name: Install web dependencies
