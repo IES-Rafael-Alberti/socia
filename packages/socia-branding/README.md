@@ -10,7 +10,7 @@ Cada brand está versionada en código (`src/brands/<id>/brand.ts`) — añadir 
 |---|---|---|
 | `socia` | SOCIA | Brand genérico por defecto. Paleta rosa-rojo `#e93456` sobre blanco con neutros fríos. |
 | `ies-rafael-alberti` | IES Rafael Alberti (Cádiz) | Paleta rosa/roja institucional. |
-| `cifp-cuenca` | CIFP N.º 1 Cuenca | Paleta naranja `#e86b1c` derivada de la web del centro. El sello reutiliza el imago hasta que haya una versión cuadrada del logo. |
+| `cifp-cuenca` | CIFP N.º 1 Cuenca | Paleta naranja `#e86b1c` derivada de la web del centro. El sello reutiliza el imago. |
 
 ## Cómo añadir un brand nuevo
 

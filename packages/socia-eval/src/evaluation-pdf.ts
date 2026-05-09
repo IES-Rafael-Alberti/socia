@@ -44,6 +44,30 @@ function setDraw(doc: jsPDF, rgb: RGB) {
   doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
 }
 
+/** Read width and height from a PNG IHDR chunk (base64-encoded bytes). */
+function pngDimensions(b64: string): { w: number; h: number } {
+  // Magic (8) + IHDR length (4) + 'IHDR' (4) + width (4) + height (4) = 24 bytes.
+  // 32 base64 chars decode to 24 raw bytes — exactly what we need.
+  const head = atob(b64.slice(0, 32));
+  const u32 = (offset: number) =>
+    ((head.charCodeAt(offset) << 24) |
+      (head.charCodeAt(offset + 1) << 16) |
+      (head.charCodeAt(offset + 2) << 8) |
+      head.charCodeAt(offset + 3)) >>> 0;
+  return { w: u32(16), h: u32(20) };
+}
+
+/** Inscribe (srcW × srcH) into (boxW × boxH) preserving aspect ratio. */
+function inscribe(
+  srcW: number,
+  srcH: number,
+  boxW: number,
+  boxH: number,
+): { w: number; h: number } {
+  const scale = Math.min(boxW / srcW, boxH / srcH);
+  return { w: srcW * scale, h: srcH * scale };
+}
+
 /** Ensure there is at least `needed` mm available. Start a new page if not. */
 function ensureSpace(
   doc: jsPDF,
@@ -121,17 +145,20 @@ function drawCover(doc: jsPDF, meta: CoverMeta, brand: Brand) {
   setFill(doc, colors.primary);
   doc.rect(0, 0, PAGE.width, PAGE.height, 'F');
 
-  // Imago (top-right corner) — only if the brand provides one.
+  // Imago (top-right corner) — only if the brand provides one. Inscribed in
+  // a 55×40 mm box preserving aspect ratio so wide wordmarks (CIFP) and
+  // squarish symbols (SOCIA, IES) both render at a comfortable size.
   if (brand.logos?.imago) {
     try {
-      const imagoSize = 32; // mm
+      const dims = pngDimensions(brand.logos.imago);
+      const { w, h } = inscribe(dims.w, dims.h, 55, 40);
       doc.addImage(
         `data:image/png;base64,${brand.logos.imago}`,
         'PNG',
-        PAGE.width - PAGE.marginX - imagoSize,
+        PAGE.width - PAGE.marginX - w,
         PAGE.marginTop,
-        imagoSize,
-        imagoSize,
+        w,
+        h,
         undefined,
         'FAST',
       );
@@ -521,12 +548,13 @@ export function renderEvaluationPdf(input: EvaluationPdfInput): Uint8Array {
   }
 
   // Sello in the bottom-right of the last content page — only if the brand
-  // provides one. Adds the institutional stamp without crowding the layout.
+  // provides one. Inscribed in a 35×28 mm box preserving aspect ratio.
   if (brand.logos?.sello) {
     try {
-      const selloSize = 22; // mm
-      const selloX = PAGE.width - PAGE.marginX - selloSize;
-      const selloY = PAGE.height - PAGE.marginBottom - selloSize - 4;
+      const dims = pngDimensions(brand.logos.sello);
+      const { w, h } = inscribe(dims.w, dims.h, 35, 28);
+      const selloX = PAGE.width - PAGE.marginX - w;
+      const selloY = PAGE.height - PAGE.marginBottom - h - 4;
       // Only render the sello if there's room; otherwise skip silently.
       if (cursor.y < selloY - 4) {
         doc.addImage(
@@ -534,8 +562,8 @@ export function renderEvaluationPdf(input: EvaluationPdfInput): Uint8Array {
           'PNG',
           selloX,
           selloY,
-          selloSize,
-          selloSize,
+          w,
+          h,
           undefined,
           'FAST',
         );
