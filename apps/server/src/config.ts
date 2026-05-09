@@ -17,4 +17,5 @@ export const config = {
   openrouterHintsModel: env('OPENROUTER_MODEL_HINTS', 'google/gemma-2-9b-it'),
   openrouterEvalModel: env('OPENROUTER_MODEL_EVAL', 'google/gemma-2-27b-it'),
   dataDir: path.resolve(env('DATA_DIR', './data')),
+  brandId: env('BRAND_ID', ''),
 };

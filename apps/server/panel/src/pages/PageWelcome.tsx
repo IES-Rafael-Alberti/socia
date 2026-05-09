@@ -2,29 +2,13 @@ import { useEffect, useState } from 'react';
 import { Icon } from '../icons';
 import { api } from '../api';
 
-interface BrandInfo {
-  brandId: string;
-  available: { id: string; name: string }[];
-}
-
 export function PageWelcome({ onGoToClasses }: { onGoToClasses: () => void }) {
   const [token, setToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [brand, setBrand] = useState<BrandInfo | null>(null);
-  const [brandSaved, setBrandSaved] = useState(false);
 
   useEffect(() => {
     api.get<{ token: string }>('/api/admin/token').then((r) => setToken(r.token)).catch(() => {});
-    api.get<BrandInfo>('/api/admin/brand').then(setBrand).catch(() => {});
   }, []);
-
-  async function changeBrand(brandId: string) {
-    if (!brand || brandId === brand.brandId) return;
-    await api.post('/api/admin/brand', { brandId });
-    setBrand({ ...brand, brandId });
-    setBrandSaved(true);
-    setTimeout(() => setBrandSaved(false), 1800);
-  }
 
   async function copy() {
     if (!token) return;
@@ -97,36 +81,6 @@ export function PageWelcome({ onGoToClasses }: { onGoToClasses: () => void }) {
             </p>
           </div>
         </div>
-
-        {brand && (
-          <div className="step" style={{ marginTop: 32, maxWidth: 640 }}>
-            <div className="step__num">AJUSTES DEL SERVIDOR</div>
-            <h4>Identidad visual de las evaluaciones</h4>
-            <p style={{ marginBottom: 12 }}>
-              El logo, los colores y la firma del PDF de evaluación. Aplica a todas las
-              evaluaciones que genere este servidor.
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <select
-                className="select"
-                value={brand.brandId}
-                onChange={(e) => changeBrand(e.target.value)}
-                style={{ maxWidth: 320 }}
-              >
-                {brand.available.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-              {brandSaved && (
-                <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>
-                  <Icon name="check" size={11} /> Guardado
-                </span>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

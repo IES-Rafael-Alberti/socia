@@ -38,7 +38,7 @@ Cada brand está versionada en código (`src/brands/<id>/brand.ts`) — añadir 
 ## Cómo se selecciona el brand
 
 - **Extensión SOCIA en standalone**: el alumno elige el brand desde Ajustes (`standaloneBrandId`). Default `ies-rafael-alberti`.
-- **SOCIA Server (managed)**: el admin configura el brand del servidor en la tabla `settings` (clave `brand_id`) o desde el panel docente. Aplica a todas las evaluaciones que genere ese servidor.
+- **SOCIA Server (managed)**: la variable de entorno `BRAND_ID` del docker-compose / `.env` fija el brand del servidor. Aplica a todas las evaluaciones que genere ese servidor.
 - **Skill `guide-generator`**: el agente lee el brand del contexto del docente que invoca la skill (instrucciones en su `SKILL.md`).
 
 ## Paleta

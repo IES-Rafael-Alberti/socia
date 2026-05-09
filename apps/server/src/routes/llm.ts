@@ -143,12 +143,7 @@ llmRouter.post('/evaluation', async (req: StudentReq, res) => {
   if (report) {
     pdfRel = path.join('evaluations', `${id}.pdf`);
     const pdfAbs = path.join(config.dataDir, pdfRel);
-    // Brand for the PDF: server-wide setting `brand_id` (configured by admin
-    // from the panel). Falls back to the default brand if unset/unknown.
-    const brandRow = db
-      .prepare("SELECT value FROM settings WHERE key = 'brand_id'")
-      .get() as { value: string } | undefined;
-    const brand = getBrand(brandRow?.value ?? null);
+    const brand = getBrand(config.brandId);
     writeEvaluationPdf({
       filePath: pdfAbs,
       caseId: workflow.case.id,

@@ -18,6 +18,7 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL_HINTS: ${OPENROUTER_MODEL_HINTS:-google/gemma-2-9b-it}
       OPENROUTER_MODEL_EVAL: ${OPENROUTER_MODEL_EVAL:-google/gemma-2-27b-it}
+      BRAND_ID: ${BRAND_ID:-}
     volumes:
       - socia-data:/data
 
