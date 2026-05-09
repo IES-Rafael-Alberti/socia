@@ -35,11 +35,11 @@ async function getApiKey(): Promise<string> {
 }
 
 function getHintModel(): string {
-  return import.meta.env.EXT_OPENROUTER_MODEL_HINTS ?? 'mistralai/mistral-7b-instruct';
+  return import.meta.env.EXT_OPENROUTER_MODEL_HINTS ?? 'xiaomi/mimo-v2-flash';
 }
 
 function getEvalModel(): string {
-  return import.meta.env.EXT_OPENROUTER_MODEL_EVAL ?? 'anthropic/claude-sonnet-4';
+  return import.meta.env.EXT_OPENROUTER_MODEL_EVAL ?? 'xiaomi/mimo-v2-flash';
 }
 
 /** Replace {{key}} placeholders */

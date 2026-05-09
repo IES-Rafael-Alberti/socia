@@ -91,7 +91,7 @@ pnpm build                # bundle + panel/dist (idéntico al que produce Docker
 | `ADMIN_PASS` | changeme | Contraseña del panel |
 | `SESSION_SECRET` | dev-secret-change-me | HMAC de la cookie de sesión |
 | `OPENROUTER_API_KEY` | (vacío) | Habilita pistas/eval automáticas |
-| `OPENROUTER_MODEL_HINTS` | google/gemma-2-9b-it | Modelo para pistas |
-| `OPENROUTER_MODEL_EVAL` | google/gemma-2-27b-it | Modelo para evaluación |
+| `OPENROUTER_MODEL_HINTS` | xiaomi/mimo-v2-flash | Modelo para pistas |
+| `OPENROUTER_MODEL_EVAL` | xiaomi/mimo-v2-flash | Modelo para evaluación |
 | `DATA_DIR` | ./data (en Docker, /data) | Carpeta del SQLite + ficheros |
 | `BRAND_ID` | socia | Logo, colores y firma del PDF de evaluación. IDs en `packages/socia-branding/src/brands/` |

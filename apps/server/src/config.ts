@@ -14,8 +14,8 @@ export const config = {
   adminPass: env('ADMIN_PASS', 'changeme'),
   sessionSecret: env('SESSION_SECRET', 'dev-secret-change-me'),
   openrouterKey: env('OPENROUTER_API_KEY', ''),
-  openrouterHintsModel: env('OPENROUTER_MODEL_HINTS', 'google/gemma-2-9b-it'),
-  openrouterEvalModel: env('OPENROUTER_MODEL_EVAL', 'google/gemma-2-27b-it'),
+  openrouterHintsModel: env('OPENROUTER_MODEL_HINTS', 'xiaomi/mimo-v2-flash'),
+  openrouterEvalModel: env('OPENROUTER_MODEL_EVAL', 'xiaomi/mimo-v2-flash'),
   dataDir: path.resolve(env('DATA_DIR', './data')),
   brandId: env('BRAND_ID', ''),
 };
