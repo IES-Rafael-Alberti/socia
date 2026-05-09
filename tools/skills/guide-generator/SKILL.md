@@ -47,7 +47,8 @@ The brand controls the colour palette, the cover eyebrow, the page footer and th
 
 1. Look at the recording metadata, the README and the user's request to identify which centre owns the case.
 2. Pick the brand id from `brands/`:
-   - `ies-rafael-alberti` — IES Rafael Alberti (Cádiz). Default if no centre is mentioned.
+   - `socia` — SOCIA generic. Default if no centre is mentioned.
+   - `ies-rafael-alberti` — IES Rafael Alberti (Cádiz).
    - `cifp-cuenca` — CIFP N.º 1 Cuenca.
    - …or any other directory present in `brands/`. New centres are added by dropping a folder following the same shape (see `brands/README.md`).
 3. Read `brands/<id>/brand.json` — it has the palette, the eyebrow, the page footer string and the credit-box copy.

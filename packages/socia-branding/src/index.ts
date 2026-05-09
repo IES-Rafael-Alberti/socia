@@ -8,6 +8,7 @@
  */
 
 import type { Brand } from './types.js';
+import { sociaBrand } from './brands/socia/brand.js';
 import { iesRafaelAlbertiBrand } from './brands/ies-rafael-alberti/brand.js';
 import { cifpCuencaBrand } from './brands/cifp-cuenca/brand.js';
 
@@ -15,12 +16,13 @@ export type { Brand, BrandPalette, BrandCopy, BrandLogos, BrandName, RGB } from 
 
 /** All built-in brands, indexed by id. */
 const registry: Record<string, Brand> = {
+  [sociaBrand.id]: sociaBrand,
   [iesRafaelAlbertiBrand.id]: iesRafaelAlbertiBrand,
   [cifpCuencaBrand.id]: cifpCuencaBrand,
 };
 
 /** The brand used when no explicit id is configured. */
-export const defaultBrand: Brand = iesRafaelAlbertiBrand;
+export const defaultBrand: Brand = sociaBrand;
 
 /** Look up a brand by id. Falls back to `defaultBrand` if not found. */
 export function getBrand(id: string | null | undefined): Brand {
@@ -40,4 +42,4 @@ export function listBrandIds(): string[] {
 
 // Re-export individual brands so consumers can import them directly when
 // they want compile-time guarantees a particular brand exists.
-export { iesRafaelAlbertiBrand, cifpCuencaBrand };
+export { sociaBrand, iesRafaelAlbertiBrand, cifpCuencaBrand };

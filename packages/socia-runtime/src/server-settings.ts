@@ -46,7 +46,7 @@ const DEFAULT: ServerSettings = {
   domainRequired: false,
   standaloneApiKey: null,
   standaloneGuidedMode: true,
-  standaloneBrandId: 'ies-rafael-alberti',
+  standaloneBrandId: 'socia',
 };
 
 export async function loadServerSettings(): Promise<ServerSettings> {

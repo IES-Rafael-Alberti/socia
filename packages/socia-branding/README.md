@@ -8,8 +8,9 @@ Cada brand está versionada en código (`src/brands/<id>/brand.ts`) — añadir 
 
 | `id` | Nombre | Notas |
 |---|---|---|
-| `ies-rafael-alberti` | IES Rafael Alberti (Cádiz) | Paleta rosa/roja original. Brand por defecto cuando no se configura otro. |
-| `cifp-cuenca` | CIFP N.º 1 Cuenca | Paleta naranja `#e86b1c` derivada de la guía de tokens del centro. El sello reutiliza el imago hasta que haya una versión cuadrada del logo. |
+| `socia` | SOCIA | Brand genérico por defecto. Paleta rosa-rojo `#e93456` sobre blanco con neutros fríos. |
+| `ies-rafael-alberti` | IES Rafael Alberti (Cádiz) | Paleta rosa/roja institucional. |
+| `cifp-cuenca` | CIFP N.º 1 Cuenca | Paleta naranja `#e86b1c` derivada de la web del centro. El sello reutiliza el imago hasta que haya una versión cuadrada del logo. |
 
 ## Cómo añadir un brand nuevo
 
@@ -37,7 +38,7 @@ Cada brand está versionada en código (`src/brands/<id>/brand.ts`) — añadir 
 
 ## Cómo se selecciona el brand
 
-- **Extensión SOCIA en standalone**: el alumno elige el brand desde Ajustes (`standaloneBrandId`). Default `ies-rafael-alberti`.
+- **Extensión SOCIA en standalone**: el alumno elige el brand desde Ajustes (`standaloneBrandId`). Default `socia`.
 - **SOCIA Server (managed)**: la variable de entorno `BRAND_ID` del docker-compose / `.env` fija el brand del servidor. Aplica a todas las evaluaciones que genere ese servidor.
 - **Skill `guide-generator`**: el agente lee el brand del contexto del docente que invoca la skill (instrucciones en su `SKILL.md`).
 

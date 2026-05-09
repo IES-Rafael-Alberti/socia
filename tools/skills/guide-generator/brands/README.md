@@ -50,5 +50,6 @@ brands/
 
 | `id` | Centro |
 |---|---|
+| `socia` | SOCIA genérico (default). Paleta rosa-rojo `#e93456` sobre blanco con neutros fríos. |
 | `ies-rafael-alberti` | IES Rafael Alberti (Cádiz). |
 | `cifp-cuenca` | CIFP N.º 1 Cuenca. Paleta naranja `#e86b1c` (guía de tokens del centro). |

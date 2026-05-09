@@ -1,0 +1,19 @@
+{
+  "id": "socia",
+  "name": {
+    "short": "SOCIA",
+    "eyebrow": "SOCIA · Ciberseguridad"
+  },
+  "palette": {
+    "primary": "#e93456",
+    "primaryDark": "#b01a3c",
+    "tint": "#fff1f4",
+    "dark": "#14161b",
+    "muted": "#525866",
+    "border": "#e6e8ec"
+  },
+  "copy": {
+    "pageFooter": "SOCIA · Ciberseguridad",
+    "guideCreditBox": "Guía generada automáticamente usando MENTORA. MENTORA graba las acciones del profesor sobre las herramientas reales del SOC y produce automáticamente este material didáctico, garantizando que la documentación coincide con la práctica actual del aula."
+  }
+}

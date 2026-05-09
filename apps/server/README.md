@@ -94,4 +94,4 @@ pnpm build                # bundle + panel/dist (idéntico al que produce Docker
 | `OPENROUTER_MODEL_HINTS` | google/gemma-2-9b-it | Modelo para pistas |
 | `OPENROUTER_MODEL_EVAL` | google/gemma-2-27b-it | Modelo para evaluación |
 | `DATA_DIR` | ./data (en Docker, /data) | Carpeta del SQLite + ficheros |
-| `BRAND_ID` | ies-rafael-alberti | Logo, colores y firma del PDF de evaluación. IDs en `packages/socia-branding/src/brands/` |
+| `BRAND_ID` | socia | Logo, colores y firma del PDF de evaluación. IDs en `packages/socia-branding/src/brands/` |
