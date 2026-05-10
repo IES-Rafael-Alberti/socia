@@ -215,12 +215,12 @@ function generateLLMInstructions(
     : '';
 
   const transcriptionFiles = hasTranscription
-    ? `- \`transcription.srt\` - Audio transcription in SRT subtitle format
+    ? `- \`transcription.srt\` - Audio transcription of the recording, segmented by chunk
 `
     : '';
 
   const transcriptionNote = hasTranscription
-    ? `5. **Read \`transcription.srt\`** for what was said during the recording
+    ? `5. **Read \`transcription.srt\`** for what was said during the recording. Use the action timestamps in the activity log to locate the relevant chunk; chunk boundaries are coarse (~5 min) and not aligned to individual phrases.
 `
     : '';
 
