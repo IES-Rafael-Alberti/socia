@@ -16,7 +16,7 @@ let dataRequestTimer: number | null = null;
 let finalVideoSentPromise: Promise<void> | null = null;
 let resolveFinalVideoSent: (() => void) | null = null;
 
-const AUDIO_CHUNK_DURATION_MS = 10 * 60 * 1000; // 10 minutes per audio chunk
+const AUDIO_CHUNK_DURATION_MS = 5 * 60 * 1000; // 5 minutes per audio chunk
 
 function buildCombinedStream(): MediaStream {
   if (!displayStream) {
