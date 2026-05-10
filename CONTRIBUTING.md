@@ -28,8 +28,7 @@ cp apps/extensions/.env.example apps/extensions/.env
 
 Las más relevantes:
 
-- **`EXT_OPENAI_API_KEY`** → MENTORA. Habilita la transcripción Whisper del audio del recording (`transcription.srt`). Sin ella, el recording se exporta sin transcripción.
-- **`EXT_OPENROUTER_API_KEY`** → SOCIA. Default compilado para pistas y evaluación en standalone. En la práctica el alumno la mete por Ajustes — solo tiene sentido fijarla aquí si vas a distribuir un build con la clave preconfigurada.
+- **`EXT_OPENROUTER_API_KEY`** → SOCIA + MENTORA. En SOCIA, default compilado para pistas y evaluación en standalone (en la práctica el alumno la mete por Ajustes; solo tiene sentido fijarla aquí si vas a distribuir un build con la clave preconfigurada). En MENTORA, habilita la transcripción Whisper del audio del recording (`transcription.srt`); sin ella el recording se exporta sin transcripción.
 
 > Todas las variables empiezan por **`EXT_`** (configurado en `apps/extensions/wxt.config.ts`). Cualquier variable sin ese prefijo se ignora — Vite obliga a un prefijo para evitar filtrar secrets server-side al bundle público.
 
