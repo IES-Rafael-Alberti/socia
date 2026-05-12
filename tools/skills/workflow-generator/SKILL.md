@@ -135,6 +135,7 @@ The matcher checks these fields **in order** — all must pass:
 - **Always use `{{variables}}` for IPs, hostnames, and case-specific data** (attacker IPs, alert IDs, search terms). This makes the workflow reusable across lab setups.
 - **Check the request body when the URL alone is ambiguous.** For example, TheHive uses `/api/v1/query` for everything — the body distinguishes "getAlert" from "getCase" from "getObservable".
 - **Use `response_body_contains` sparingly** — only when you need to confirm the *result* of an action, not just that it was attempted. Example: verifying a case was actually created (`"_type":"Case"`).
+- **Discriminate the correct entity on generic endpoints.** When a milestone represents "view details of X" and the endpoint returns data for any entity of that type (any alert, any case, any observable), add `response_body_contains` with an identifier of the correct entity — typically `{{alert_title}}`, the case name, or the observable value. Without this, opening *any* entity of the same type would complete the milestone. This is especially important for TheHive's `/api/v1/query` endpoint, which returns different entities depending on the query body but always has the same URL pattern.
 - **Bodies are truncated to 1000 characters** in the network log. Don't rely on content that would appear deep into a large response.
 
 ### 4. Define dependencies
@@ -196,6 +197,7 @@ Before delivering the workflow, verify:
 - [ ] `tool_hosts` for each phase include all hosts referenced by that phase's milestones
 - [ ] Milestone IDs are unique across the entire workflow (not just within a phase)
 - [ ] `case` does NOT contain a `mode` field (the guided/unguided choice is made at runtime, not embedded in the workflow)
+- [ ] Milestones that detect "viewing details" of a specific entity (alert, case, observable) include `response_body_contains` with a discriminating value (`{{alert_title}}`, victim host, observable value, etc.) to prevent false positives when the student opens a different entity of the same type
 
 ## Common patterns and examples
 
@@ -218,16 +220,18 @@ TheHive uses `/api/v1/query` for everything. Use `request_body_contains` to dist
 ```json
 {
   "id": "view-alert",
-  "label": "Revisar detalles de la alerta",
+  "label": "Revisar detalles de la alerta de {{alert_title}}",
   "network_signature": {
     "method": "POST",
     "url_contains": "/api/v1/query",
     "host_contains": "{{thehive_host}}",
     "response_status": [200],
-    "request_body_contains": ["getAlert", "extraData"]
+    "request_body_contains": ["getAlert", "extraData"],
+    "response_body_contains": "{{alert_title}}"
   }
 }
 ```
+Note: `response_body_contains` with `{{alert_title}}` ensures only the correct alert completes the milestone. Without it, opening *any* alert would count as a match because the `request_body_contains` fields (`getAlert`, `extraData`) are the same for every alert detail request.
 
 ### Case creation with response verification
 ```json

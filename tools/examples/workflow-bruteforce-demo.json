@@ -51,14 +51,15 @@
         },
         {
           "id": "view-alert",
-          "label": "Revisar los detalles de la alerta",
+          "label": "Revisar los detalles de la alerta de fuerza bruta SSH",
           "depends_on": ["thehive-login"],
           "network_signature": {
             "method": "POST",
             "url_contains": "/api/v1/query",
             "host_contains": "{{thehive_host}}",
             "response_status": [200],
-            "request_body_contains": ["getAlert", "extraData"]
+            "request_body_contains": ["getAlert", "extraData"],
+            "response_body_contains": "{{alert_title}}"
           },
           "hint_examples": [
             "Ahora que estás dentro, busca las alertas pendientes. ¿Dónde se listan las alertas en TheHive?",
