@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import type { StateResponse, RecordingState } from '../../../utils/mentora/messages';
+import { useSessionState } from '../../../utils/shared/popup-session';
 
 function sendMessage<T>(message: Record<string, unknown>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -21,8 +22,36 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasRecording, setHasRecording] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
+  const [timerCache, setTimerCache] = useSessionState('mentora.timerCache', {
+    elapsedTime: 0,
+    lastPolledAt: 0,
+    state: 'idle' as RecordingState,
+  });
   const timerRef = useRef<number | null>(null);
   const baseTimeRef = useRef<number>(0);
+
+  // Rehydrate timer from session cache so the popup shows ~the right elapsed
+  // value immediately on remount, instead of restarting from 0 and jumping
+  // to the real value when the first GET_STATE response arrives.
+  useLayoutEffect(() => {
+    if (timerCache.lastPolledAt === 0) return;
+    if (timerCache.state === 'recording') {
+      const since = Date.now() - timerCache.lastPolledAt;
+      const projected = timerCache.elapsedTime + since;
+      setElapsedTime(projected);
+      baseTimeRef.current = Date.now() - projected;
+      setState('recording');
+    } else if (timerCache.state === 'paused') {
+      setElapsedTime(timerCache.elapsedTime);
+      baseTimeRef.current = Date.now() - timerCache.elapsedTime;
+      setState('paused');
+    }
+    // 'idle' → ignore, normal fetchState path will fill in.
+    // We deliberately don't `setIsLoading(false)` here; the loading splash
+    // is short-lived and the real state lands within ~50ms.
+  }, []); // mount only — `timerCache` mutates on every poll write
 
   const fetchState = useCallback(async () => {
     try {
@@ -38,12 +67,18 @@ export default function App() {
       setState(response.state);
       setActionCount(response.actionCount || 0);
       setScreenshotCount(response.screenshotCount || 0);
+      setIsExporting(response.isExporting ?? false);
 
       // Set elapsed time from background
       if (response.elapsedTime !== undefined) {
         setElapsedTime(response.elapsedTime);
         // Store base time for local timer
         baseTimeRef.current = Date.now() - response.elapsedTime;
+        setTimerCache({
+          elapsedTime: response.elapsedTime,
+          lastPolledAt: Date.now(),
+          state: response.state,
+        });
       }
 
       // Check if there's a recording ready to download
@@ -114,29 +149,34 @@ export default function App() {
     };
   }, [state]);
 
-  // Poll for action/screenshot counts
+  // Poll for action/screenshot counts (or export progress when idle).
   useEffect(() => {
-    if (state === 'recording' || state === 'paused') {
-      const pollInterval = setInterval(async () => {
-        try {
-          const response: StateResponse = await sendMessage<StateResponse>({
-            type: 'GET_STATE',
-          });
-          setActionCount(response.actionCount || 0);
-          setScreenshotCount(response.screenshotCount || 0);
+    if (state !== 'recording' && state !== 'paused' && !isExporting) return;
+    const pollInterval = setInterval(async () => {
+      try {
+        const response: StateResponse = await sendMessage<StateResponse>({
+          type: 'GET_STATE',
+        });
+        setActionCount(response.actionCount || 0);
+        setScreenshotCount(response.screenshotCount || 0);
+        setIsExporting(response.isExporting ?? false);
 
-          // If paused, also sync the elapsed time
-          if (state === 'paused' && response.elapsedTime !== undefined) {
-            setElapsedTime(response.elapsedTime);
-          }
-        } catch (err) {
-          console.error('[Popup] Failed to poll state:', err);
+        // If paused, also sync the elapsed time
+        if (state === 'paused' && response.elapsedTime !== undefined) {
+          setElapsedTime(response.elapsedTime);
         }
-      }, 2000);
 
-      return () => clearInterval(pollInterval);
-    }
-  }, [state]);
+        // After export finishes, reflect the cleared recording.
+        if (response.state === 'idle' && response.hasRecordingData === false) {
+          setHasRecording(false);
+        }
+      } catch (err) {
+        console.error('[Popup] Failed to poll state:', err);
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [state, isExporting]);
 
   const formatTime = (ms: number): string => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -170,6 +210,7 @@ export default function App() {
         setElapsedTime(0);
         baseTimeRef.current = Date.now();
         setHasRecording(true);
+        setHasDownloaded(false);
         setIsLoading(false);
       }
     } catch (err) {
@@ -220,27 +261,7 @@ export default function App() {
     }
   };
 
-  const handleStop = async () => {
-    setIsLoading(true);
-    try {
-      console.log('[Popup] Stopping...');
-      const response = await sendMessage<{ success: boolean; error?: string }>({
-        type: 'STOP_RECORDING',
-      });
-      console.log('[Popup] Stop response:', response);
-
-      if (response?.success) {
-        setState('idle');
-        setHasRecording(true);
-      }
-    } catch (err) {
-      console.error('[Popup] Stop error:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDownload = async () => {
+  const handleDownload = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -253,14 +274,37 @@ export default function App() {
       if (!response?.success) {
         setError(response?.error || 'Failed to download recording');
       } else {
-        setHasRecording(false);
-        setActionCount(0);
-        setScreenshotCount(0);
-        setElapsedTime(0);
+        // Recording data is kept in IndexedDB so the user can re-download
+        // until they start a new recording.
+        setHasDownloaded(true);
       }
     } catch (err) {
       console.error('[Popup] Download error:', err);
       setError('Failed to download recording');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const handleStop = async () => {
+    setIsLoading(true);
+    try {
+      console.log('[Popup] Stopping...');
+      const response = await sendMessage<{ success: boolean; error?: string }>({
+        type: 'STOP_RECORDING',
+      });
+      console.log('[Popup] Stop response:', response);
+
+      if (response?.success) {
+        setState('idle');
+        setHasRecording(true);
+        setHasDownloaded(false);
+        // Auto-export the ZIP so the user doesn't need an extra click. The
+        // save dialog will appear once the background finishes packaging.
+        await handleDownload();
+      }
+    } catch (err) {
+      console.error('[Popup] Stop error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -323,11 +367,19 @@ export default function App() {
         {isIdle && (
           <div className="idle-hero">
             <div className="idle-pulse" />
-            <h2>{hasRecording ? 'Tu grabación está lista' : 'Lista para grabar'}</h2>
+            <h2>
+              {!hasRecording
+                ? 'Lista para grabar'
+                : hasDownloaded
+                  ? 'ZIP descargado'
+                  : 'Tu grabación está lista'}
+            </h2>
             <p>
-              {hasRecording
-                ? 'Descárgala como ZIP o empieza una nueva grabación.'
-                : 'MENTORA captura pantalla, micro y todas las acciones del navegador.'}
+              {!hasRecording
+                ? 'MENTORA captura pantalla, micro y todas las acciones del navegador.'
+                : hasDownloaded
+                  ? 'Empieza una grabación nueva o vuelve a descargar el ZIP.'
+                  : 'Preparando el ZIP…'}
             </p>
           </div>
         )}
@@ -346,9 +398,15 @@ export default function App() {
                 <button
                   className="btn btn-secondary btn-block"
                   onClick={handleDownload}
-                  disabled={isLoading}
+                  disabled={isLoading || isExporting}
                 >
-                  {isLoading ? 'Preparando…' : 'Descargar ZIP'}
+                  {isExporting
+                    ? 'Exportando…'
+                    : isLoading
+                      ? 'Preparando…'
+                      : hasDownloaded
+                        ? 'Volver a descargar'
+                        : 'Descargar ZIP'}
                 </button>
               )}
             </>

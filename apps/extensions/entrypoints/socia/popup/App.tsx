@@ -6,6 +6,7 @@ import {
   type ServerSettings,
 } from '@socia/runtime';
 import SettingsScreen from './SettingsScreen';
+import { useSessionState } from '../../../utils/shared/popup-session';
 import './style.css';
 
 /** Replace {{key}} placeholders with values from workflow.variables */
@@ -26,6 +27,7 @@ interface StateResponse {
   mode?: 'guided' | 'unguided';
   completedMilestones?: string[];
   milestoneStatus?: Record<string, boolean>;
+  isFinishing?: boolean;
   error?: string;
 }
 
@@ -46,8 +48,12 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useSessionState('socia.showSettings', false);
   const [serverSettings, setServerSettings] = useState<ServerSettings | null>(null);
+  // `isFinishing` is owned by the background — once the student presses
+  // "Terminar", the SW marks the flag and clears it in finally. Reading it from
+  // GET_STATE keeps the popup honest even after a close/reopen cycle.
+  const isFinishing = stateResp?.isFinishing ?? false;
   const [finishedSummary, setFinishedSummary] = useState<{
     grade?: number;
     pdfAvailable?: boolean;
@@ -94,9 +100,10 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchState]);
 
-  // Local timer tick
+  // Local timer tick — frozen during finish so the displayed elapsed time
+  // doesn't keep climbing while the LLM is generating the evaluation.
   useEffect(() => {
-    if (workflow && state?.isActive) {
+    if (workflow && state?.isActive && !isFinishing) {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = window.setInterval(() => {
         setElapsedSeconds((s) => s + 1);
@@ -105,7 +112,7 @@ export default function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [workflow, state?.isActive]);
+  }, [workflow, state?.isActive, isFinishing]);
 
   // ──────────────── Handlers ────────────────
 
@@ -138,9 +145,7 @@ export default function App() {
     }
   };
 
-  const [isFinishing, setIsFinishing] = useState(false);
-
-  const [showFinishModal, setShowFinishModal] = useState(false);
+  const [showFinishModal, setShowFinishModal] = useSessionState('socia.showFinishModal', false);
 
   /** managed: confirm() simple. standalone: abre el modal con 3 opciones. */
   const handleFinishClick = () => {
@@ -157,7 +162,6 @@ export default function App() {
   /** Runs the actual finish, with or without LLM evaluation. */
   const runFinish = async (evaluate: boolean) => {
     setShowFinishModal(false);
-    setIsFinishing(true);
     setIsLoading(true);
     setError(null);
     try {
@@ -191,7 +195,6 @@ export default function App() {
     }
     setStateResp(null);
     setElapsedSeconds(0);
-    setIsFinishing(false);
     setIsLoading(false);
   };
 
@@ -250,6 +253,29 @@ export default function App() {
           <button className="btn btn-secondary btn-block" onClick={() => setFinishedSummary(null)}>
             Cerrar
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ──────────────── Finishing (LLM call + cleanup in flight) ────────────────
+
+  // `isFinishing` survives popup remount because it lives in the SW; if the
+  // student closes the popup mid-evaluation, this branch keeps showing the
+  // "Evaluando…" feedback instead of jumping to a stale main screen.
+  if (isFinishing && (!workflow || !state)) {
+    return (
+      <div className="socia-popup">
+        <header className="socia-header">
+          <h1>SOCIA</h1>
+        </header>
+        <div className="socia-body">
+          <div className="waiting-card">
+            <div className="waiting-pulse" />
+            <div className="waiting-card__eyebrow">Evaluando</div>
+            <h2>Generando tu evaluación…</h2>
+            <p>Esto puede tardar hasta un minuto. Puedes cerrar este panel; cuando vuelvas verás el resultado.</p>
+          </div>
         </div>
       </div>
     );
@@ -451,7 +477,7 @@ export default function App() {
         <button
           className="btn btn-danger btn-block"
           onClick={handleFinishClick}
-          disabled={isLoading}
+          disabled={isLoading || isFinishing}
         >
           {isFinishing ? 'Evaluando…' : 'Terminar'}
         </button>

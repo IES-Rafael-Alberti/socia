@@ -38,6 +38,7 @@ export default defineBackground(() => {
   let lastMicPermissionOpen = 0;
   let pendingStart = false;
   let startInProgress = false;
+  let isExporting = false;
 
   // Restore state on startup
   getRecordingState().then(async (state) => {
@@ -191,6 +192,14 @@ export default defineBackground(() => {
       startInProgress = true;
       pendingStart = true;
       console.log('[Background] Starting recording...');
+
+      // Clear any leftover data from a previous (already-downloaded) session
+      // so the new recording starts on a clean slate.
+      const prevState = await getRecordingState();
+      const prevRecordingId = prevState.recordingId ?? currentRecordingId;
+      if (prevRecordingId) {
+        await clearRecording(prevRecordingId);
+      }
 
       currentRecordingId = uuidv4();
       visitedPages.clear();
@@ -373,6 +382,7 @@ export default defineBackground(() => {
       screenshotCount,
       isPaused: state.state === 'paused',
       hasRecordingData,
+      isExporting,
     };
     console.log('[Background] GET_STATE response:', response);
     return response;
@@ -466,6 +476,9 @@ export default defineBackground(() => {
   }
 
   async function downloadRecording(): Promise<{ success: boolean; error?: string }> {
+    if (isExporting) {
+      return { success: false, error: 'Export already in progress' };
+    }
     const state = await getRecordingState();
     const recordingId = currentRecordingId || state.recordingId;
 
@@ -473,6 +486,7 @@ export default defineBackground(() => {
       return { success: false, error: 'No recording available' };
     }
 
+    isExporting = true;
     try {
       console.log('[Background] Preparing download for recording:', recordingId);
 
@@ -516,15 +530,15 @@ export default defineBackground(() => {
         saveAs: true,
       });
 
-      // Clear the recording data
-      await clearRecording(recordingId);
-      currentRecordingId = null;
-
+      // Recording data is intentionally preserved so the user can re-download
+      // the ZIP if needed; it's wiped at the start of the next recording.
       console.log('[Background] Download initiated');
       return { success: true };
     } catch (error) {
       console.error('[Background] Failed to download recording:', error);
       return { success: false, error: String(error) };
+    } finally {
+      isExporting = false;
     }
   }
 

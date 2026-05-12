@@ -151,6 +151,8 @@ export interface StateResponse {
   screenshotCount?: number;
   isPaused?: boolean;
   hasRecordingData?: boolean;
+  /** True while `DOWNLOAD_RECORDING` is in flight in the background. */
+  isExporting?: boolean;
 }
 
 export interface DownloadResponse {

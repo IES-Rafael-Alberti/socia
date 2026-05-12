@@ -54,6 +54,7 @@ export default defineBackground(() => {
   let trace: StudentAction[] = [];
   let hintEvents: HintEvent[] = [];
   let networkTrace: StudentNetworkEvent[] = [];
+  let isFinishing = false;
 
   // Managed-mode tracking
   let managedLaunchId: string | null = null;
@@ -274,7 +275,12 @@ export default defineBackground(() => {
   }
 
   function getStateResponse() {
-    if (!state || !workflow) return { success: false, error: 'No workflow loaded' };
+    if (!state || !workflow) {
+      // The case state may already have been cleared inside finishCase() while
+      // the LLM call / cleanup still runs. Surface isFinishing so the popup
+      // can show "Evaluando…" instead of falling back to the empty/idle view.
+      return { success: false, error: 'No workflow loaded', isFinishing };
+    }
 
     const currentPhase = workflow.phases[state.currentPhaseIndex] ?? null;
 
@@ -300,6 +306,7 @@ export default defineBackground(() => {
       mode: currentMode,
       completedMilestones: state.completedMilestones,
       milestoneStatus,
+      isFinishing,
     };
   }
 
@@ -318,6 +325,12 @@ export default defineBackground(() => {
   }
 
   async function finishCase(opts: { evaluate?: boolean } = {}) {
+    if (isFinishing) {
+      return { success: false, error: 'Finish already in progress' };
+    }
+    isFinishing = true;
+    broadcastStateChange();
+    try {
     const evaluate = opts.evaluate !== false;
     let result: {
       success: boolean;
@@ -412,6 +425,10 @@ export default defineBackground(() => {
     lastReportedMilestoneCount = -1;
     lastReportedHintCount = -1;
     return result;
+    } finally {
+      isFinishing = false;
+      broadcastStateChange();
+    }
   }
 
   // ──────────────── Action Recording ────────────────

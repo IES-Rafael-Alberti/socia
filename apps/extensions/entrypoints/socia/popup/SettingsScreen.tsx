@@ -11,6 +11,7 @@ import {
   identifyStudent,
 } from '@socia/runtime';
 import { listBrands } from '@socia/branding';
+import { useSessionState } from '../../../utils/shared/popup-session';
 
 type ConnState = 'unknown' | 'checking' | 'ok' | 'error';
 
@@ -24,7 +25,7 @@ export default function SettingsScreen({ onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [showApiKey, setShowApiKey] = useSessionState('socia.showApiKey', false);
   const [classFound, setClassFound] = useState(false);
 
   useEffect(() => {
