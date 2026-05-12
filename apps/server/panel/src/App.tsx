@@ -8,9 +8,16 @@ import { PageWorkflows } from './pages/PageWorkflows';
 import { PageLive } from './pages/PageLive';
 import { PageEvals } from './pages/PageEvals';
 
+const PAGE_IDS: PageId[] = ['welcome', 'classes', 'workflows', 'live', 'evals'];
+
+function pageFromHash(): PageId {
+  const raw = window.location.hash.replace(/^#\/?/, '');
+  return (PAGE_IDS as string[]).includes(raw) ? (raw as PageId) : 'welcome';
+}
+
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [page, setPage] = useState<PageId>('welcome');
+  const [page, setPage] = useState<PageId>(pageFromHash);
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowRow[]>([]);
   const [evalsCount, setEvalsCount] = useState(0);
@@ -49,6 +56,19 @@ export function App() {
     if (authed) refresh();
   }, [authed, refresh]);
 
+  useEffect(() => {
+    const onHash = () => setPage(pageFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const navigate = useCallback((p: PageId) => {
+    if (window.location.hash !== `#/${p}`) {
+      window.location.hash = `#/${p}`;
+    }
+    setPage(p);
+  }, []);
+
   if (authed === null) {
     return <div className="boot">Cargando…</div>;
   }
@@ -59,12 +79,12 @@ export function App() {
   return (
     <Shell
       active={page}
-      onNav={setPage}
+      onNav={navigate}
       onLogout={() => setAuthed(false)}
       counts={{ classes: classes.length, workflows: workflows.length, evals: evalsCount }}
       hasLive={hasLive}
     >
-      {page === 'welcome' && <PageWelcome onGoToClasses={() => setPage('classes')} />}
+      {page === 'welcome' && <PageWelcome onGoToClasses={() => navigate('classes')} />}
       {page === 'classes' && <PageClasses classes={classes} onChange={refresh} />}
       {page === 'workflows' && <PageWorkflows classes={classes} onChange={refresh} />}
       {page === 'live' && <PageLive classes={classes} workflows={workflows} onChange={refresh} />}
