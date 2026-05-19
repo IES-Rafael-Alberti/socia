@@ -140,10 +140,10 @@ export default defineBackground(() => {
         if (
           me.launch &&
           me.launch.launchId !== managedLaunchId &&
-          me.launch.launchId !== recentlyFinishedLaunchId &&
-          !workflow
+          me.launch.launchId !== recentlyFinishedLaunchId
         ) {
-          // New launch from teacher and we have nothing loaded → fetch workflow
+          // A launch different from the one we're running (teacher launched
+          // or relaunched a case) → replace whatever is loaded with it.
           managedLaunchId = me.launch.launchId;
           managedLaunchGuided = me.launch.guided ?? true;
           await refreshCurrentMode();
@@ -152,9 +152,11 @@ export default defineBackground(() => {
             await loadWorkflow(wfData);
             await reportProgress();
           }
-        } else if (!me.launch && managedLaunchId && !workflow) {
+        } else if (!me.launch && managedLaunchId) {
+          // Teacher closed/stopped the case → stop the student.
           managedLaunchId = null;
           managedLaunchGuided = null;
+          await stopManagedCase();
           await refreshCurrentMode();
         }
       } catch (err) {
@@ -322,6 +324,21 @@ export default defineBackground(() => {
     await clearHintEvents();
     broadcastStateChange();
     return { success: true };
+  }
+
+  async function stopManagedCase() {
+    await clearAllFromStorage();
+    await clearTrace();
+    await clearHintEvents();
+    clearHintHistory();
+    state = null;
+    workflow = null;
+    trace = [];
+    hintEvents = [];
+    networkTrace = [];
+    lastReportedMilestoneCount = -1;
+    lastReportedHintCount = -1;
+    broadcastStateChange();
   }
 
   async function finishCase(opts: { evaluate?: boolean } = {}) {

@@ -14,6 +14,10 @@ import { Router } from 'express';
 import QRCode from 'qrcode';
 import { db } from '../db.js';
 
+/** Enlace de descarga de la extensión SOCIA (carpeta de Drive del centro). */
+const EXTENSION_DOWNLOAD_URL =
+  'https://drive.google.com/file/d/10z8uz7_iNbdIhGHbfiPq3UgarbGMkUGc/view?usp=sharing';
+
 export const joinRouter = Router();
 
 function escapeHtml(s: string): string {
@@ -119,10 +123,13 @@ ${pageStyles()}
   </section>
 
   <section class="join__steps">
+    <a class="join__download" href="${EXTENSION_DOWNLOAD_URL}" target="_blank" rel="noopener">⬇ Descargar extensión SOCIA</a>
     <ol>
-      <li>Instala la extensión <strong>SOCIA</strong> en tu navegador.</li>
-      <li>Abre los ajustes de SOCIA (icono ⚙ en la esquina del popup).</li>
-      <li>Pega la URL del servidor y el código de clase. Identifícate y listo.</li>
+      <li>Descarga y <strong>descomprime</strong> el archivo .zip.</li>
+      <li>Abre <code>chrome://extensions</code> en tu navegador (Chrome).</li>
+      <li>Activa el <strong>Modo de desarrollador</strong> (arriba a la derecha).</li>
+      <li>Pulsa <strong>Cargar extensión sin empaquetar</strong> y elige la carpeta descomprimida.</li>
+      <li>Abre los ajustes de SOCIA (icono ⚙), pega la URL del servidor y el código de clase, e identifícate.</li>
     </ol>
   </section>
 
@@ -252,6 +259,20 @@ body {
   margin: 0;
 }
 .join__steps strong { color: var(--accent); }
+.join__download {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--accent); color: #fff;
+  font-weight: 800; font-size: 15px;
+  text-decoration: none;
+  padding: 14px 22px; border-radius: 999px;
+  margin-bottom: 20px;
+}
+.join__download:hover { filter: brightness(0.95); }
+.join__steps code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  background: var(--accent-tint); color: var(--accent);
+  padding: 2px 6px; border-radius: 6px; font-size: 13px;
+}
 
 .join__foot {
   margin-top: 56px;
