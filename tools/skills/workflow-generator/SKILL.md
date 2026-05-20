@@ -186,18 +186,28 @@ Use `{{variables}}` in hints so they adapt to the case. The hint LLM uses these 
 
 ### 8. Validate the workflow
 
-Before delivering the workflow, verify:
+Run the validator script. It enforces the schema **strictly** (rejects undeclared fields — catches typos like `network_match`, `hints_examples`, `methods`) and checks semantic invariants. Any error is blocking: iterate until it passes. Warnings are quality recommendations; address them when you can.
 
-- [ ] Every milestone's `network_signature` matches at least one request in the network log
-- [ ] All `{{variables}}` used in signatures/hints are defined in the `variables` object
-- [ ] `depends_on` references exist as milestone IDs within the same phase
-- [ ] `after_milestone` references exist as milestone IDs in a previous phase
-- [ ] No circular dependencies
-- [ ] Phase `order` values are sequential starting from 1
-- [ ] `tool_hosts` for each phase include all hosts referenced by that phase's milestones
-- [ ] Milestone IDs are unique across the entire workflow (not just within a phase)
-- [ ] `case` does NOT contain a `mode` field (the guided/unguided choice is made at runtime, not embedded in the workflow)
-- [ ] Milestones that detect "viewing details" of a specific entity (alert, case, observable) include `response_body_contains` with a discriminating value (`{{alert_title}}`, victim host, observable value, etc.) to prevent false positives when the student opens a different entity of the same type
+```bash
+uv run tools/skills/workflow-generator/scripts/validate_workflow.py path/to/workflow.json
+```
+
+What it covers:
+
+- **Schema**: required fields present, correct types, and `extra="forbid"` at every level (no stray fields anywhere — including `case.mode`, which is forbidden).
+- **Variables**: every `{{variable}}` used in titles, descriptions, signatures, or `hint_examples` is defined in the `variables` block.
+- **Dependencies**: `depends_on` references milestones in the **same phase**; `after_milestone` references milestones in an **earlier phase** (lower `order`); no cycles.
+- **Uniqueness**: `phase.id`, `phase.order`, and `milestone.id` unique across the whole workflow.
+- **Pedagogy**: keys of `context.pedagogy` correspond to `phase.id` values.
+- **Per-student**: if `per_student_ports` is present, every listed name exists in `variables`.
+- **(Warning) `case.title`** uses `{{variables}}` so the panel re-interpolates it on edit (otherwise the title stays frozen).
+- **(Warning) `tool_hosts` and `hint_examples`** use host variables (`{{thehive_host}}`, `{{graylog_host}}`) instead of literal IPs — IPs change.
+- **(Warning) `hint_examples`** follows the convention of 3 hints, least to most directive.
+
+Things the **validator cannot check** that you must ensure when designing:
+
+- Each `network_signature` maps to at least one real request from `network-log.json`.
+- Milestones that detect "viewing details" of an entity (alert, case, observable) include a `response_body_contains` with a discriminating value (`{{alert_title}}`, victim host, observable value) to avoid false positives when the student opens a different entity of the same type.
 
 ## Common patterns and examples
 
