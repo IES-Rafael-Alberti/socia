@@ -1,0 +1,262 @@
+name: Release
+
+# Trigger: push to main whose head commit message contains the `[release]`
+# marker. A regular commit publishes nothing — only commits explicitly tagged
+# (e.g. "feat: new verifier [release]") cut a release. The marker check lives
+# on each job through `if:`, gated by the `version` job.
+#
+# Versioning: sequential 0.N, no major bump. The `version` job counts existing
+# `v0.*` tags and reserves `v0.$((N+1))`. That number is injected into:
+#   - apps/extensions/wxt.config.ts (manifest version, via sed)
+#   - apps/server/package.json
+# before building, so each artifact carries the version baked in.
+#
+# Artifacts: three zips published to the GitHub release:
+#   - mentora-vX.Y.zip       (teacher extension)
+#   - socia-vX.Y.zip         (student extension)
+#   - panel-server-vX.Y.zip  (built server + teacher panel)
+#
+# Changelog: commits since the previous tag, grouped roughly by conventional
+# prefix (feat/fix/docs/chore/refactor). If there is no previous tag, all
+# commits are listed.
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Resolve next 0.N version
+    if: contains(github.event.head_commit.message, '[release]')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      tag: ${{ steps.next.outputs.tag }}
+      previous_tag: ${{ steps.next.outputs.previous_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute next version
+        id: next
+        run: |
+          set -euo pipefail
+          # Latest existing 0.N version (there may be none yet).
+          last_tag=$(git tag -l 'v0.*' | sed 's/^v0\.//' | sort -n | tail -n 1 || true)
+          if [ -z "${last_tag:-}" ]; then
+            next=1
+            previous_tag=""
+          else
+            next=$((last_tag + 1))
+            previous_tag="v0.${last_tag}"
+          fi
+          version="0.${next}"
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=${previous_tag}" >> "$GITHUB_OUTPUT"
+          echo "Next release: ${tag} (previous: ${previous_tag:-none})"
+
+  build-extensions:
+    name: Build extensions (MENTORA + SOCIA)
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Inject version into manifests
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # wxt.config.ts has two `version: '1.0.0',` blocks (one per
+          # extension). Replace both with the computed version.
+          sed -i "s/version: '[^']*',/version: '${VERSION}',/g" apps/extensions/wxt.config.ts
+
+      - name: Build MENTORA
+        run: pnpm build:extensions:mentora
+
+      - name: Build SOCIA
+        run: pnpm build:extensions:socia
+
+      - name: Package zips
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-artifacts
+          cd apps/extensions/dist-mentora/chrome-mv3
+          zip -r "../../../../release-artifacts/mentora-v${VERSION}.zip" .
+          cd -
+          cd apps/extensions/dist-socia/chrome-mv3
+          zip -r "../../../../release-artifacts/socia-v${VERSION}.zip" .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extensions
+          path: release-artifacts/*.zip
+
+  build-server:
+    name: Build server + panel
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Inject version into server package.json
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'apps/server/package.json';
+            const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            pkg.version = process.env.VERSION;
+            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Build server (panel + backend)
+        run: pnpm build:server
+
+      - name: Package server zip
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-artifacts
+          # Bundle what's needed to start the server on the target machine:
+          # backend dist/, built panel, package.json to resolve production
+          # dependencies, and the Dockerfile/compose for the containerized
+          # path.
+          cd apps/server
+          zip -r "../../release-artifacts/panel-server-v${VERSION}.zip" \
+            dist \
+            panel/dist \
+            package.json \
+            Dockerfile \
+            docker-compose.yml \
+            README.md
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: server
+          path: release-artifacts/*.zip
+
+  release:
+    name: Publish GitHub release
+    needs: [version, build-extensions, build-server]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          PREVIOUS_TAG: ${{ needs.version.outputs.previous_tag }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${PREVIOUS_TAG}" ]; then
+            range="${PREVIOUS_TAG}..HEAD"
+          else
+            range="HEAD"
+          fi
+          {
+            echo "## ${TAG}"
+            echo
+            if [ -n "${PREVIOUS_TAG}" ]; then
+              echo "Changes since ${PREVIOUS_TAG}:"
+            else
+              echo "First release."
+            fi
+            echo
+            for prefix in feat fix refactor docs chore; do
+              entries=$(git log ${range} --pretty=format:'- %s (%h)' --no-merges \
+                | grep -iE "^- (\(${prefix}\)|${prefix}[:(])" || true)
+              if [ -n "${entries}" ]; then
+                case "${prefix}" in
+                  feat) title="New features" ;;
+                  fix) title="Fixes" ;;
+                  refactor) title="Refactor" ;;
+                  docs) title="Documentation" ;;
+                  chore) title="Maintenance" ;;
+                esac
+                echo "### ${title}"
+                echo "${entries}"
+                echo
+              fi
+            done
+            other=$(git log ${range} --pretty=format:'- %s (%h)' --no-merges \
+              | grep -ivE "^- (\(feat\)|feat[:(]|\(fix\)|fix[:(]|\(refactor\)|refactor[:(]|\(docs\)|docs[:(]|\(chore\)|chore[:(])" || true)
+            if [ -n "${other}" ]; then
+              echo "### Other"
+              echo "${other}"
+              echo
+            fi
+            echo "---"
+            echo
+            echo "### Artifacts"
+            echo
+            echo "- \`mentora-${TAG}.zip\` — MENTORA Chrome extension (teacher)."
+            echo "- \`socia-${TAG}.zip\` — SOCIA Chrome extension (student)."
+            echo "- \`panel-server-${TAG}.zip\` — server + teacher panel."
+            echo
+            echo "### Quick install"
+            echo
+            echo "**Extensions (Chrome / Edge):** unzip and load the resulting folder from \`chrome://extensions\` with developer mode enabled (\"Load unpacked\")."
+            echo
+            echo "**Server:** unzip \`panel-server-${TAG}.zip\`, install production dependencies (\`pnpm install --prod\`) and start with \`node dist/index.js\`. Alternatively, use the included \`Dockerfile\`."
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: SOCIA ${{ needs.version.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          files: release-artifacts/*.zip
+          fail_on_unmatched_files: true
