@@ -9,6 +9,7 @@
  */
 
 export * from './workflow-types';
+export * from './interpolation';
 export * from './trace-export';
 export * from './grading';
 export * from './eval-prompt';

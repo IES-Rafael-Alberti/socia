@@ -10,6 +10,7 @@ import { uid } from '../util.js';
 import { broadcastAdmins } from '../ws.js';
 import {
   buildEvaluationMessages,
+  interpolateWorkflowText,
   parseEvaluationResponse,
   type EvaluationReport,
 } from '@socia/eval';
@@ -102,7 +103,7 @@ llmRouter.post('/evaluation', async (req: StudentReq, res) => {
   const stepsDone = traceExport.outcome?.milestones_completed?.length ?? 0;
   const hints = traceExport.timeline.filter((e) => e.type === 'hint_received').length;
   const durationSeconds = traceExport.session?.duration_seconds ?? 0;
-  const caseName = workflow.case.title;
+  const caseName = interpolateWorkflowText(workflow.case.title, workflow.variables);
 
   // Deterministic grade — formula lives in @socia/eval (packages/socia-eval) so the
   // extension's standalone path produces the same numbers.

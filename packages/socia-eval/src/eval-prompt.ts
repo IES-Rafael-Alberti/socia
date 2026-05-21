@@ -13,6 +13,7 @@
 
 import type { WorkflowData } from './workflow-types.js';
 import type { GradingResult } from './grading.js';
+import { interpolateWorkflowText } from './interpolation.js';
 
 // ──────────────── Public schema ────────────────
 
@@ -52,11 +53,6 @@ export interface EvaluationReport {
 }
 
 // ──────────────── Helpers ────────────────
-
-/** Replace {{key}} placeholders with values from a vars dictionary. */
-function interpolate(text: string, vars: Record<string, string>): string {
-  return text.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (_match, key) => vars[key] ?? `{{${key}}}`);
-}
 
 // ──────────────── Prompt builders ────────────────
 
@@ -126,8 +122,8 @@ NO incluyas nada fuera del JSON. NO uses markdown. NO añadas campos extra.`;
     'guided';
 
   const userPrompt = `## Caso
-Título: ${interpolate(workflow.case.title, vars)}
-Descripción: ${interpolate(workflow.case.description, vars)}
+Título: ${interpolateWorkflowText(workflow.case.title, vars)}
+Descripción: ${interpolateWorkflowText(workflow.case.description, vars)}
 Modo: ${traceMode}
 
 ## Notas del profesor (contexto del caso)
@@ -137,8 +133,8 @@ ${workflow.context.notes || '(ninguna)'}
 ${workflow.phases
   .map(
     (phase) =>
-      `### ${interpolate(phase.title, vars)} (id: ${phase.id}, rol: ${phase.role || '—'})
-${phase.milestones.map((m) => `  - [${m.id}] ${interpolate(m.label, vars)}`).join('\n')}`,
+      `### ${interpolateWorkflowText(phase.title, vars)} (id: ${phase.id}, rol: ${phase.role || '—'})
+${phase.milestones.map((m) => `  - [${m.id}] ${interpolateWorkflowText(m.label, vars)}`).join('\n')}`,
   )
   .join('\n\n')}
 

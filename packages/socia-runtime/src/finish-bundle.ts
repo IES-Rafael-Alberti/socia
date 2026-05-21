@@ -10,6 +10,7 @@ import JSZip from 'jszip';
 import { evaluateCase } from './openrouter';
 import type { EvaluationReport } from './openrouter';
 import { renderEvaluationPdf } from '@socia/eval';
+import { interpolateWorkflowText } from '@socia/eval';
 import type { WorkflowData } from '@socia/eval';
 import type { Brand } from '@socia/branding';
 import type { TraceExport } from './trace-export';
@@ -79,7 +80,7 @@ export async function finishAndDownload(
   // Render the PDF
   const pdfBytes = renderEvaluationPdf({
     caseId: traceExport.case_id,
-    caseTitle: workflow.case.title,
+    caseTitle: interpolateWorkflowText(workflow.case.title, workflow.variables),
     sessionStartedAt: traceExport.session.started_at,
     durationText: traceExport.session.duration,
     mode: traceExport.session.mode,
