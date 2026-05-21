@@ -13,6 +13,7 @@
     "dev:extensions:mentora": "pnpm --filter @socia/extensions dev:mentora",
     "dev:server": "pnpm --filter @socia/server dev",
     "dev:server:panel": "pnpm --filter @socia/server dev:panel",
+    "dev:server:all": "pnpm --filter @socia/server dev:all",
     "typecheck": "pnpm -r typecheck",
     "clean": "pnpm -r clean"
   },

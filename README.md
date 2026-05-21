@@ -40,7 +40,7 @@ Requiere [pnpm](https://pnpm.io/) ≥ 9 y Node ≥ 20.
 ```bash
 pnpm install                    # solo apps/ + packages/  (la web no entra)
 pnpm build                      # construye extensiones + server
-pnpm dev:server                 # arranca server en :4317 + panel en :5173
+pnpm dev:server:all             # API en :4317 + panel Vite (HMR) en :5173
 pnpm dev:extensions:socia       # arranca la extensión SOCIA en modo dev
 ```
 

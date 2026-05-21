@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:panel": "vite --config panel/vite.config.ts",
+    "dev:all": "PANEL_DEV_URL=http://localhost:5173 tsx watch src/index.ts & vite --config panel/vite.config.ts & wait",
     "build": "pnpm build:panel && pnpm build:server",
     "build:panel": "vite build --config panel/vite.config.ts",
     "build:server": "tsup",

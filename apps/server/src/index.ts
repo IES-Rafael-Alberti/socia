@@ -54,8 +54,16 @@ const server = http.createServer(app);
 attachWS(server);
 
 server.listen(config.port, () => {
+  const backendUrl = `http://localhost:${config.port}`;
+  const panelDevUrl = process.env.PANEL_DEV_URL;
   // eslint-disable-next-line no-console
-  console.log(`\nSOCIA Server listening on http://localhost:${config.port}`);
+  console.log(`\nSOCIA Server listening on ${backendUrl}`);
+  if (panelDevUrl) {
+    console.log(`Panel (Vite dev, HMR):      ${panelDevUrl}  ← abre esta`);
+    console.log(`Panel (servido por API):    ${backendUrl}`);
+  } else {
+    console.log(`Panel:                      ${backendUrl}`);
+  }
   // Never print full credentials to stdout. In production this stream is
   // captured by docker / journald / kubernetes; anyone with read access
   // to those logs would be able to authenticate. We surface enough hints
