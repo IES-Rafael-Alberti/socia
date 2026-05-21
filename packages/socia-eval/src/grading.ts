@@ -5,34 +5,27 @@
  * that produced it) and writes the justification around it. This way two
  * runs of the same trace always yield the same grade.
  *
- * Formula (Option C — explicit weights):
+ * Formula:
  *
- *   grade = 10 × (0.7 × M  +  0.2 × (1 − T)  +  0.1 × (1 − P))
+ *   base         = (completed / total) × 10           // 0..10
+ *   time_penalty = max(0, durationMinutes − estimatedMinutes)
+ *                                                     // 1 point per minute over,
+ *                                                     // 0 if within estimate or
+ *                                                     // estimated_minutes missing
+ *   hint_penalty = hints × 0.25
  *
- *   M = completed / total                        (milestone coverage)
- *   T = clamp((actual − target) / target, 0, 1)  (lateness; target = estimated_minutes)
- *   P = clamp(hints / total, 0, 1)               (autonomy)
+ *   grade        = clamp(base − time_penalty − hint_penalty, 0, 10)
  *
- * Edge cases:
- * - If `estimated_minutes` is not defined, skip the time penalty: redistribute
- *   the time weight onto the other two so the formula stays out of 10.
- * - If `total` milestones is 0, grade = 0.
+ * Properties:
+ * - 0 milestones completed → grade = 0 (no "free points" from being fast or
+ *   not asking for hints).
+ * - All milestones, within time, no hints → grade = 10.
+ * - Time and hints only ever subtract; they never add.
+ * - Time penalty is continuous (30s over the estimate = 0.5 points off).
  */
 
 import type { WorkflowData } from './workflow-types.js';
 import type { TraceExport } from './trace-export.js';
-
-export interface GradingWeights {
-  milestones: number;
-  time: number;
-  hints: number;
-}
-
-export const DEFAULT_WEIGHTS: GradingWeights = {
-  milestones: 0.7,
-  time: 0.2,
-  hints: 0.1,
-};
 
 export interface GradingInputs {
   completed: number;
@@ -45,23 +38,26 @@ export interface GradingInputs {
 }
 
 export interface GradingResult {
-  /** The final 0–10 grade, rounded to 1 decimal. */
+  /** The final 0–10 grade, clamped and rounded to 1 decimal. */
   grade: number;
-  /** Same number, raw (not rounded) — useful for debugging. */
+  /** Raw `base − time_penalty − hint_penalty` (may be negative). For debugging. */
   gradeRaw: number;
-  /** Component scores, all in [0, 1]. */
-  components: {
-    /** M — milestone coverage (1 = perfect). */
-    milestones: number;
-    /** 1 − T — time score (1 = on or under target, 0 = at/over double). */
-    time: number;
-    /** 1 − P — autonomy score (1 = no hints). */
-    autonomy: number;
-  };
-  /** Weights actually applied (after redistribution if any). */
-  weights: GradingWeights;
-  /** True if `estimatedMinutes` was missing and time was redistributed. */
-  timeSkipped: boolean;
+  /** Milestone coverage in [0, 1] = completed / total. */
+  milestoneCoverage: number;
+  /** Inputs echoed for downstream display. */
+  completed: number;
+  total: number;
+  hints: number;
+  /** Base score from milestones, in [0, 10]. */
+  base: number;
+  /** Points subtracted by the time penalty (≥ 0). */
+  timePenalty: number;
+  /** Minutes over the estimate (≥ 0). 0 if within estimate or no estimate. */
+  minutesOverEstimate: number;
+  /** Points subtracted by the hint penalty (= hints × 0.25). */
+  hintPenalty: number;
+  /** True if the workflow had `estimated_minutes`; false → time penalty disabled. */
+  estimateAvailable: boolean;
 }
 
 /** Round to 1 decimal — e.g. 8.473 → 8.5. */
@@ -76,56 +72,39 @@ function clamp01(x: number): number {
   return x;
 }
 
-export function computeGrade(
-  inputs: GradingInputs,
-  weights: GradingWeights = DEFAULT_WEIGHTS,
-): GradingResult {
+export function computeGrade(inputs: GradingInputs): GradingResult {
   const { completed, total, hints, durationSeconds, estimatedMinutes } = inputs;
 
-  // Milestone coverage M
-  const M = total > 0 ? clamp01(completed / total) : 0;
+  // Base: linear with milestone coverage.
+  const milestoneCoverage = total > 0 ? clamp01(completed / total) : 0;
+  const base = milestoneCoverage * 10;
 
-  // Time penalty T (lateness over target). target = estimated_minutes (no margin).
-  const hasTime =
+  // Time penalty: 1 point per minute over the estimate; never below 0.
+  const estimateAvailable =
     typeof estimatedMinutes === 'number' && estimatedMinutes > 0;
-  let T = 0;
-  if (hasTime) {
-    const targetSeconds = estimatedMinutes! * 60;
-    T = clamp01((durationSeconds - targetSeconds) / targetSeconds);
-  }
-  const timeScore = 1 - T;
+  const minutesOverEstimate = estimateAvailable
+    ? Math.max(0, durationSeconds / 60 - estimatedMinutes!)
+    : 0;
+  const timePenalty = minutesOverEstimate;
 
-  // Hints penalty P (capped at total milestones — beyond that, fully penalised).
-  const P = total > 0 ? clamp01(hints / total) : (hints > 0 ? 1 : 0);
-  const autonomyScore = 1 - P;
+  // Hint penalty: 0.25 per hint requested.
+  const hintPenalty = Math.max(0, hints) * 0.25;
 
-  // Effective weights (redistribute time weight if no estimated_minutes).
-  let w = weights;
-  if (!hasTime) {
-    const m = weights.milestones + weights.time;
-    // Redistribute the time weight proportionally onto milestones (keep
-    // hints weight steady — it's a small slice and we don't want to
-    // overweight autonomy because a workflow lacked an estimate).
-    w = {
-      milestones: m,
-      time: 0,
-      hints: weights.hints,
-    };
-  }
+  const gradeRaw = base - timePenalty - hintPenalty;
+  const grade = round1(Math.max(0, Math.min(10, gradeRaw)));
 
-  const gradeRaw =
-    10 * (w.milestones * M + w.time * timeScore + w.hints * autonomyScore);
-  const grade = clamp01(gradeRaw / 10) * 10; // safety
   return {
-    grade: round1(grade),
+    grade,
     gradeRaw,
-    components: {
-      milestones: round1(M * 10) / 10,
-      time: round1(timeScore * 10) / 10,
-      autonomy: round1(autonomyScore * 10) / 10,
-    },
-    weights: w,
-    timeSkipped: !hasTime,
+    milestoneCoverage,
+    completed,
+    total,
+    hints,
+    base: round1(base),
+    timePenalty: round1(timePenalty),
+    minutesOverEstimate: round1(minutesOverEstimate),
+    hintPenalty: round1(hintPenalty),
+    estimateAvailable,
   };
 }
 

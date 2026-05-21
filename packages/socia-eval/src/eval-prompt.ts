@@ -117,11 +117,8 @@ DEBES devolver un objeto JSON válido con esta estructura exacta:
 NO incluyas nada fuera del JSON. NO uses markdown. NO añadas campos extra.`;
 
   // Pre-computed score block the LLM must echo verbatim.
-  const total = workflow.phases.reduce(
-    (acc, p) => acc + p.milestones.length,
-    0,
-  );
-  const completed = Math.round(grading.components.milestones * total);
+  const total = grading.total;
+  const completed = grading.completed;
   const percentage = Math.round((total > 0 ? completed / total : 0) * 100);
 
   const traceMode =
@@ -156,9 +153,10 @@ ${phase.milestones.map((m) => `  - [${m.id}] ${interpolate(m.label, vars)}`).joi
 \`\`\`
 
 Desglose interno (para que entiendas el porqué de la nota; NO lo metas en el JSON):
-- Cobertura de hitos: ${(grading.components.milestones * 100).toFixed(0)}%   (peso ${(grading.weights.milestones * 100).toFixed(0)}%)
-- Puntualidad:        ${(grading.components.time * 100).toFixed(0)}%   (peso ${(grading.weights.time * 100).toFixed(0)}%${grading.timeSkipped ? ' — sin estimated_minutes en el workflow, peso redistribuido' : ''})
-- Autonomía (pistas): ${(grading.components.autonomy * 100).toFixed(0)}%   (peso ${(grading.weights.hints * 100).toFixed(0)}%)
+- Base por hitos:        ${grading.base.toFixed(1)} / 10   (${grading.completed}/${grading.total} completados)
+- Penalización tiempo:   ${grading.timePenalty > 0 ? `−${grading.timePenalty.toFixed(1)} (${grading.minutesOverEstimate.toFixed(1)} min sobre el estimado, 1 punto/min)` : grading.estimateAvailable ? '0 (dentro del tiempo estimado)' : '0 (el workflow no define estimated_minutes)'}
+- Penalización pistas:   ${grading.hintPenalty > 0 ? `−${grading.hintPenalty.toFixed(2)} (${grading.hints} pistas × 0.25)` : '0 (ninguna pista pedida)'}
+- Nota final:            ${grading.grade.toFixed(1)} / 10
 
 ## Traza del alumno (formato v4.0 — incluye resultados, timing por fase, pistas recibidas y timeline cronológica)
 ${JSON.stringify(traceExport, null, 2)}
@@ -227,11 +225,8 @@ export async function runEvaluation(
   const parsed = parseEvaluationResponse(raw);
 
   // Authoritative score wins over whatever the LLM echoed back.
-  const total = workflow.phases.reduce(
-    (acc, p) => acc + p.milestones.length,
-    0,
-  );
-  const completed = Math.round(grading.components.milestones * total);
+  const total = grading.total;
+  const completed = grading.completed;
   parsed.score = {
     completed,
     total,
