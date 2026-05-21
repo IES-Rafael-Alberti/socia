@@ -19,7 +19,7 @@ pnpm typecheck
 
 ## Variables de entorno
 
-Las extensiones leen unas pocas variables en build-time (Vite las inlinea en el bundle, así que cualquier cambio requiere rebuild). **Todas son opcionales** — las extensiones funcionan sin ellas degradando funcionalidad concreta:
+Las extensiones leen unas pocas variables en build-time (Vite las coloca en el bundle, así que cualquier cambio requiere rebuild). **Todas son opcionales** — las extensiones funcionan sin ellas, aunque conlleva cierta pérdida de funcionalidad:
 
 ```bash
 cp apps/extensions/.env.example apps/extensions/.env
@@ -28,9 +28,9 @@ cp apps/extensions/.env.example apps/extensions/.env
 
 Las más relevantes:
 
-- **`EXT_OPENROUTER_API_KEY`** → SOCIA + MENTORA. En SOCIA, default compilado para pistas y evaluación en standalone (en la práctica el alumno la mete por Ajustes; solo tiene sentido fijarla aquí si vas a distribuir un build con la clave preconfigurada). En MENTORA, habilita la transcripción Whisper del audio del recording (`transcription.srt`); sin ella el recording se exporta sin transcripción.
+- **`EXT_OPENROUTER_API_KEY`** → SOCIA + MENTORA. En SOCIA, la usa para generar pistas y la evaluación en standalone (en la práctica el alumno la mete por Ajustes; solo tiene sentido fijarla aquí si vas a distribuir un build con la clave preconfigurada, no si se usa el panel de control). En MENTORA, habilita la transcripción Whisper del audio del recording (`transcription.srt`); sin ella la grabación se exporta sin la transcripción en el archivo ZIP.
 
-> Todas las variables empiezan por **`EXT_`** (configurado en `apps/extensions/wxt.config.ts`). Cualquier variable sin ese prefijo se ignora — Vite obliga a un prefijo para evitar filtrar secrets server-side al bundle público.
+> Todas las variables empiezan por **`EXT_`** (configurado en `apps/extensions/wxt.config.ts`). Cualquier variable sin ese prefijo se ignora.
 
 Lista completa y descripción detallada en [`apps/extensions/.env.example`](apps/extensions/.env.example).
 
@@ -74,6 +74,26 @@ Desde `web/landing/` o `web/docs/` (cada uno con su `pnpm install`):
 - Descripción clara: qué problema resuelve, cómo probarlo.
 - `pnpm build` y `pnpm typecheck` deben pasar (CI lo verifica).
 - Si tocas algo del schema de workflow, actualiza también [`tools/skills/workflow-generator`](tools/skills/workflow-generator) y los ejemplos de [`tools/examples/`](tools/examples/).
+
+## Añadir un caso nuevo (PR)
+
+Un "caso" en SOCIA es un `workflow.json`: la definición del ejercicio (fases, hitos, firmas de red que prueban que el alumno completó cada paso). Puedes ver un ejemplo completo en [`tools/examples/workflow-bruteforce-demo.json`](tools/examples/workflow-bruteforce-demo.json).
+
+Flujo recomendado para contribuir un caso nuevo:
+
+1. **Créalo con MENTORA.** Instala la extensión MENTORA, ejecuta tú mismo el ejercicio de principio a fin sobre las herramientas reales (TheHive, Graylog, etc.), explicándolo usando tu micrófono y exporta el ZIP. Dentro encontrarás `network-log.json`, `activity-log.json`, `metadata.json` y capturas, así como el vídeo y la transcripción (si pusiste la API KEY).
+2. **Genera el `workflow.json`.** Instala el skill [`tools/skills/workflow-generator`](tools/skills/workflow-generator) en el agente que quieras utilizar. Pásale el ZIP de MENTORA como entrada.
+3. **Pruébalo con SOCIA.**
+   - `pnpm dev:extensions:socia` para arrancar la extensión.
+   - Carga el `workflow.json` en SOCIA y completa el caso entero como lo haría un alumno. Verifica que todos los hitos se marcan como completados y que las pistas tienen sentido en orden.
+4. **Coloca el archivo.**
+   - En [`tools/examples/`](tools/examples/) con nombre `workflow-<slug>.json`.
+5. **PR.** Adjunta en la descripción:
+   - Resumen pedagógico (1-2 frases): qué se aprende.
+   - Herramientas implicadas (TheHive, Graylog, …) y si requieren laboratorio.
+   - Captura o nota de la prueba manual en SOCIA (paso 3).
+
+Si el caso requiere extender el schema (un tipo de milestone nuevo, un campo nuevo), hazlo en una PR aparte previa, tocando `tools/skills/workflow-generator/` y los tipos en SOCIA (`packages/socia-eval`, `packages/socia-runtime`). Mantener "cambio de schema" y "caso nuevo" en PRs distintos hace la revisión mucho más fácil.
 
 ## Reportar bugs
 
