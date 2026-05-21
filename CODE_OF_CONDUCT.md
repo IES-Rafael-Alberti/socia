@@ -28,7 +28,7 @@ Ejemplos de comportamientos inaceptables:
 
 Las personas mantenedoras del proyecto son responsables de aclarar y hacer cumplir los estándares de comportamiento aceptable, y tomarán acciones correctivas apropiadas y justas en respuesta a cualquier comportamiento que consideren inapropiado, amenazante, ofensivo o dañino.
 
-Tendrán el derecho y la responsabilidad de eliminar, editar o rechazar comentarios, *commits*, código, ediciones de la wiki, *issues* y otras contribuciones que no estén alineadas con este Código de Conducta, y comunicarán las razones de sus decisiones cuando sea apropiado.
+Tendrán el derecho y la responsabilidad de eliminar, editar o rechazar comentarios, *commits*, código, *issues* y otras contribuciones que no estén alineadas con este Código de Conducta, y comunicarán las razones de sus decisiones cuando sea apropiado.
 
 ## Alcance
 
