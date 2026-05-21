@@ -1,6 +1,6 @@
 {
   "case": {
-    "id": "brute-force-debianvuln01",
+    "id": "brute-force-ssh",
     "title": "Brute Force a {{victim_host}} desde {{attacker_ip}}",
     "description": "Se ha detectado una alerta de fuerza bruta SSH contra el servidor debianvuln01. El estudiante debe triagear la alerta en TheHive, investigar los logs en Graylog y ejecutar análisis de reputación sobre la IP atacante.",
     "difficulty": "beginner",
@@ -8,7 +8,7 @@
   },
   "variables": {
     "attacker_ip": "172.31.0.2",
-    "victim_host": "debianvuln01",
+    "victim_host": "172.18.2.117",
     "thehive_host": "172.17.33.200",
     "graylog_host": "172.17.33.153:9000",
     "alert_title": "Brute Force",
