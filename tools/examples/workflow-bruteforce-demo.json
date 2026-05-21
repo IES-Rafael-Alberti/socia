@@ -9,7 +9,7 @@
   "variables": {
     "attacker_ip": "172.31.0.2",
     "victim_host": "debianvuln01",
-    "thehive_host": "172.17.33.104",
+    "thehive_host": "172.17.33.200",
     "graylog_host": "172.17.33.153:9000",
     "alert_title": "Brute Force",
     "rule_ids": "5710 OR 5711 OR 5712 OR 5763"
