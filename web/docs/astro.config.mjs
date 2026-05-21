@@ -53,6 +53,7 @@ export default defineConfig({
 					translations: { en: 'AI components' },
 					items: [
 						{ label: 'Visión general', translations: { en: 'Overview' }, link: '/ia/vision/' },
+						{ label: 'Proceso de diseño', translations: { en: 'Design journey' }, link: '/ia/proceso-diseno/' },
 						{ label: 'MENTORA — extensión del docente', translations: { en: 'MENTORA — teacher extension' }, link: '/ia/mentora/' },
 						{ label: 'SOCIA — extensión del alumnado', translations: { en: 'SOCIA — student extension' }, link: '/ia/socia/' },
 						{ label: 'SOCIA Server — panel del centro', translations: { en: 'SOCIA Server — school panel' }, link: '/ia/server/' },
