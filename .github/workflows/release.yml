@@ -11,10 +11,12 @@ name: Release
 #   - apps/server/package.json
 # before building, so each artifact carries the version baked in.
 #
-# Artifacts: three zips published to the GitHub release:
-#   - mentora-vX.Y.zip       (teacher extension)
-#   - socia-vX.Y.zip         (student extension)
-#   - panel-server-vX.Y.zip  (built server + teacher panel)
+# Artifacts published to the GitHub release:
+#   - mentora-vX.Y.zip                (teacher extension)
+#   - socia-vX.Y.zip                  (student extension)
+#   - panel-server-vX.Y.zip           (built server + teacher panel)
+#   - workflow-generator-vX.Y.skill   (agent skill)
+#   - guide-generator-vX.Y.skill      (agent skill)
 #
 # Changelog: commits since the previous tag, grouped roughly by conventional
 # prefix (feat/fix/docs/chore/refactor). If there is no previous tag, all
@@ -175,9 +177,44 @@ jobs:
           name: server
           path: release-artifacts/*.zip
 
+  build-skills:
+    name: Package agent skills
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Package skills
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-artifacts
+          for skill in workflow-generator guide-generator; do
+            test -f "tools/skills/${skill}/SKILL.md"
+            (
+              cd tools/skills
+              zip -r -q "../../release-artifacts/${skill}-v${VERSION}.skill" "${skill}"
+            )
+          done
+
+      - name: Verify skill archives
+        run: |
+          set -euo pipefail
+          for artifact in release-artifacts/*.skill; do
+            unzip -t "$artifact"
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: skills
+          path: release-artifacts/*.skill
+
   release:
     name: Publish GitHub release
-    needs: [version, build-extensions, build-server]
+    needs: [version, build-extensions, build-server, build-skills]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -243,12 +280,16 @@ jobs:
             echo "- \`mentora-${TAG}.zip\` — MENTORA Chrome extension (teacher)."
             echo "- \`socia-${TAG}.zip\` — SOCIA Chrome extension (student)."
             echo "- \`panel-server-${TAG}.zip\` — server + teacher panel."
+            echo "- \`workflow-generator-${TAG}.skill\` — agent skill for generating SOCIA workflows from MENTORA recordings."
+            echo "- \`guide-generator-${TAG}.skill\` — agent skill for generating step-by-step teaching guides from MENTORA recordings."
             echo
             echo "### Quick install"
             echo
             echo "**Extensions (Chrome / Edge):** unzip and load the resulting folder from \`chrome://extensions\` with developer mode enabled (\"Load unpacked\")."
             echo
             echo "**Server:** unzip \`panel-server-${TAG}.zip\`, install production dependencies (\`pnpm install --prod\`) and start with \`node dist/index.js\`. Alternatively, use the included \`Dockerfile\`."
+            echo
+            echo "**Agent skills:** install \`workflow-generator-${TAG}.skill\` and \`guide-generator-${TAG}.skill\` with an agent compatible with the \`.skill\` format. If your agent does not support \`.skill\` files, rename each file to \`.zip\`, unzip it, and follow that agent's own skill installation instructions with the extracted skill folder."
           } > RELEASE_NOTES.md
           cat RELEASE_NOTES.md
 
@@ -258,5 +299,5 @@ jobs:
           tag_name: ${{ needs.version.outputs.tag }}
           name: SOCIA ${{ needs.version.outputs.tag }}
           body_path: RELEASE_NOTES.md
-          files: release-artifacts/*.zip
+          files: release-artifacts/*
           fail_on_unmatched_files: true

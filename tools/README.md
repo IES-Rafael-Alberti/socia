@@ -9,7 +9,9 @@ Artefactos de desarrollo que **no son runtime** del producto pero acompañan al 
 - **`workflow-generator`** — produce un `workflow.json` a partir de una grabación MENTORA (network log + activity log).
 - **`guide-generator`** — produce una guía didáctica en PDF a partir de la misma grabación.
 
-Para usarlas con Claude Code o la app de Claude, copia la carpeta de la skill (`SKILL.md` + `references/` + `assets/`) al directorio de skills correspondiente. Ver la documentación oficial de Claude para detalles de instalación.
+En cada release se publican también como artefactos `.skill`: cada archivo es un ZIP con la carpeta de la skill (`SKILL.md` + `references/`, `assets/`, `scripts/` u otros recursos propios). Si el agente no admite el formato `.skill`, cambia la extensión a `.zip`, descomprímelo y sigue las instrucciones de instalación de skills propias de ese agente.
+
+Para usarlas desde el repo, copia la carpeta de la skill (`SKILL.md` + sus recursos) al directorio de skills correspondiente del agente. Ver la documentación oficial del agente para detalles de instalación.
 
 ## `examples/`
 
