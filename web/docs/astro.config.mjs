@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import { defineConfig, passthroughImageService } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
@@ -7,6 +7,11 @@ export default defineConfig({
 	// Hosted on the project's custom domain. Docs live at /docs/.
 	site: "https://socia.fpciberseguridad.com",
 	base: "/docs",
+	// sharp is not declared as a dependency in this package; use passthrough
+	// so Astro skips image optimisation and serves images as-is.
+	image: {
+		service: passthroughImageService(),
+	},
 	integrations: [
 		starlight({
 			title: 'SOCIA',
