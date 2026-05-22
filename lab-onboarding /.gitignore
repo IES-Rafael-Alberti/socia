@@ -1,0 +1,20 @@
+# Datos sensibles — NUNCA subir al repo
+slots_vpn.csv
+slots_team.csv
+*.conf
+setup/.env
+setup/env
+
+# Configuración local con valores reales — usar *.example.gs como plantilla
+apps-script/Config.gs
+apps-script-team/Config_team.gs
+
+# Python
+__pycache__/
+*.pyc
+
+# Entorno local de clasp (vinculado a una cuenta Google concreta)
+.clasp.json
+
+# macOS
+.DS_Store

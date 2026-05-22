@@ -1,0 +1,22 @@
+"equipo","slot_m1","ip_m1","privkey_m1","pubkey_m1","psk_m1","conf_m1","uuid_m1","slot_m2","ip_m2","privkey_m2","pubkey_m2","psk_m2","conf_m2","uuid_m2","libre","nombre_equipo","email_m1","email_m2","centro","enviado_en"
+"equipo1","equipo1_m1","10.0.3.151","AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=","CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=","[Interface]
+PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+Address = 10.0.3.151/32
+DNS = 1.1.1.1, 8.8.8.8
+
+[Peer]
+PublicKey = TU_CLAVE_PUBLICA_SERVIDOR=
+PresharedKey = CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=
+Endpoint = TU_IP_PUBLICA:TU_PUERTO
+AllowedIPs = 10.0.3.0/24, 172.17.33.0/24
+PersistentKeepalive = 15","xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx","equipo1_m2","10.0.3.152","DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=","EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE=","FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF=","[Interface]
+PrivateKey = DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=
+Address = 10.0.3.152/32
+DNS = 1.1.1.1, 8.8.8.8
+
+[Peer]
+PublicKey = TU_CLAVE_PUBLICA_SERVIDOR=
+PresharedKey = FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF=
+Endpoint = TU_IP_PUBLICA:TU_PUERTO
+AllowedIPs = 10.0.3.0/24, 172.17.33.0/24
+PersistentKeepalive = 15","yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy","TRUE","","","","",""
