@@ -1,10 +1,10 @@
 services:
   socia-server:
     build:
-      # Build context is the repo root — the Dockerfile needs the full pnpm
-      # workspace (apps/server depends on @socia/eval and @socia/branding).
-      context: ../..
-      dockerfile: apps/server/Dockerfile
+      # Build context is apps/ — this is the pnpm workspace for extensions,
+      # server and shared packages. web/ and infra/ stay outside the image.
+      context: ..
+      dockerfile: server/Dockerfile
     container_name: socia-server
     restart: unless-stopped
     ports:

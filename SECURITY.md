@@ -34,7 +34,7 @@ Componentes que aceptamos en reportes:
 | **Servidor + panel docente** | `apps/server/` | Auth bypass del panel, IDOR sobre evaluaciones, XSS, SQLi, RCE en handlers, exposición de tokens de estudiante, leak de datos de menores |
 | **Extensión SOCIA** | `apps/extensions/entrypoints/socia/` | Filtración de la API key del alumno, manipulación de la traza, ejecución de código vía workflow.json malicioso |
 | **Extensión MENTORA** | `apps/extensions/entrypoints/mentora/` | Filtración de la API key de OpenAI compilada, captura de credenciales del docente |
-| **Paquetes compartidos** | `packages/socia-eval/`, `packages/socia-runtime/`, `packages/socia-branding/` | Inyección a través del PDF, validación de input débil, abuso del prompt al LLM |
+| **Paquetes compartidos** | `apps/packages/socia-eval/`, `apps/packages/socia-runtime/`, `apps/packages/socia-branding/` | Inyección a través del PDF, validación de input débil, abuso del prompt al LLM |
 | **Web pública** | `web/landing/`, `web/docs/` | XSS en el sitio publicado, contenido inyectado vía meta tags |
 
 Componentes **fuera de alcance**:

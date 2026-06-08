@@ -3,7 +3,7 @@
    Caveat Brush, white-dominant surfaces, single-accent discipline. Tokens
    are aligned with the SOCIA landing's design tokens (web/landing/src/styles/
    theme.css) so docs and landing read as one product. Institutional brands
-   for generated PDFs live in `packages/socia-branding`, not here. */
+   for generated PDFs live in `apps/packages/socia-branding`, not here. */
 
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Caveat+Brush&family=Kalam:wght@400;700&display=swap');
 

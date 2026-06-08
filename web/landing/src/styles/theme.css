@@ -1,7 +1,7 @@
 /* SOCIA — design tokens for the public landing.
    Single rose-red accent on white. No second accent.
    Institutional brands (IES Rafael Alberti, CIFP N.º 1 Cuenca…) live in
-   `packages/socia-branding` and apply only to generated PDFs, not to this
+   `apps/packages/socia-branding` and apply only to generated PDFs, not to this
    site's chrome. */
 
 :root,

@@ -12,7 +12,7 @@ Two layers:
      phase dependencies are coherent, plus quality conventions.
 
 Usage:
-  uv run tools/skills/workflow-generator/scripts/validate_workflow.py <workflow.json>
+  uv run apps/skills/workflow-generator/scripts/validate_workflow.py <workflow.json>
 
 Output:
   - Errors and warnings on stderr (each with its path inside the JSON).

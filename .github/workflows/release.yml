@@ -81,34 +81,40 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: apps/pnpm-lock.yaml
 
       - name: Install workspace dependencies
+        working-directory: apps
         run: pnpm install --frozen-lockfile
 
       - name: Inject version into manifests
+        working-directory: apps
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           # wxt.config.ts has two `version: '1.0.0',` blocks (one per
           # extension). Replace both with the computed version.
-          sed -i "s/version: '[^']*',/version: '${VERSION}',/g" apps/extensions/wxt.config.ts
+          sed -i "s/version: '[^']*',/version: '${VERSION}',/g" extensions/wxt.config.ts
 
       - name: Build MENTORA
+        working-directory: apps
         run: pnpm build:extensions:mentora
 
       - name: Build SOCIA
+        working-directory: apps
         run: pnpm build:extensions:socia
 
       - name: Package zips
+        working-directory: apps
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
-          mkdir -p release-artifacts
-          cd apps/extensions/dist-mentora/chrome-mv3
+          mkdir -p ../release-artifacts
+          cd extensions/dist-mentora/chrome-mv3
           zip -r "../../../../release-artifacts/mentora-v${VERSION}.zip" .
           cd -
-          cd apps/extensions/dist-socia/chrome-mv3
+          cd extensions/dist-socia/chrome-mv3
           zip -r "../../../../release-artifacts/socia-v${VERSION}.zip" .
 
       - name: Upload artifacts
@@ -133,36 +139,41 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: apps/pnpm-lock.yaml
 
       - name: Install workspace dependencies
+        working-directory: apps
         run: pnpm install --frozen-lockfile
 
       - name: Inject version into server package.json
+        working-directory: apps
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           node -e "
             const fs = require('fs');
-            const p = 'apps/server/package.json';
+            const p = 'server/package.json';
             const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
             pkg.version = process.env.VERSION;
             fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n');
           "
 
       - name: Build server (panel + backend)
+        working-directory: apps
         run: pnpm build:server
 
       - name: Package server zip
+        working-directory: apps
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
-          mkdir -p release-artifacts
+          mkdir -p ../release-artifacts
           # Bundle what's needed to start the server on the target machine:
           # backend dist/, built panel, package.json to resolve production
           # dependencies, and the Dockerfile/compose for the containerized
           # path.
-          cd apps/server
+          cd server
           zip -r "../../release-artifacts/panel-server-v${VERSION}.zip" \
             dist \
             panel/dist \
@@ -192,9 +203,9 @@ jobs:
           set -euo pipefail
           mkdir -p release-artifacts
           for skill in workflow-generator guide-generator; do
-            test -f "tools/skills/${skill}/SKILL.md"
+            test -f "apps/skills/${skill}/SKILL.md"
             (
-              cd tools/skills
+              cd apps/skills
               zip -r -q "../../release-artifacts/${skill}-v${VERSION}.skill" "${skill}"
             )
           done

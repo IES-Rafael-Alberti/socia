@@ -17,28 +17,27 @@ SOCIA es una suite educativa para formación profesional en ciberseguridad. Es u
 
 ```
 socia/
-├── apps/                # productos finales (workspace pnpm)
+├── apps/                # workspace pnpm de SOCIA / MENTORA / Server
 │   ├── extensions/      # MENTORA + SOCIA (proyecto wxt)
-│   └── server/          # Express + panel admin
-├── packages/            # librerías compartidas (workspace pnpm)
-│   ├── socia-eval/      # Tipos de workflow, grading, eval-prompt, PDF
-│   └── socia-runtime/   # Cliente, settings, hint-overlay, matcher, engine
-├── tools/
-│   ├── skills/          # Skills de agentes para generar workflows y guías
-│   └── examples/        # workflow.json de referencia
-└── web/                 # SITES públicos — fuera del workspace
+│   ├── server/          # Express + panel admin
+│   ├── packages/        # librerías internas compartidas por extensions/server
+│   └── skills/          # skills de agente para el flujo MENTORA
+├── exercises/           # workflows/casos prácticos para SOCIA
+├── infra/               # despliegues, laboratorios y material operativo
+└── web/                 # sites públicos — fuera del workspace de apps
     ├── landing/         # Astro
     └── docs/            # Astro Starlight
 ```
 
-> `web/` está deliberadamente fuera del workspace pnpm. Quien clona el repo para usar las apps no instala Astro / Starlight / sharp. Si vas a tocar la web, ver [`web/README.md`](web/README.md).
+> `web/` está deliberadamente fuera del workspace pnpm de `apps/`. Quien clona el repo para usar las apps no instala Astro / Starlight / sharp. Si vas a tocar la web, ver [`web/README.md`](web/README.md).
 
 ## Quick start
 
 Requiere [pnpm](https://pnpm.io/) ≥ 9 y Node ≥ 20.
 
 ```bash
-pnpm install                    # solo apps/ + packages/  (la web no entra)
+cd apps
+pnpm install                    # solo extensions/ + server/ + packages/
 pnpm build                      # construye extensiones + server
 pnpm dev:server:all             # API en :4317 + panel Vite (HMR) en :5173
 pnpm dev:extensions:socia       # arranca la extensión SOCIA en modo dev

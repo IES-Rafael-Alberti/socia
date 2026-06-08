@@ -105,7 +105,7 @@ llmRouter.post('/evaluation', async (req: StudentReq, res) => {
   const durationSeconds = traceExport.session?.duration_seconds ?? 0;
   const caseName = interpolateWorkflowText(workflow.case.title, workflow.variables);
 
-  // Deterministic grade — formula lives in @socia/eval (packages/socia-eval) so the
+  // Deterministic grade — formula lives in @socia/eval (apps/packages/socia-eval) so the
   // extension's standalone path produces the same numbers.
   const grading = gradeFromTrace(workflow, traceExport);
 

@@ -1,10 +1,10 @@
 {
-  "name": "socia-monorepo",
+  "name": "socia-apps-workspace",
   "private": true,
   "version": "1.0.0",
-  "description": "SOCIA — entrenamiento práctico de ciberseguridad SOC con verificación automática y evaluación por LLM. Monorepo: extensiones MENTORA + SOCIA, servidor + panel docente. La web pública (landing + docs) vive en /web con su propio install.",
+  "description": "Workspace pnpm de las apps SOCIA: extensiones MENTORA + SOCIA, servidor + panel docente, librerías internas y skills de agente.",
   "scripts": {
-    "build": "pnpm -r --filter='./apps/*' --filter='./packages/*' build",
+    "build": "pnpm -r --filter='./extensions' --filter='./server' --filter='./packages/*' build",
     "build:extensions": "pnpm --filter @socia/extensions build",
     "build:extensions:socia": "pnpm --filter @socia/extensions build:socia",
     "build:extensions:mentora": "pnpm --filter @socia/extensions build:mentora",

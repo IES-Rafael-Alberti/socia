@@ -29,7 +29,7 @@ const landingRoot = resolve(here, '..');
 const LOGO_PATH = resolve(landingRoot, 'src/assets/socia-logo.svg');
 const OUTPUT = resolve(landingRoot, 'public/social.jpg');
 
-// Brand tokens — keep in sync with packages/socia-branding (default brand).
+// Brand tokens — keep in sync with apps/packages/socia-branding (default brand).
 const PRIMARY = '#e93456';
 const PRIMARY_DARK = '#c42847';
 

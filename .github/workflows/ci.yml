@@ -1,14 +1,14 @@
 # Run on every push and PR.
 #
 # Two independent jobs:
-#   - core: workspace pnpm (apps/extensions + apps/server + packages/*).
+#   - core: apps workspace pnpm (extensions + server + packages/*).
 #     Build + typecheck. This is what most contributions touch.
 #   - web: only when web/ changes. Each web app installs and builds on its
 #     own (web/ is outside the workspace by design).
 #
 # `--frozen-lockfile` (the pnpm install default) is strict: CI fails if the
 # lockfile is out of sync with package.json. Anyone adding a dependency must
-# commit the updated `pnpm-lock.yaml`. This is the right tradeoff for an
+# commit the updated `apps/pnpm-lock.yaml`. This is the right tradeoff for an
 # open-source repo where reproducibility matters more than convenience.
 #
 # Note on pnpm version: we let `pnpm/action-setup` read it from the
@@ -25,7 +25,7 @@ on:
 
 jobs:
   core:
-    name: Build core (extensions + server + packages)
+    name: Build core apps (extensions + server + packages)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,17 +39,22 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: apps/pnpm-lock.yaml
 
       - name: Install workspace dependencies
+        working-directory: apps
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck (all packages + apps)
+        working-directory: apps
         run: pnpm typecheck
 
       - name: Build extensions
+        working-directory: apps
         run: pnpm build:extensions
 
       - name: Build server (panel + backend)
+        working-directory: apps
         run: pnpm build:server
 
   web:

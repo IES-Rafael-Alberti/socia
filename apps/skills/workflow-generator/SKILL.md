@@ -189,7 +189,7 @@ Use `{{variables}}` in hints so they adapt to the case. The hint LLM uses these 
 Run the validator script. It enforces the schema **strictly** (rejects undeclared fields — catches typos like `network_match`, `hints_examples`, `methods`) and checks semantic invariants. Any error is blocking: iterate until it passes. Warnings are quality recommendations; address them when you can.
 
 ```bash
-uv run tools/skills/workflow-generator/scripts/validate_workflow.py path/to/workflow.json
+uv run apps/skills/workflow-generator/scripts/validate_workflow.py path/to/workflow.json
 ```
 
 What it covers:

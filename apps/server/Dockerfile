@@ -1,7 +1,6 @@
-# Build context for this Dockerfile is the REPO ROOT (see docker-compose.yml).
-# We build from the root so the workspace is intact: the server depends on
-# `@socia/eval` and `@socia/branding` (workspace:* packages) and pnpm needs
-# to see them to install/link.
+# Build context for this Dockerfile is apps/ (see docker-compose.yml). We build
+# from that workspace root so the server can resolve @socia/* packages without
+# bringing web/ or infra/ into the Docker context.
 #
 # ── Build stage ────────────────────────────────────────────────────────────
 FROM node:22-bookworm AS build
@@ -19,21 +18,21 @@ RUN corepack enable
 # Workspace manifests first — better Docker layer caching: pnpm only re-runs
 # when a package.json changes.
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
-COPY apps/server/package.json apps/server/
+COPY server/package.json server/
 COPY packages/socia-eval/package.json packages/socia-eval/
 COPY packages/socia-branding/package.json packages/socia-branding/
 # socia-runtime is browser-only (chrome.* APIs) and not consumed by the
 # server — but it is part of the workspace, so its manifest is needed for
 # pnpm install to succeed.
 COPY packages/socia-runtime/package.json packages/socia-runtime/
-# apps/extensions is also in the workspace; only its manifest is needed,
+# extensions is also in the workspace; only its manifest is needed,
 # without the postinstall (`wxt prepare`) which requires extension sources.
-COPY apps/extensions/package.json apps/extensions/
+COPY extensions/package.json extensions/
 
 RUN pnpm install --filter @socia/server... --frozen-lockfile=false --ignore-scripts
 
 # Now bring in the actual sources we need to build the server.
-COPY apps/server/ apps/server/
+COPY server/ server/
 COPY packages/socia-eval/ packages/socia-eval/
 COPY packages/socia-branding/ packages/socia-branding/
 
@@ -55,10 +54,10 @@ ENV NODE_ENV=production
 # are everything we need at runtime. `apps/server/node_modules` from a pnpm
 # workspace contains symlinks into the global store; using a plain copy with
 # -L (--dereference) flattens those symlinks into real files.
-COPY --from=build --chown=node:node /repo/apps/server/dist ./dist
-COPY --from=build --chown=node:node /repo/apps/server/panel/dist ./panel/dist
-COPY --from=build --chown=node:node /repo/apps/server/package.json ./package.json
-COPY --from=build --chown=node:node /repo/apps/server/node_modules ./node_modules
+COPY --from=build --chown=node:node /repo/server/dist ./dist
+COPY --from=build --chown=node:node /repo/server/panel/dist ./panel/dist
+COPY --from=build --chown=node:node /repo/server/package.json ./package.json
+COPY --from=build --chown=node:node /repo/server/node_modules ./node_modules
 
 # Persistent volume for SQLite + workflows + PDFs
 VOLUME ["/data"]

@@ -7,6 +7,7 @@
 ```bash
 git clone https://github.com/<usuario>/socia.git
 cd socia
+cd apps
 pnpm install
 ```
 
@@ -40,17 +41,19 @@ El servidor (`apps/server/`) tiene su propio `.env` aparte; ver [`apps/server/.e
 
 Es un monorepo con dos zonas:
 
-- **Workspace pnpm** (raíz `package.json` + `pnpm-workspace.yaml`):
+- **Workspace pnpm de apps** (`apps/package.json` + `apps/pnpm-workspace.yaml`):
   - **`apps/extensions/`** — extensiones MENTORA y SOCIA.
   - **`apps/server/`** — backend + panel docente.
-  - **`packages/socia-eval/`** y **`packages/socia-runtime/`** — librerías compartidas. Se importan con aliases (`@socia/eval`, `@socia/runtime`).
-  - **`tools/`** — utilidades de desarrollo (skills para agentes, ejemplos de workflow).
+  - **`apps/packages/socia-eval/`** y **`apps/packages/socia-runtime/`** — librerías compartidas. Se importan con aliases (`@socia/eval`, `@socia/runtime`).
+  - **`apps/skills/`** — skills de agente para generar workflows y guías desde exportaciones de MENTORA.
+- **Ejercicios** (`exercises/`):
+  - Workflows/casos prácticos que se cargan en SOCIA.
 - **Web pública** (`web/`):
   - **`web/landing/`** y **`web/docs/`** — sites Astro. **Fuera** del workspace pnpm: cada uno tiene su propio install. Si solo tocas las apps, ni los miras.
 
 ## Scripts útiles
 
-Desde la raíz (workspace, requiere `pnpm install` previo):
+Desde `apps/` (workspace, requiere `pnpm install` previo):
 
 | Comando | Qué hace |
 |---|---|
@@ -73,27 +76,27 @@ Desde `web/landing/` o `web/docs/` (cada uno con su `pnpm install`):
 - Una PR por cambio lógico.
 - Descripción clara: qué problema resuelve, cómo probarlo.
 - `pnpm build` y `pnpm typecheck` deben pasar (CI lo verifica).
-- Si tocas algo del schema de workflow, actualiza también [`tools/skills/workflow-generator`](tools/skills/workflow-generator) y los ejemplos de [`tools/examples/`](tools/examples/).
+- Si tocas algo del schema de workflow, actualiza también [`apps/skills/workflow-generator`](apps/skills/workflow-generator) y los ejercicios de [`exercises/`](exercises/).
 
 ## Añadir un caso nuevo (PR)
 
-Un "caso" en SOCIA es un `workflow.json`: la definición del ejercicio (fases, hitos, firmas de red que prueban que el alumno completó cada paso). Puedes ver un ejemplo completo en [`tools/examples/workflow-bruteforce-demo.json`](tools/examples/workflow-bruteforce-demo.json).
+Un "caso" en SOCIA es un `workflow.json`: la definición del ejercicio (fases, hitos, firmas de red que prueban que el alumno completó cada paso). Puedes ver un ejemplo completo en [`exercises/workflow-bruteforce-demo.json`](exercises/workflow-bruteforce-demo.json).
 
 Flujo recomendado para contribuir un caso nuevo:
 
 1. **Créalo con MENTORA.** Instala la extensión MENTORA, ejecuta tú mismo el ejercicio de principio a fin sobre las herramientas reales (TheHive, Graylog, etc.), explicándolo usando tu micrófono y exporta el ZIP. Dentro encontrarás `network-log.json`, `activity-log.json`, `metadata.json` y capturas, así como el vídeo y la transcripción (si pusiste la API KEY).
-2. **Genera el `workflow.json`.** Instala el skill [`tools/skills/workflow-generator`](tools/skills/workflow-generator) en el agente que quieras utilizar. Pásale el ZIP de MENTORA como entrada.
+2. **Genera el `workflow.json`.** Instala el skill [`apps/skills/workflow-generator`](apps/skills/workflow-generator) en el agente que quieras utilizar. Pásale el ZIP de MENTORA como entrada.
 3. **Pruébalo con SOCIA.**
    - `pnpm dev:extensions:socia` para arrancar la extensión.
    - Carga el `workflow.json` en SOCIA y completa el caso entero como lo haría un alumno. Verifica que todos los hitos se marcan como completados y que las pistas tienen sentido en orden.
 4. **Coloca el archivo.**
-   - En [`tools/examples/`](tools/examples/) con nombre `workflow-<slug>.json`.
+   - En [`exercises/`](exercises/) con nombre `workflow-<slug>.json`.
 5. **PR.** Adjunta en la descripción:
    - Resumen pedagógico (1-2 frases): qué se aprende.
    - Herramientas implicadas (TheHive, Graylog, …) y si requieren laboratorio.
    - Captura o nota de la prueba manual en SOCIA (paso 3).
 
-Si el caso requiere extender el schema (un tipo de milestone nuevo, un campo nuevo), hazlo en una PR aparte previa, tocando `tools/skills/workflow-generator/` y los tipos en SOCIA (`packages/socia-eval`, `packages/socia-runtime`). Mantener "cambio de schema" y "caso nuevo" en PRs distintos hace la revisión mucho más fácil.
+Si el caso requiere extender el schema (un tipo de milestone nuevo, un campo nuevo), hazlo en una PR aparte previa, tocando `apps/skills/workflow-generator/` y los tipos en SOCIA (`apps/packages/socia-eval`, `apps/packages/socia-runtime`). Mantener "cambio de schema" y "caso nuevo" en PRs distintos hace la revisión mucho más fácil.
 
 ## Reportar bugs
 

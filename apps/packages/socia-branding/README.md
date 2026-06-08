@@ -21,8 +21,8 @@ Cada brand está versionada en código (`src/brands/<id>/brand.ts`) — añadir 
    node -e "
    const fs = require('fs');
    for (const [src, dst] of [
-     ['ruta/a/imago.png', 'packages/socia-branding/src/brands/<id>/imago.b64.ts'],
-     ['ruta/a/sello.png', 'packages/socia-branding/src/brands/<id>/sello.b64.ts'],
+     ['ruta/a/imago.png', 'apps/packages/socia-branding/src/brands/<id>/imago.b64.ts'],
+     ['ruta/a/sello.png', 'apps/packages/socia-branding/src/brands/<id>/sello.b64.ts'],
    ]) {
      const b64 = fs.readFileSync(src).toString('base64');
      fs.writeFileSync(dst,
@@ -34,7 +34,7 @@ Cada brand está versionada en código (`src/brands/<id>/brand.ts`) — añadir 
    ```
 3. Crea `brand.ts` exportando un objeto `Brand` (ver `types.ts` para los campos exactos).
 4. Regístralo en `src/index.ts` añadiéndolo al `registry`.
-5. **(Importante)** Replica la carpeta paralela en [`tools/skills/guide-generator/brands/<id>/`](../../tools/skills/guide-generator/brands/) para que la skill que genera la guía didáctica también pueda usar el brand. La sincronización es manual a propósito (la skill se distribuye aislada del monorepo).
+5. **(Importante)** Replica la carpeta paralela en [`apps/skills/guide-generator/brands/<id>/`](../../skills/guide-generator/brands/) para que la skill que genera la guía didáctica también pueda usar el brand. La sincronización es manual a propósito (la skill se distribuye aislada del monorepo).
 
 ## Cómo se selecciona el brand
 

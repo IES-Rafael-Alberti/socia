@@ -1,6 +1,6 @@
 # `web/`
 
-Sites públicos del proyecto SOCIA. **Fuera del workspace pnpm** del resto del repo: cada uno tiene su propio `package.json` y su propio `node_modules`. Quien clona el repo solo para usar las apps (extensiones / servidor) **no necesita instalar nada de aquí**.
+Sites públicos del proyecto SOCIA. **Fuera del workspace pnpm de `apps/`**: cada site tiene su propio `package.json` y su propio `node_modules`. Quien clona el repo solo para usar las apps (extensiones / servidor) **no necesita instalar nada de aquí**.
 
 ## Apps
 
@@ -9,7 +9,7 @@ Sites públicos del proyecto SOCIA. **Fuera del workspace pnpm** del resto del r
 
 ## Trabajar en local
 
-`web/` es un **sub-workspace pnpm** independiente del workspace de la raíz. Tiene su propio `pnpm-workspace.yaml` y su propio lockfile. Esto le aísla del install del repo principal.
+`web/` es un **sub-workspace pnpm** independiente del workspace de `apps/`. Tiene su propio `pnpm-workspace.yaml` y su propio lockfile. Esto le aísla del install de las apps.
 
 Desde `web/` se construye y desarrolla cualquiera de las dos:
 
@@ -37,6 +37,6 @@ Lo hace [`/.github/workflows/static.yml`](../.github/workflows/static.yml): inst
 
 Las dependencias de la web (Astro, Starlight, sharp, tailwind…) son grandes y no aportan nada a quien quiere usar las apps. Mantenerlas separadas:
 
-- Acelera el `pnpm install` del repo principal.
+- Acelera el `pnpm install` del workspace de `apps/`.
 - Permite a la web usar versiones de Astro distintas sin coordinarlas con el resto.
 - Da una separación clara para colaboradores: "yo toco docs" vs. "yo toco código".

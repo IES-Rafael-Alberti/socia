@@ -1,8 +1,8 @@
 # Brands para `guide-generator`
 
-Catálogo paralelo al de [`packages/socia-branding`](../../../../packages/socia-branding) para que la skill `guide-generator` (que se distribuye aislada del monorepo) tenga su propia copia.
+Catálogo paralelo al de [`apps/packages/socia-branding`](../../../packages/socia-branding) para que la skill `guide-generator` (que se distribuye aislada del monorepo) tenga su propia copia.
 
-Mantenimiento manual: cuando añades o modificas un brand en `packages/socia-branding/src/brands/<id>/`, replica el cambio aquí en `tools/skills/guide-generator/brands/<id>/`.
+Mantenimiento manual: cuando añades o modificas un brand en `apps/packages/socia-branding/src/brands/<id>/`, replica el cambio aquí en `apps/skills/guide-generator/brands/<id>/`.
 
 ## Estructura
 

@@ -9,8 +9,8 @@ Backend + panel docente para SOCIA. Sirve:
 
 ## Arranque rápido (Docker)
 
-Desde **`apps/server/`** (el `docker-compose.yml` referencia el contexto
-del repo padre, así que es importante ejecutarlo desde aquí):
+Desde **`apps/server/`** (el `docker-compose.yml` referencia `apps/` como
+contexto de build, así que es importante ejecutarlo desde aquí):
 
 ```bash
 cd apps/server
@@ -30,11 +30,11 @@ contenedor.
 
 ## Desarrollo local (sin Docker)
 
-El server vive dentro del workspace pnpm de la raíz, así que primero
-`pnpm install` desde la raíz del repo. Luego, desde la raíz:
+El server vive dentro del workspace pnpm de `apps/`, así que primero
+`pnpm install` desde `apps/`. Luego, desde `apps/`:
 
 ```bash
-cp apps/server/.env.example apps/server/.env
+cp server/.env.example server/.env
 pnpm --filter @socia/server build:panel      # genera panel/dist
 pnpm dev:server                              # backend en :4317
 # en otra terminal, si quieres el panel con hot-reload:
@@ -94,4 +94,4 @@ pnpm build                # bundle + panel/dist (idéntico al que produce Docker
 | `OPENROUTER_MODEL_HINTS` | xiaomi/mimo-v2-flash | Modelo para pistas |
 | `OPENROUTER_MODEL_EVAL` | xiaomi/mimo-v2-flash | Modelo para evaluación |
 | `DATA_DIR` | ./data (en Docker, /data) | Carpeta del SQLite + ficheros |
-| `BRAND_ID` | socia | Logo, colores y firma del PDF de evaluación. IDs en `packages/socia-branding/src/brands/` |
+| `BRAND_ID` | socia | Logo, colores y firma del PDF de evaluación. IDs en `apps/packages/socia-branding/src/brands/` |

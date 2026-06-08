@@ -14,8 +14,8 @@ Las siguientes marcas y logos están protegidos por derechos de autor y/o regist
 
 | Marca / logo | Titular | Ubicación en el repo |
 |---|---|---|
-| **IES Rafael Alberti** (logos imago, sello y wordmark) | IES Rafael Alberti, Cádiz | `packages/socia-branding/src/brands/ies-rafael-alberti/`, `tools/skills/guide-generator/brands/ies-rafael-alberti/`, `web/landing/src/assets/Sello-Rafael-Alberti-Primario.svg` |
-| **CIFP N.º 1 Cuenca** (logo y wordmark) | CIFP N.º 1 Cuenca | `packages/socia-branding/src/brands/cifp-cuenca/`, `tools/skills/guide-generator/brands/cifp-cuenca/`, `web/landing/src/assets/logo-cifp-cuenca.png` |
+| **IES Rafael Alberti** (logos imago, sello y wordmark) | IES Rafael Alberti, Cádiz | `apps/packages/socia-branding/src/brands/ies-rafael-alberti/`, `apps/skills/guide-generator/brands/ies-rafael-alberti/`, `web/landing/src/assets/Sello-Rafael-Alberti-Primario.svg` |
+| **CIFP N.º 1 Cuenca** (logo y wordmark) | CIFP N.º 1 Cuenca | `apps/packages/socia-branding/src/brands/cifp-cuenca/`, `apps/skills/guide-generator/brands/cifp-cuenca/`, `web/landing/src/assets/logo-cifp-cuenca.png` |
 | **Aktios Security Services** | Aktios Security Services, S.L. | `web/landing/src/assets/atkios.svg` |
 
 Estos logos están aquí porque cada centro/empresa colabora activamente con SOCIA. Si haces fork del proyecto y no formas parte de esa colaboración, **debes retirar los logos** o sustituirlos por los del centro/organización que adopte tu derivado.
@@ -53,7 +53,7 @@ La landing en `web/landing/` está construida sobre el template open source [`as
 
 Si vas a publicar un derivado que no forma parte del proyecto SOCIA original:
 
-1. Sustituye los archivos PNG de los brands en `packages/socia-branding/src/brands/<id>/imago.b64.ts` y `sello.b64.ts` por logos propios. Mismo procedimiento en el espejo `tools/skills/guide-generator/brands/<id>/`.
+1. Sustituye los archivos PNG de los brands en `apps/packages/socia-branding/src/brands/<id>/imago.b64.ts` y `sello.b64.ts` por logos propios. Mismo procedimiento en el espejo `apps/skills/guide-generator/brands/<id>/`.
 2. En la landing (`web/landing/src/components/partners.astro`) sustituye o retira los partners que no apliquen.
 3. Vuelve a ejecutar `pnpm og` desde `web/landing/` para regenerar la OG card sin los logos del repo original.
 4. Actualiza este `NOTICE.md` con tus titulares.
