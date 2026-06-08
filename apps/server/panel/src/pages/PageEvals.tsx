@@ -34,9 +34,8 @@ export function PageEvals({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
-  // The toggle reflects "allowed in EVERY class" — derived directly from the
-  // up-to-date `classes` prop, so React keeps it in sync after each PATCH.
-  // (Previously this lived in a useState mirror that drifted out of sync.)
+  // The toggle reflects "allowed in EVERY class" and is derived directly from
+  // the `classes` prop, so React keeps it in sync after each PATCH.
   const allowDownload =
     classes.length > 0 && classes.every((c) => c.allowPdfDownload === 1);
 

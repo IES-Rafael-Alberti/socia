@@ -1,9 +1,9 @@
 /**
  * SOCIA grading formula — DETERMINISTIC.
  *
- * The LLM no longer decides the grade. It receives the grade (and the inputs
- * that produced it) and writes the justification around it. This way two
- * runs of the same trace always yield the same grade.
+ * The LLM receives the grade and the inputs that produced it, then writes the
+ * justification around those deterministic values. Two runs of the same trace
+ * always yield the same grade.
  *
  * Formula:
  *

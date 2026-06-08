@@ -18,7 +18,7 @@ export function PageWelcome({ onGoToClasses }: { onGoToClasses: () => void }) {
   }
 
   async function regenerate() {
-    if (!confirm('¿Regenerar el token? El antiguo dejará de funcionar en MENTORA.')) return;
+    if (!confirm('¿Regenerar el token? El token anterior dejará de funcionar en MENTORA.')) return;
     const r = await api.post<{ token: string }>('/api/admin/token/regenerate');
     setToken(r.token);
   }
