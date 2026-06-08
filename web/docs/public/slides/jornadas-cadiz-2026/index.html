@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>Jornadas SOCIA · Cádiz 2026</title>
+
+		<link rel="stylesheet" href="dist/reset.css">
+		<link rel="stylesheet" href="dist/reveal.css">
+
+		<!-- Tema SOCIA -->
+		<link rel="stylesheet" href="dist/theme/white-socia.css">
+
+		<!-- Theme used for syntax highlighted code -->
+		<link rel="stylesheet" href="plugin/highlight/monokai.css">
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<section data-markdown="jornadas-socia.md"
+         		data-separator="^\n---\n$"
+         		data-separator-vertical="^\n\n"
+         		data-separator-notes="^Note:"
+         		data-charset="UTF-8">
+    		<!--
+        		Windows uses `\r\n` instead of `\n`. Si hay problemas con el separador,
+        		usar `\r?\n` en data-separator.
+    		-->
+				</section>
+			</div>
+		</div>
+
+		<script src="dist/reveal.js"></script>
+		<script src="plugin/notes/notes.js"></script>
+		<script src="plugin/markdown/markdown.js"></script>
+		<script src="plugin/highlight/highlight.js"></script>
+		<script>
+			Reveal.initialize({
+				hash: true,
+				slideNumber: 'c/t',
+				transition: 'slide',
+				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+			});
+		</script>
+	</body>
+</html>
