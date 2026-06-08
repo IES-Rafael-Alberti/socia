@@ -10,6 +10,7 @@ import cybermaster from '../../../assets/cybermaster.png';
 import socdash from '../../../assets/socdash.png';
 import sociaLogo from '../../../assets/socia-logo.svg';
 import mentoraLogo from '../../../assets/mentora-logo.svg';
+import sociaPanelWeb from '../../../assets/socia-panel-web.png';
 
 La tutorización con inteligencia artificial figuraba en la propuesta del proyecto SOCIA como la innovación central del SOC educativo. Sin embargo, no estaba ni definida ni desarrollada, así que era un problema a resolver. Esta página cuenta cómo lo solventamos, qué descartamos por el camino y por qué la solución final que proponemos tiene un diseño basado en tres aplicaciones independientes (MENTORA, SOCIA y el panel de control).
 
@@ -104,6 +105,11 @@ Casi sin darnos cuenta, acabamos teniendo entre manos un sistema de documentaci�
 En este punto teníamos un sistema preparado para crear casos y ponerlos en práctica. Pero aún existía bastante fricción en la gestión del aula. El docente tenía que enviarle el JSON al estudiante (que podía abrir y recibir bastantes pistas con su lectura) y después tenía que enviar de vuelta el PDF con la evaluación que generaba.
 
 Para solventar este problema, construimos el **panel web de SOCIA** (SOCIA Server). Desde el mismo, el docente puede crear clases, agregar y configurar casos, desplegarlos a las extensiones SOCIA de cada estudiante, monitorizar el avance de los mismos en tiempo real y recibir toda la información de su desempeño. El complemento perfecto que nos permitió llevar el sistema desarrollado al aula.
+
+<figure>
+  <Image src={sociaPanelWeb} alt="Panel web de SOCIA Server" />
+  <figcaption>Panel web de SOCIA Server</figcaption>
+</figure>
 
 ## La solución que proponemos
 
