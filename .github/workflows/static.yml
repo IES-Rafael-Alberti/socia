@@ -7,9 +7,6 @@
 # extensions / server don't have to install Astro / Starlight). Each one
 # is installed and built independently here.
 #
-# Note on pnpm version: we let `pnpm/action-setup` read it from the
-# `packageManager` field in package.json instead of pinning it again here.
-
 name: Build & deploy SOCIA site
 
 on:
@@ -35,6 +32,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
 
       - name: Setup Node
         uses: actions/setup-node@v4

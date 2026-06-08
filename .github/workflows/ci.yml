@@ -11,10 +11,6 @@
 # commit the updated `apps/pnpm-lock.yaml`. This is the right tradeoff for an
 # open-source repo where reproducibility matters more than convenience.
 #
-# Note on pnpm version: we let `pnpm/action-setup` read it from the
-# `packageManager` field in package.json (the canonical source) instead of
-# pinning it again here. Setting both is now an error in the action.
-
 name: CI
 
 on:
@@ -33,6 +29,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -66,6 +64,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
