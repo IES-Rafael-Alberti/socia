@@ -3,7 +3,7 @@
 
 <div class="portada-socia">
 
-<img src="assets/socia/SOCIA_logo.png" style="max-height: 280px; margin-bottom: 0.3em;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/SOCIA_logo.png" style="max-height: 280px; margin-bottom: 0.3em;">
 
 <h1 style="font-size: 2.8em; margin-bottom: 0.1em;">SOCIA</h1>
 
@@ -15,8 +15,8 @@ Jornadas Formativas · Cádiz · 21 – 22 de mayo de 2026
 </p>
 
 <div class="logos-pie">
-<img src="assets/socia/Sello-Rafael-Alberti-Primario.svg" alt="IES Rafael Alberti">
-<img src="assets/socia/atkios.svg" alt="AKTIOS Security Services">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/Sello-Rafael-Alberti-Primario.svg" alt="IES Rafael Alberti">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/atkios.svg" alt="AKTIOS Security Services">
 </div>
 
 </div>
@@ -70,9 +70,9 @@ Proyectos de Innovación e Investigación aplicadas y transferencia del conocimi
 **Desarrollo del proyecto**: sept. 2024 – ago. 2026
 
 <div class="logos-pie" style="margin-top: 1.2em; gap: 50px;">
-<img src="assets/socia/logo-ministerio-fp.jpg" alt="Ministerio de Educación, Formación Profesional y Deportes" style="max-height: 73px;">
-<img src="assets/socia/logo-plan-recuperacion.jpg" alt="Plan de Recuperación, Transformación y Resiliencia" style="max-height: 130px;">
-<img src="assets/socia/logo-next-generation.jpg" alt="Financiado por la Unión Europea — NextGenerationEU" style="max-height: 73px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/logo-ministerio-fp.jpg" alt="Ministerio de Educación, Formación Profesional y Deportes" style="max-height: 73px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/logo-plan-recuperacion.jpg" alt="Plan de Recuperación, Transformación y Resiliencia" style="max-height: 130px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/logo-next-generation.jpg" alt="Financiado por la Unión Europea — NextGenerationEU" style="max-height: 73px;">
 </div>
 
 ---
@@ -83,17 +83,17 @@ Proyectos de Innovación e Investigación aplicadas y transferencia del conocimi
 
 <div style="text-align: center;">
 <!-- <div style="font-size: 0.5em;"><strong>Centro coordinador</strong></div> -->
-<img src="assets/socia/Sello-Rafael-Alberti-Primario.svg" alt="IES Rafael Alberti" style="max-height: 140px; margin: 0 auto 0.8em;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/Sello-Rafael-Alberti-Primario.svg" alt="IES Rafael Alberti" style="max-height: 140px; margin: 0 auto 0.8em;">
 </div>
 
 <div style="text-align: center;">
 <!-- <div style="font-size: 0.5em;"><strong>Centro participante</strong></div> -->
-<img src="assets/socia/logo-cifp-cuenca.png" alt="CIFP Nº1 de Cuenca" style="max-height: 140px; margin: 0 auto 0.8em;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/logo-cifp-cuenca.png" alt="CIFP Nº1 de Cuenca" style="max-height: 140px; margin: 0 auto 0.8em;">
 </div>
 
 <div style="text-align: center;">
 <!-- <div style="font-size: 0.5em;"><strong>Empresa colaboradora</strong></div> -->
-<img src="assets/socia/atkios.svg" alt="AKTIOS Security Services" style="max-height: 140px; margin: 0 auto 0.8em;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/atkios.svg" alt="AKTIOS Security Services" style="max-height: 140px; margin: 0 auto 0.8em;">
 </div>
 
 </div>
@@ -211,7 +211,7 @@ La capa de IA es la que justifica el nombre y la que veremos en profundidad mañ
 
 ## Panel docente
 
-<img src="assets/socia/panel.png" alt="Panel docente SOCIA" style="max-height: 70vh; max-width: 92%; margin: 0.4em auto 0; display: block;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/panel.png" alt="Panel docente SOCIA" style="max-height: 70vh; max-width: 92%; margin: 0.4em auto 0; display: block;">
 
 ---
 
@@ -221,7 +221,7 @@ La capa de IA es la que justifica el nombre y la que veremos en profundidad mañ
 
 ## Mentora
 
-<img src="assets/socia/mentora.png" alt="Mentora" style="max-height: 70vh; max-width: 92%; margin: 0.4em auto 0; display: block;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/mentora.png" alt="Mentora" style="max-height: 70vh; max-width: 92%; margin: 0.4em auto 0; display: block;">
 
 Note:
 Extensión de navegador que graba al docente resolviendo un caso (pantalla, voz y acciones). Genera una guía PDF y un caso en json listo para SOCIA.
@@ -232,7 +232,7 @@ Extensión de navegador que graba al docente resolviendo un caso (pantalla, voz 
 
 La parte que da nombre al proyecto: la **IA** de SOCIA
 
-<img src="assets/socia/SOCIA_logo.png" style="max-height: 220px; margin-top: 0.6em;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/SOCIA_logo.png" style="max-height: 220px; margin-top: 0.6em;">
 
 Note:
 Extensión de navegador que carga el caso, realiza el seguimiento, ofrece pistas con un LLM pequeño y genera una evaluación final en PDF. Funciona con o sin servidor.
@@ -241,7 +241,7 @@ Extensión de navegador que carga el caso, realiza el seguimiento, ofrece pistas
 
 ## SOCIA
 
-<img src="assets/socia/socia.png" alt="SOCIA" style="max-height: 78vh; max-width: 96%; margin: 0.4em auto 0; display: block;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/socia.png" alt="SOCIA" style="max-height: 78vh; max-width: 96%; margin: 0.4em auto 0; display: block;">
 
 Note:
 
@@ -253,7 +253,7 @@ Note:
 
 ## Arquitectura del SOC
 
-<img src="assets/socia/diagrama.png" alt="Diagrama de arquitectura SOCIA" style="max-height: 62vh; max-width: 85%; margin: 0.4em auto 0; display: block;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/diagrama.png" alt="Diagrama de arquitectura SOCIA" style="max-height: 62vh; max-width: 85%; margin: 0.4em auto 0; display: block;">
 
 Note:
 Cuatro capas:
@@ -392,23 +392,23 @@ El <strong>viernes a las 13:30</strong> abriremos el repositorio completo y vere
 
 Antes de pasar al desayuno, escanea el **QR** y completa el formulario por parejas.
 
-<img src="assets/socia/qr_formulario.png" style="max-height: 240px; background: #fff; padding: 10px; border-radius: 8px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/qr_formulario.png" style="max-height: 240px; background: #fff; padding: 10px; border-radius: 8px;">
 
 ---
 
 ## ¿Preguntas?
 
-<img src="assets/socia/SOCIA_logo.png" style="max-height: 220px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/SOCIA_logo.png" style="max-height: 220px;">
 
 <p style="font-size: 0.6em; margin-top: 0.6em;">
 Proyecto SOCIA · AINN23 / 00303 · IES Rafael Alberti · CIFP Nº1 Cuenca · AKTIOS
 </p>
 
 <div class="logos-pie" style="gap: 38px; margin-top: 0.8em; align-items: center;">
-<img src="assets/socia/Sello-Rafael-Alberti-Primario.svg" alt="IES Rafael Alberti" style="max-height: 63px;">
-<img src="assets/socia/logo-cifp-cuenca.png" alt="CIFP Nº1 de Cuenca" style="max-height: 52px;">
-<img src="assets/socia/atkios.svg" alt="AKTIOS Security Services" style="max-height: 42px;">
-<img src="assets/socia/logo-ministerio-fp.jpg" alt="Ministerio de Educación, Formación Profesional y Deportes" style="max-height: 46px;">
-<img src="assets/socia/logo-plan-recuperacion.jpg" alt="Plan de Recuperación, Transformación y Resiliencia" style="max-height: 67px;">
-<img src="assets/socia/logo-next-generation.jpg" alt="Financiado por la Unión Europea — NextGenerationEU" style="max-height: 46px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/Sello-Rafael-Alberti-Primario.svg" alt="IES Rafael Alberti" style="max-height: 63px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/logo-cifp-cuenca.png" alt="CIFP Nº1 de Cuenca" style="max-height: 52px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/atkios.svg" alt="AKTIOS Security Services" style="max-height: 42px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/logo-ministerio-fp.jpg" alt="Ministerio de Educación, Formación Profesional y Deportes" style="max-height: 46px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/logo-plan-recuperacion.jpg" alt="Plan de Recuperación, Transformación y Resiliencia" style="max-height: 67px;">
+<img src="/docs/slides/jornadas-cadiz-2026/assets/socia/logo-next-generation.jpg" alt="Financiado por la Unión Europea — NextGenerationEU" style="max-height: 46px;">
 </div>
