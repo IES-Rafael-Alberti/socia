@@ -65,6 +65,28 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Comunidad y eventos',
+					translations: { en: 'Community & events' },
+					items: [
+						{ label: 'Resumen', translations: { en: 'Overview' }, link: '/comunidad/resumen/' },
+						{
+							label: 'Jornadas formativas',
+							translations: { en: 'Training sessions' },
+							items: [
+								{ label: 'Cuenca 2026', link: '/comunidad/jornadas/cuenca-2026/' },
+								{ label: 'Cádiz 2026', link: '/comunidad/jornadas/cadiz-2026/' },
+							],
+						},
+						{
+							label: 'Encuentros y difusión',
+							translations: { en: 'Meetups & dissemination' },
+							items: [
+								{ label: 'Castilla-La Mancha', link: '/comunidad/encuentros/castilla-la-mancha/' },
+							],
+						},
+					],
+				},
+				{
 					label: 'Referentes',
 					translations: { en: 'References' },
 					items: [
