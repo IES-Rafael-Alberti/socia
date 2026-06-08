@@ -54,16 +54,14 @@ jobs:
       # On the custom domain (socia.fpciberseguridad.com) the artifact root
       # IS the apex. Landing's dist/ goes flat into _site/; docs dist/ —
       # built with base "/docs" — goes under _site/docs/.
-      # Slides (reveal.js) go under _site/slides/.
+      # Public docs assets, including reveal.js slides, are copied by Astro
+      # into web/docs/dist/ and therefore published under /docs/.
       - name: Assemble site
         run: |
           rm -rf _site
-          mkdir -p _site/docs _site/slides
+          mkdir -p _site/docs
           cp -R web/landing/dist/. _site/
           cp -R web/docs/dist/. _site/docs/
-          # Copy reveal.js slides excluding dev dependencies
-          cp -R slides/. _site/slides/
-          rm -rf _site/slides/node_modules _site/slides/package.json _site/slides/package-lock.json _site/slides/gulpfile.js
           # Custom domain — keep CNAME so GitHub Pages serves the apex.
           echo "socia.fpciberseguridad.com" > _site/CNAME
 
