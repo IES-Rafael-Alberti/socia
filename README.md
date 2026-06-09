@@ -1,37 +1,39 @@
 # SOCIA
 
-**Entrenamiento práctico de ciberseguridad SOC con verificación y calificación automática y retroalimentación personalizada usando un LLM.**
+**Infraestructura educativa abierta para entrenar la gestión de incidentes en un SOC, con herramientas profesionales, casos prácticos y acompañamiento basado en IA.**
 
-SOCIA es una suite educativa para formación profesional en ciberseguridad. Es una infraestructura de SOC (Security Operations Center) real en la que el alumnado puede resolver casos prácticos de forma guiada.
+SOCIA es un proyecto de formación práctica en ciberseguridad para FP. Incluye una infraestructura de SOC (Security Operations Center) desplegable, casos de investigación, documentación docente y aplicaciones para crear, lanzar, seguir y evaluar ejercicios con alumnado.
+
+Para una visión general del proyecto, consulta la [web oficial](https://socia.fpciberseguridad.com/). La documentación técnica y didáctica está en [socia.fpciberseguridad.com/docs](https://socia.fpciberseguridad.com/docs/).
 
 ## Componentes
 
-| App | Qué hace |
+| Componente | Qué contiene |
 |---|---|
-| **[Extensión MENTORA](apps/extensions)** | Creación de casos por parte del docente. |
-| **[Extensión SOCIA](apps/extensions)** | Registra las acciones del estudiante, ofrece pistas progresivas y genera evaluación al terminar. |
-| **[SOCIA Server](apps/server)** | Backend Express + panel React para el docente. Gestiona clases, lanza casos, monitoriza progreso en vivo y centraliza evaluaciones. |
-| **[Web pública](web)** | Landing y docs (Astro) del proyecto. |
+| **[Infraestructura SOC](infra)** | Despliegues, configuraciones y material para montar el entorno de prácticas con herramientas open source propias de un SOC. |
+| **[Casos prácticos](exercises)** | Workflows y ejercicios que puede resolver el alumnado con la extensión SOCIA. |
+| **[Aplicaciones SOCIA](apps)** | La capa de Inteligencia Artificial del proyecto. Extensiones de navegador, panel web, librerías internas y skills para agentes. |
+| **[Web pública y documentación](web)** | Landing del proyecto y documentación web construida con Astro y Starlight. |
 
 ## Arquitectura
 
 ```
 socia/
-├── apps/                # workspace pnpm de SOCIA / MENTORA / Server
+├── apps/                # workspace pnpm de aplicaciones y librerías internas
 │   ├── extensions/      # MENTORA + SOCIA (proyecto wxt)
 │   ├── server/          # Express + panel admin
 │   ├── packages/        # librerías internas compartidas por extensions/server
 │   └── skills/          # skills de agente para el flujo MENTORA
 ├── exercises/           # workflows/casos prácticos para SOCIA
-├── infra/               # despliegues, laboratorios y material operativo
-└── web/                 # sites públicos — fuera del workspace de apps
+├── infra/               # despliegues, laboratorios y material
+└── web/                 # webs públicas
     ├── landing/         # Astro
     └── docs/            # Astro Starlight
 ```
 
 > `web/` está deliberadamente fuera del workspace pnpm de `apps/`. Quien clona el repo para usar las apps no instala Astro / Starlight / sharp. Si vas a tocar la web, ver [`web/README.md`](web/README.md).
 
-## Quick start
+## Desarrollo de aplicaciones
 
 Requiere [pnpm](https://pnpm.io/) ≥ 9 y Node ≥ 20.
 
@@ -49,13 +51,6 @@ Para trabajar en la web (landing / docs):
 cd web/landing && pnpm install && pnpm dev    # http://localhost:4321
 cd web/docs    && pnpm install && pnpm dev    # http://localhost:4321
 ```
-
-## Modos de uso
-
-- **Standalone**: el alumno carga un workflow.json y trabaja sin servidor. La evaluación se genera localmente con su API key de OpenRouter (opcional).
-- **Gestionado**: el docente despliega SOCIA Server, crea clases y asigna casos. El alumnado se conecta con un código y todo el progreso queda centralizado.
-
-Ambos modos soportan **modo guiado** (con checklist visible de hitos) y **no guiado** (solo cronómetro). Las pistas funcionan en ambos.
 
 ## Contribuir
 
