@@ -301,6 +301,13 @@ strong { color: var(--sl-color-text); font-weight: 700; }
   padding: 0;
   border-radius: 0;
 }
+.sl-markdown-content .expressive-code .ec-line :where(span[style^='--']:not([class])) {
+  color: var(--0, inherit) !important;
+  background-color: var(--0bg, transparent) !important;
+  font-style: var(--0fs, inherit) !important;
+  font-weight: var(--0fw, inherit) !important;
+  text-decoration: var(--0td, inherit) !important;
+}
 :root[data-theme='dark'] .sl-markdown-content .expressive-code .frame,
 :root[data-theme='dark'] .sl-markdown-content pre {
   border-color: rgba(255, 255, 255, 0.12) !important;
