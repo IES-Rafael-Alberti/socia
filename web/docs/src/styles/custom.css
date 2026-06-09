@@ -593,6 +593,21 @@ header.header {
   height: auto;
   object-fit: contain;
 }
+.sl-markdown-content figure.screenshot {
+  max-width: min(100%, 48rem);
+  margin: 2.25rem auto;
+}
+.sl-markdown-content figure.screenshot img {
+  width: 100%;
+  max-height: none;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(20, 22, 27, 0.10);
+}
+:root[data-theme='dark'] .sl-markdown-content figure.screenshot img {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
 .sl-markdown-content figcaption {
   margin-top: 0.6rem;
   font-size: 0.82rem;

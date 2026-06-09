@@ -22,7 +22,7 @@ MENTORA es una extensión de navegador pensada para facilitar la creación de ca
 
 MENTORA va registrando las diferentes acciones realizadas: qué se hace con el ratón y el teclado, graba un vídeo, realiza capturas de pantalla, captura peticiones de red... Al detener la grabación, MENTORA prepara un ZIP con todo ese material. Dicho material se utilizará como fuente de información para poder crear posteriormente el caso preparado en formato JSON.
 
-<figure>
+<figure class="screenshot">
   <Image src={mentoraPopupLista} alt="Popup de MENTORA listo para iniciar una grabación" />
   <figcaption>MENTORA antes de iniciar una grabación.</figcaption>
 </figure>
@@ -60,7 +60,7 @@ pnpm --filter @socia/extensions zip:mentora
 
 La extensión necesita permiso para capturar la pantalla y el micrófono. La primera vez que se use puede abrir una pantalla auxiliar de permisos. Es necesario concederlos antes de grabar una sesión; si falta el micrófono, la grabación seguirá siendo útil para el workflow, pero se perderá el contexto verbal, que es muy importante para la fiabilidad de la creación del caso.
 
-<figure>
+<figure class="screenshot">
   <Image src={mentoraPermisosCaptura} alt="Selector del navegador para compartir pantalla con MENTORA y pestaña de permiso de micrófono" />
   <figcaption>Permisos de micrófono y captura de pantalla necesarios para grabar con MENTORA.</figcaption>
 </figure>
@@ -81,7 +81,7 @@ Cuando todo esté listo, abre el popup de la extensión MENTORA y pulsa **Empeza
 
 Al terminar, pulsa **Detener**. MENTORA prepara automáticamente el ZIP y abre el diálogo de descarga. El nombre del archivo sigue el patrón `mentora-recording-<fecha>.zip`.
 
-<figure>
+<figure class="screenshot">
   <Image src={mentoraPopupGrabando} alt="Popup de MENTORA durante una grabación con temporizador, acciones y capturas" />
   <figcaption>Grabación activa de una resolución docente.</figcaption>
 </figure>
@@ -127,7 +127,7 @@ La skill trabaja a partir del mismo ZIP de MENTORA, pero utiliza otros elementos
 
 La idea es adjuntar el ZIP al agente y pedirle que use la skill **guide-generator** para crear la guía. Un buen uso de la guía es generar primero una versión amplia y después revisarla con ojo crítico, pudiendo pedirle al agente que itere haciendo las modificaciones que prefieras hacer.
 
-<figure>
+<figure class="screenshot">
   <Image src={mentoraGuiaGenerada} alt="Ejemplo de guía paso a paso generada a partir de una grabación de MENTORA" />
   <figcaption>Ejemplo de guía paso a paso generada a partir de una grabación de MENTORA.</figcaption>
 </figure>
