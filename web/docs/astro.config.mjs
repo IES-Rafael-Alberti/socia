@@ -47,10 +47,7 @@ export default defineConfig({
 					translations: { en: 'Install the platform' },
 					items: [
 						{ label: 'Resumen y requisitos', translations: { en: 'Overview & requirements' }, link: '/instalacion/requisitos/' },
-						{ label: 'SOCIA Server (Docker)', link: '/instalacion/server/' },
 						{ label: 'Stack SOC: Graylog · TheHive · Malcolm', translations: { en: 'SOC stack: Graylog · TheHive · Malcolm' }, link: '/instalacion/stack-soc/' },
-						{ label: 'Extensiones MENTORA y SOCIA', translations: { en: 'MENTORA & SOCIA extensions' }, link: '/instalacion/extensiones/' },
-						{ label: 'Adopción en otros institutos', translations: { en: 'Adopting SOCIA in your school' }, link: '/instalacion/adopcion/' },
 					],
 				},
 				{
@@ -59,9 +56,9 @@ export default defineConfig({
 					items: [
 						{ label: 'Visión general', translations: { en: 'Overview' }, link: '/ia/vision/' },
 						{ label: 'Proceso de diseño', translations: { en: 'Design journey' }, link: '/ia/proceso-diseno/' },
-						{ label: 'MENTORA — extensión del docente', translations: { en: 'MENTORA — teacher extension' }, link: '/ia/mentora/' },
-						{ label: 'SOCIA — extensión del alumnado', translations: { en: 'SOCIA — student extension' }, link: '/ia/socia/' },
-						{ label: 'SOCIA Server — panel del centro', translations: { en: 'SOCIA Server — school panel' }, link: '/ia/server/' },
+						{ label: 'MENTORA (profesorado)', translations: { en: 'MENTORA (teachers)' }, link: '/ia/mentora/' },
+						{ label: 'SOCIA (alumnado)', translations: { en: 'SOCIA (students)' }, link: '/ia/socia/' },
+						{ label: 'Panel web (gestión)', translations: { en: 'Web panel (management)' }, link: '/ia/server/' },
 					],
 				},
 				{
