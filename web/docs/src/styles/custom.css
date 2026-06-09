@@ -240,6 +240,73 @@ strong { color: var(--sl-color-text); font-weight: 700; }
   color: var(--socia-red-200);
 }
 
+/* Code blocks — Starlight uses Expressive Code for fenced blocks. Keep them
+   clearly technical, but less generic than the default theme: compact radius,
+   ink background, subtle border, and a quiet header. */
+.sl-markdown-content .expressive-code {
+  margin: 1.25rem 0 1.75rem;
+}
+.sl-markdown-content .expressive-code figure,
+.sl-markdown-content pre {
+  max-width: none;
+  margin: 0;
+  text-align: left;
+}
+.sl-markdown-content .expressive-code .frame,
+.sl-markdown-content pre {
+  border: 1px solid var(--socia-ink-200) !important;
+  border-radius: 8px !important;
+  background: var(--socia-ink-900) !important;
+  box-shadow: 0 8px 24px rgba(20, 22, 27, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+.sl-markdown-content .expressive-code .frame::before,
+.sl-markdown-content > pre::before {
+  content: "";
+  display: block;
+  height: 3px;
+  background: var(--socia-red-500);
+}
+.sl-markdown-content .expressive-code pre {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none;
+  overflow: auto;
+}
+.sl-markdown-content .expressive-code .header {
+  display: none !important;
+}
+.sl-markdown-content .expressive-code .title,
+.sl-markdown-content .expressive-code .language-id {
+  color: var(--socia-ink-100) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.sl-markdown-content .expressive-code pre,
+.sl-markdown-content pre {
+  padding: 1rem 1.1rem !important;
+  color: var(--socia-ink-50) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+.sl-markdown-content .expressive-code code,
+.sl-markdown-content pre code {
+  background: transparent !important;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+}
+:root[data-theme='dark'] .sl-markdown-content .expressive-code .frame,
+:root[data-theme='dark'] .sl-markdown-content pre {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: none;
+}
+
 a {
   color: var(--sl-color-text-accent);
 }
