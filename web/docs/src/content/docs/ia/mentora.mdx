@@ -18,9 +18,9 @@ Esta página está en borrador.
 
 ## Qué es MENTORA
 
-MENTORA es una extensión de navegador pensada para facilitar la creación de casos para la extensión SOCIA por parte del profesorado. Su uso es bastante intuitivo, solamente es necesario ponerla en marcha y realizar el caso mientras se explica usando la voz, tal y como se haría para explicar el caso en el aula al alumnado.
+MENTORA es una extensión de navegador pensada para facilitar la creación de casos para la [extensión SOCIA](/docs/ia/socia/) por parte del profesorado. Su uso es bastante intuitivo, solamente es necesario ponerla en marcha y realizar el caso mientras se explica usando la voz, tal y como se haría para explicar el caso en el aula al alumnado.
 
-MENTORA va registrando las diferentes acciones realizadas: qué se hace con el ratón y el teclado, graba un vídeo, realiza capturas de pantalla, captura peticiones de red... Al detener la grabación, MENTORA prepara un ZIP con todo ese material. Dicho material se utilizará como fuente de información para poder crear posteriormente el caso preparado en formato json.
+MENTORA va registrando las diferentes acciones realizadas: qué se hace con el ratón y el teclado, graba un vídeo, realiza capturas de pantalla, captura peticiones de red... Al detener la grabación, MENTORA prepara un ZIP con todo ese material. Dicho material se utilizará como fuente de información para poder crear posteriormente el caso preparado en formato JSON.
 
 <figure>
   <Image src={mentoraPopupLista} alt="Popup de MENTORA listo para iniciar una grabación" />
@@ -49,7 +49,7 @@ pnpm install
 pnpm --filter @socia/extensions dev:mentora
 ```
 
-Este modo es el más cómodo cuando se está ajustando la extensión, porque mantiene el proceso activo y recompila los cambios.
+Este modo es el más cómodo cuando se está ajustando la extensión, porque mantiene el proceso activo y recompila los cambios. La consola indicará la carpeta generada dentro de `.output` para cargarla como extensión descomprimida si el navegador no se abre automáticamente.
 
 Para generar un ZIP distribuible de la extensión:
 
@@ -77,7 +77,7 @@ Lo recomendable es tener claro:
 - Qué partes deben convertirse en hitos para el alumnado.
 - Qué explicación de conceptos puede ayudar después a generar la guía.
 
-Cuando todo esté listo, abre el popup de la extesión MENTORA y pulsa **Empezar**. A partir de ese momento la extensión captura pantalla, micrófono, acciones del navegador y peticiones de red. Durante la grabación puede pausarse si hace falta preparar algo que no forma parte del caso, aunque lo recomendable es hacerlo en una sola vez.
+Cuando todo esté listo, abre el popup de la extensión MENTORA y pulsa **Empezar**. A partir de ese momento la extensión captura pantalla, micrófono, acciones del navegador y peticiones de red. Durante la grabación puede pausarse si hace falta preparar algo que no forma parte del caso, aunque lo recomendable es hacerlo en una sola vez.
 
 Al terminar, pulsa **Detener**. MENTORA prepara automáticamente el ZIP y abre el diálogo de descarga. El nombre del archivo sigue el patrón `mentora-recording-<fecha>.zip`.
 
@@ -109,9 +109,9 @@ El archivo más importante para el workflow es `network-log.json`, porque SOCIA 
 
 El primer producto que suele salir de una grabación es el `workflow.json`. Ese archivo es el caso que después se carga en SOCIA o en el panel web para lanzarlo al alumnado.
 
-Para generarlo se usa la skill **workflow-generator**, incluida en el repositorio en `apps/skills/workflow-generator`. La grabación de MENTORA se entrega al agente como ZIP o como carpeta descomprimida, y la skill le proporciona las instrucciones para transformar las peticiones de red en diferentes fases e hitos.
+Para generarlo se usa la skill **workflow-generator**, incluida en el repositorio en `apps/skills/workflow-generator`. La idea es adjuntar el ZIP de MENTORA al agente y pedirle que use la skill correspondiente para generar el workflow. La grabación puede entregarse como ZIP o como carpeta descomprimida, y la skill le proporciona las instrucciones para transformar las peticiones de red en diferentes fases e hitos.
 
-Se recomienda usar un modelo frontera, como Codex o Claude, ya que los resultados serán mejores. La instalación de la skill depende del sistema que uses. Por ejemplo, en releases puedes encontrar el archivo .skill, que se instala directamente en Claude abriendo el archivo con su aplicación de escritorio.
+Se recomienda usar un agente potente, como Codex o Claude, ya que los resultados serán mejores. La instalación de la skill depende del sistema que uses. Por ejemplo, en las [releases del repositorio](https://github.com/IES-Rafael-Alberti/socia/releases) puedes encontrar el archivo `.skill`, que se instala directamente en Claude abriendo el archivo con su aplicación de escritorio.
 
 <Aside type="tip" title="Revisión docente">
 El JSON generado debe probarse siempre en SOCIA antes de usarlo con alumnado. La automatización reduce mucho el trabajo, pero no elimina la validación del funcionamiento del caso.
@@ -121,11 +121,11 @@ El JSON generado debe probarse siempre en SOCIA antes de usarlo con alumnado. La
 
 El segundo producto posible es una guía didáctica en PDF. En este caso se usa la skill **guide-generator**, ubicada en `apps/skills/guide-generator`.
 
-La guía se puede utilizar como material didáctico para que el alumnado aprenda a resolver el caso y los conceptos teóricos asociados, así como para qué sirven cada uno de los parámetros.
+La guía se puede utilizar como material didáctico para que el alumnado aprenda a resolver el caso y los conceptos teóricos asociados, así como para qué sirve cada uno de los parámetros.
 
-La skill trabaja a partir del mismo ZIP de MENTORA, pero se utiliza otros elementos. Observa la línea temporal, selecciona capturas, decide las fases, redacta los pasos y aplica una identidad visual del centro o del proyecto. El resultado esperado es un PDF con portada, índice, pasos ilustrados y demás.
+La skill trabaja a partir del mismo ZIP de MENTORA, pero utiliza otros elementos. Observa la línea temporal, selecciona capturas, decide las fases, redacta los pasos y aplica una identidad visual del centro o del proyecto. El resultado esperado es un PDF con portada, índice, pasos ilustrados y demás.
 
-Un buen uso de la guía es generar primero una versión amplia y después revisarla con ojo crítico, pudiendo pedirle al agente que itere haciendo las modificaciones que prefieras hacer.
+La idea es adjuntar el ZIP al agente y pedirle que use la skill **guide-generator** para crear la guía. Un buen uso de la guía es generar primero una versión amplia y después revisarla con ojo crítico, pudiendo pedirle al agente que itere haciendo las modificaciones que prefieras hacer.
 
 <figure>
   <Image src={mentoraGuiaGenerada} alt="Ejemplo de guía paso a paso generada a partir de una grabación de MENTORA" />
@@ -143,7 +143,9 @@ El flujo completo queda así:
 5. Probar el caso en SOCIA como si fuera un estudiante.
 6. Usar `guide-generator` para crear la guía paso a paso.
 7. Revisar la guía, especialmente capturas, valores concretos y explicaciones.
-8. Subir el workflow al panel web y compartir la guía si se quiere usar como material de apoyo. Si quieres compartirlo con la comunidad, haz un Pull Request al repositorio siguiendo [estas instrucciones](https://github.com/IES-Rafael-Alberti/socia?tab=contributing-ov-file#a%C3%B1adir-un-caso-nuevo-pr).
+8. Subir el workflow al panel web y compartir la guía si se quiere usar como material de apoyo.
+
+Si quieres compartirlo con la comunidad, haz un Pull Request al repositorio siguiendo [estas instrucciones](https://github.com/IES-Rafael-Alberti/socia?tab=contributing-ov-file#a%C3%B1adir-un-caso-nuevo-pr).
 
 Lo importante es no confundir la grabación con el producto final. MENTORA captura la resolución docente; las skills convierten esa captura en materiales utilizables. Ahí está la ventaja: el conocimiento del profesorado entra por una demostración natural, y sale como caso ejecutable y documentación didáctica.
 
