@@ -33,13 +33,6 @@ cd /home/debian/socia-thehive/multiinstance-shared-backend
 sudo ./create-many.sh 10
 ```
 
-La vía legacy `thehive-consumer` para `ioc-events/ioc-events-alerts` está
-retirada de la instalación activa y archivada en:
-
-```text
-/home/debian/old-scripts/thehive-consumer
-```
-
 ## Orden recomendado de despliegue
 
 Si se parte desde cero:
@@ -83,8 +76,6 @@ Más detalle en [docs/architecture.md](docs/architecture.md).
 - [docs/multiinstance-shared-backend.md](docs/multiinstance-shared-backend.md):
   creación, borrado, arranque/parada, prerequisitos y credenciales de las
   instancias de alumnos.
-- [docs/legacy.md](docs/legacy.md): piezas retiradas, archivos archivados y
-  notas históricas.
 
 ## Rutas importantes
 

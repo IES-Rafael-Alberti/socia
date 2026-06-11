@@ -345,7 +345,7 @@ def normalize_graylog_payload(envelope: Dict[str, Any]) -> Tuple[str, Dict[str, 
 
     # Graylog HTTP notifications include both an event DTO and a backlog. The
     # event DTO often contains only reduced custom fields; the backlog carries
-    # the original Wazuh fields used by the old .104 parser.
+    # the Wazuh fields expected by the parser.
     if isinstance(payload.get("backlog"), list) and payload.get("backlog"):
         payload.setdefault("event_definition_title", event_title)
         return str(event_title), payload, source_ref_material

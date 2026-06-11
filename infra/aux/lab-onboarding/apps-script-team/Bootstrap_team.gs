@@ -170,7 +170,7 @@ function setupTeam() {
 
   Logger.log('✅ Hoja TheHive creada con ' + thRows.length + ' URLs (puertos 9101-9150)');
 
-  // ── 5. Limpiar forms antiguos y reutilizar el activo ─────────
+  // ── 5. Limpiar forms no activos y reutilizar el activo ───────
   // Identificar el form activo (el que getFormUrl() devuelve)
   var existingFormUrl = ss.getFormUrl();
   var activeFormId    = existingFormUrl
@@ -187,7 +187,7 @@ function setupTeam() {
       var otherForm = FormApp.openById(fFile.getId());
       if (otherForm.getDestinationId() === ss.getId()) {
         otherForm.removeDestination();
-        Logger.log('🔗 Form antiguo desvinculado: ' + fFile.getName());
+        Logger.log('🔗 Form no activo desvinculado: ' + fFile.getName());
       }
     } catch(fe) {}
   }
@@ -276,7 +276,7 @@ function setupTeam() {
   }
 
   // ── Limpiar hojas de respuestas sobrantes ─────────────────────
-  // removeDestination() ya eliminó las hojas de forms antiguos automáticamente;
+  // removeDestination() elimina las hojas de forms no activos automáticamente;
   // por si queda algún residuo, borramos todo excepto las hojas de datos
   var keepSheets = [CONFIG_TEAM.SHEET_SLOTS, CONFIG_TEAM.SHEET_THEHIVE];
   if (responseSheetName) keepSheets.push(responseSheetName);
