@@ -1,0 +1,65 @@
+---
+title: Puesta en marcha
+description: Arranque automático, alta disponibilidad y orden de arranque del entorno SOCIA ya validado.
+sidebar:
+  order: 13
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Con todas las VMs restauradas y validadas — OPNsense incluido — el entorno está completo. Hasta ahora se han mantenido con `onboot=0` (sin arranque automático) para poder revisarlas con calma. Toca ahora dejarlas listas para producción: que arranquen solas, en el orden correcto, y que Proxmox las recupere automáticamente si fallan.
+
+## Arranque automático
+
+Activa `onboot` en todas las VMs del entorno:
+
+```bash
+qm set <VMID> --onboot 1
+```
+
+## Orden de arranque
+
+Define en Proxmox un **orden de arranque** (`Start/Shutdown order`, en la configuración de cada VM o vía `qm set <VMID> --startup order=N,up=<segundos>`, donde `up` es el margen antes de considerar la VM arrancada y dejar que arranque la siguiente) coherente con las dependencias:
+
+1. `100 opnsense` y `109 fwlab` — el entorno necesita la red operativa antes que nada.
+2. `101 opensearch` — backend de datos, debe estar listo antes que sus consumidores.
+3. `102 graylog`, `103 wazuh-velociraptor`, `105 misp` — pueden arrancar en paralelo una vez OpenSearch está en pie.
+4. `106 thehive-cortex` — depende de MISP y de Graylog para el flujo de alertas, arráncala después de ambos. `104 malcolm` es autónomo (usa su propio OpenSearch interno, no depende de nada del resto), pero arráncalo tarde de todas formas: sus contenedores pueden leer ~45 GB de disco durante la inicialización, y conviene que no compita por disco/CPU con el resto del entorno arrancando a la vez.
+5. `108 grafana` — visualización, al final: depende de que Wazuh, MISP y OPNsense ya estén sirviendo datos.
+
+<Aside type="note" title="Márgenes entre etapas">
+Deja un margen de arranque entre etapas (el `up` delay del comando anterior) para que cada backend esté realmente listo antes de que arranque su consumidor — especialmente antes de Malcolm y Grafana, y ten en cuenta que Malcolm puede tardar varios minutos en inicializar sus contenedores.
+</Aside>
+
+## Alta disponibilidad (HA)
+
+Para que Proxmox reinicie automáticamente una VM si se cae mientras el host sigue vivo (se cuelga, el proceso muere), añádela al gestor de HA:
+
+```bash
+ha-manager add vm:<VMID> --state started --max_restart 3 --max_relocate 0
+```
+
+Aplícalo al menos a las VMs críticas del entorno: OPNsense (`100`), `fwlab` (`109`) y el resto de servicios del SOC (`101`, `102`, `103`, `104`, `105`, `106`, `108`).
+
+<Aside type="caution" title="ha-manager solo funciona en clúster Proxmox">
+El gestor de HA depende del framework de clúster de Proxmox (corosync, quórum) — en una instalación **standalone**, sin clúster, el comando no funcionará. Si tu entorno es un único servidor sin clúster (el caso más probable en un centro educativo), omite esta sección: `onboot=1` ya cubre el escenario de fallo más común, el reinicio del host.
+</Aside>
+
+<Aside type="danger" title="Por qué esto importa">
+Sin `onboot=1`, un reinicio del host deja todas las VMs apagadas hasta que alguien las arranque a mano. Sin HA (si tienes clúster), un fallo puntual de una VM no se recupera solo mientras el host siga vivo. Cualquiera de los dos escenarios puede dejar el entorno caído sin que nadie lo note — incluyendo, si OPNsense es tu única vía de acceso remoto (por ejemplo vía WireGuard), quedarte sin forma de entrar a arreglarlo. Configura `onboot` siempre; añade HA si tu Proxmox está en clúster.
+</Aside>
+
+## Verificación final
+
+Confirma que el arranque automático y la HA quedaron bien aplicados:
+
+```bash
+for id in 100 101 102 103 104 105 106 108 109; do echo "== $id"; qm config $id | grep onboot; done
+ha-manager status  # solo si configuraste HA (ver aviso arriba)
+```
+
+Por último, relanza el flujo de prueba extremo a extremo (un evento real recorriendo Wazuh → Filebeat → Graylog → OpenSearch → TheHive) para confirmar que el entorno completo, ya en su configuración final, sigue funcionando de punta a punta.
+
+## Siguiente paso
+
+Con el entorno en marcha, [programa copias de seguridad periódicas](/docs/despliegue/restauracion/backups-periodicos/) para poder recuperarlo o replicarlo en el futuro.

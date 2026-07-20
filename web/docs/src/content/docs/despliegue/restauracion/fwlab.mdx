@@ -1,0 +1,81 @@
+---
+title: fwlab (firewall interno del laboratorio)
+description: Arranque, validación y configuración de referencia del segundo OPNsense del entorno SOCIA, interno al laboratorio.
+sidebar:
+  order: 11
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`fwlab` es un segundo firewall OPNsense, interno al laboratorio: no tiene WAN ni salida a Internet propia. Une las redes `vul0`, `vul1` y `vul2`, y es el gateway (`LABGW`) que el OPNsense principal usa para llegar a `vul1`/`vul2` mediante rutas estáticas.
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `109 · fwlab` |
+| Redes | `vul0`, `vul1`, `vul2` (sin WAN) |
+| IP (`vul0`, interfaz de tránsito) | `172.18.1.200` |
+| IP (`vul1`) | `172.18.2.1` |
+| IP (`vul2`) | `172.18.3.1` |
+| Acceso | `https://172.18.1.200/`, `https://172.18.2.1/` o `https://172.18.3.1/` |
+| Versión probada | OPNsense 25.1.12 |
+| Depende de | las redes `vul0`/`vul1`/`vul2` ya creadas; el OPNsense principal, para llegar a él desde fuera del laboratorio |
+
+<Aside type="note" title="Sin SSH">
+Esta máquina tiene el SSH deshabilitado por completo (no solo bloqueado por firewall — la propia opción "Enable Secure Shell" está desmarcada). El único acceso es por la interfaz web, en cualquiera de sus tres IPs.
+</Aside>
+
+## Arranque
+
+```bash
+qm start 109
+qm status 109
+```
+
+## Validación
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+Como no tiene WAN, `fwlab` puede arrancarse y validarse de forma segura sin ningún riesgo de red externa, en cuanto sus tres redes (`vul0`, `vul1`, `vul2`) existan como bridges internos. Sobre desde dónde lanzar estas comprobaciones (los bridges de laboratorio no tienen ruta directa desde el propio Proxmox), aplica el mismo criterio explicado en la [página de OpenSearch](/docs/despliegue/restauracion/opensearch/#validación).
+
+```bash
+ping -c 3 172.18.1.200
+curl -k -I https://172.18.1.200/
+```
+
+Comprueba en **Interfaces → Assignments** que las interfaces con las IPs `172.18.1.200`, `172.18.2.1` y `172.18.3.1` corresponden a las redes `vul0`/`vul1`/`vul2` respectivamente — el nombre que OPNsense les asigne (`LAN`, `OPT1`, `OPT2`... o uno personalizado) es secundario; lo que importa es que la IP coincida con la tabla de la sección siguiente.
+
+La comprobación de que el OPNsense principal alcanza `172.18.2.0/24` y `172.18.3.0/24` a través de este firewall **no se puede completar todavía en este punto** del itinerario: se difiere a la validación de OPNsense, el paso siguiente (ver la sección "Gateways y rutas estáticas" en la [página de OPNsense](/docs/despliegue/restauracion/opnsense/)).
+
+## Configuración aplicada
+
+### Asignación de interfaces
+
+| Papel | Red Proxmox | IP |
+| --- | --- | --- |
+| Tránsito | `vul0` | `172.18.1.200/24` |
+| Laboratorio | `vul1` | `172.18.2.1/24` |
+| Laboratorio | `vul2` | `172.18.3.1/24` |
+
+`vul0` es el segmento de tránsito y sniffing: por él pasan tanto el OPNsense principal como `fwlab`, y es donde Malcolm captura tráfico. `vul1` y `vul2` alojan las máquinas vulnerables y de práctica.
+
+### Único usuario
+
+A diferencia del resto de máquinas del entorno, `fwlab` no tiene aplicaciones ni cuentas de servicio: es un router puro con un único usuario, `root` (System Administrator), sin API keys ni datos personales.
+
+<Aside type="note" title="Alias y reglas eliminados en el backup público">
+En el backup distribuible se eliminó un alias `atacante` (6 IPs) y las 2 reglas de firewall que lo usaban en `vul1`/`vul2` — eran restos de un ejercicio de ataque-defensa de una clase concreta, sin relación con la arquitectura del laboratorio. Si necesitas bloquear IPs de forma similar, créalo de nuevo según tu propio caso de uso.
+</Aside>
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Interfaz web | `root` | `Root.OpnsenseInt1!` |
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia estas credenciales inmediatamente después de validar el despliegue.
+</Aside>
+
+## Siguiente paso
+
+Continúa con [OPNsense](/docs/despliegue/restauracion/opnsense/), el firewall perimetral, que se valida y se conecta el último.

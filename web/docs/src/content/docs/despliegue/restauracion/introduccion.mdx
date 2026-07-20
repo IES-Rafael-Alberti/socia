@@ -1,0 +1,54 @@
+---
+title: Introducción
+description: Requisitos, principios de seguridad e itinerario de la restauración del entorno SOCIA.
+sidebar:
+  order: 0
+---
+
+
+Puedes replicar la infraestructura SOCIA restaurando los **backups completos de sus máquinas virtuales** en un servidor Proxmox, físico o alojado en un proveedor. Primero se crean las redes internas del laboratorio, después se restauran las VMs una a una y por último se valida cada servicio en orden de dependencias.
+
+## Requisitos
+
+### Hardware
+
+| Recurso | Mínimo recomendado |
+| --- | --- |
+| Almacenamiento | 1 TB libre |
+| Memoria | 64 GB o más para el entorno completo |
+| CPU | Procesador multinúcleo con soporte de virtualización |
+| Espacio de staging | ~120 GB temporales para alojar los archivos de backup (`.vma.zst`) antes de restaurarlos; puede trabajarse por tandas si es limitado |
+
+### Software
+
+- **Proxmox VE** entre las versiones **8.3.0 y 9.1.7** (rango probado; no se garantiza el funcionamiento fuera de él).
+- **Open vSwitch** instalado en el nodo (`apt install openvswitch-switch`): las redes del entorno se crean como OVS Bridge.
+- **Acceso root** al servidor Proxmox destino.
+
+## Principios de seguridad de la restauración
+
+Estas reglas se aplican durante todo el proceso:
+
+1. **Restaurar primero, revisar después, arrancar al final** — y en orden de dependencias.
+2. **Verificar tamaño y SHA256** de cada backup antes de restaurarlo.
+3. Mantener `onboot=0` en todas las VMs durante la restauración y la validación.
+4. **Antes de arrancar una VM**, revisar su hardware virtual y sus redes.
+5. **No conectar OPNsense a una red física** hasta revisar su WAN, reglas y VPN. Es el componente con más capacidad de romper la red que lo rodea (DHCP duplicado, gateway duplicado, pérdida de acceso al propio Proxmox).
+
+## Itinerario
+
+1. [Descargas](/docs/despliegue/restauracion/descargas/) — los backups de las VMs y el manifiesto de verificación.
+2. [Preparación del Proxmox destino](/docs/despliegue/restauracion/preparacion/) — staging, verificación de los backups y creación de las redes.
+3. [Restauración de las VMs](/docs/despliegue/restauracion/vms/) — inventario de las VMs, procedimiento `qmrestore` y orden recomendado.
+4. Validación servicio a servicio, en orden de dependencias:
+   [OpenSearch](/docs/despliegue/restauracion/opensearch/) →
+   [Graylog](/docs/despliegue/restauracion/graylog/) →
+   [Wazuh y Velociraptor](/docs/despliegue/restauracion/wazuh-velociraptor/) →
+   [Malcolm](/docs/despliegue/restauracion/malcolm/) →
+   [MISP](/docs/despliegue/restauracion/misp/) →
+   [TheHive y Cortex](/docs/despliegue/restauracion/thehive-cortex/) →
+   [Grafana](/docs/despliegue/restauracion/grafana/) →
+   [fwlab](/docs/despliegue/restauracion/fwlab/) (firewall interno) →
+   [OPNsense](/docs/despliegue/restauracion/opnsense/) (firewall perimetral; se valida y se conecta el último).
+5. [Puesta en marcha](/docs/despliegue/restauracion/puesta-en-marcha/) — arranque automático, orden de arranque y alta disponibilidad, una vez todo el entorno está validado.
+6. [Programar backups del entorno](/docs/despliegue/restauracion/backups-periodicos/) — copias de seguridad periódicas, con el mismo mecanismo para producir tus propias réplicas.

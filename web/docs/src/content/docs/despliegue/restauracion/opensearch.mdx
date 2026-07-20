@@ -1,0 +1,89 @@
+---
+title: OpenSearch
+description: Arranque y validación de la VM de OpenSearch, backend de datos del entorno SOCIA.
+sidebar:
+  order: 4
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+OpenSearch es el backend de almacenamiento e indexación del entorno: Graylog y Wazuh guardan en él sus índices. Se valida **el primero**, porque el resto de servicios dependen de que esté sano.
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `101 · opensearch` |
+| Redes | `prod0` + `log0` |
+| IP (`prod0`) | `172.17.33.113` |
+| Acceso | `http://172.17.33.113:9200/` (API REST, sin interfaz web) |
+| Versión probada | wazuh-indexer 4.13.1 |
+| Depende de | — (se valida el primero) |
+
+## Arranque
+
+```bash
+qm start 101
+qm status 101
+```
+
+## Validación
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+<Aside type="tip" title="¿Desde dónde se ejecutan estos comandos?">
+Las redes SOCIA (`prod0`, `log0`, `vul0`...) son bridges internos de Proxmox, sin IP en el propio host: **desde el Proxmox no se llega directamente a las VMs** (`ping`/`curl` a `172.17.33.x` fallarán con "No route to host"). Dos formas de ejecutar estas comprobaciones:
+
+- **Desde otra VM ya conectada** a esa red (por ejemplo, por SSH a una VM del SOC y desde ahí `curl`/`ping` a las demás).
+- **Desde el propio Proxmox, añadiendo una IP temporal** al bridge correspondiente y retirándola al terminar:
+
+```bash
+ip addr add 172.17.33.254/24 dev prod0
+# ... ejecuta aquí las comprobaciones ...
+ip addr del 172.17.33.254/24 dev prod0
+```
+
+Aplica el mismo criterio en el resto de páginas de validación de este itinerario.
+</Aside>
+
+Comprueba la API y la salud del clúster:
+
+```bash
+curl -sS http://172.17.33.113:9200/
+curl -sS http://172.17.33.113:9200/_cluster/health?pretty
+curl -sS 'http://172.17.33.113:9200/_cat/nodes?v'
+curl -sS 'http://172.17.33.113:9200/_cat/allocation?v'
+curl -sS 'http://172.17.33.113:9200/_cat/indices?v&s=store.size:desc'
+```
+
+Criterios de aceptación:
+
+- la API responde y devuelve la versión esperada;
+- el nodo está presente;
+- estado del clúster `green`;
+- cero shards sin asignar y cero tareas pendientes;
+- los índices históricos (Graylog, Wazuh y el index set `TheHive` que crea Graylog, con prefijo `thehive_`) están presentes.
+
+<Aside type="note" title="¿Clúster en yellow?">
+SOCIA usa un único nodo de OpenSearch, y por eso los index sets de Graylog vienen configurados con **cero réplicas**. Si el clúster aparece en `yellow` con shards sin asignar, lo habitual es que algún índice esté pidiendo réplicas (por ejemplo, un index set creado posteriormente en Graylog, que por defecto solicita una): con un solo nodo nunca podrán asignarse. Configúralo a cero réplicas y el clúster volverá a `green`: en Graylog, **System → Indices → (el index set) → Edit → Index replicas → 0** para los índices futuros; y para un índice ya creado, en caliente vía API:
+
+```bash
+curl -X PUT "http://172.17.33.113:9200/<índice>/_settings" \
+  -H 'Content-Type: application/json' \
+  -d '{"index":{"number_of_replicas":0}}'
+```
+</Aside>
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Consola/`su` | `root` | `Root.Opensearch` |
+| Consola / SSH | `lab` | `Lab.Opensearch` |
+| API (9200) | `admin` | `Admin.Opensearch` (inactiva: la seguridad de OpenSearch está desactivada, la API responde sin autenticación) |
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia las credenciales de `root` y `lab` inmediatamente después de validar el despliegue. La de `admin` está guardada en `internal_users.yml` pero no protege nada en este despliegue (ver nota en la tabla) — si en algún momento activas la seguridad/TLS de OpenSearch, cámbiala también.
+</Aside>
+
+## Siguiente paso
+
+Con OpenSearch en `green`, continúa con [Graylog](/docs/despliegue/restauracion/graylog/).

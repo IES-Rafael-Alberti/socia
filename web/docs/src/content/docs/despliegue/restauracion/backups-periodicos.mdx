@@ -1,0 +1,51 @@
+---
+title: Programar backups del entorno
+description: Configuración de copias de seguridad periódicas del entorno SOCIA una vez desplegado.
+sidebar:
+  order: 14
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import proxmoxBackupAdd from '../../../../assets/despliegue/proxmox-backup-add.png';
+import proxmoxBackupGeneral from '../../../../assets/despliegue/proxmox-backup-general.png';
+import proxmoxBackupRetention from '../../../../assets/despliegue/proxmox-backup-retention.png';
+
+Con el entorno desplegado y validado, programa copias de seguridad periódicas. Es el mismo mecanismo con el que se generaron los backups que acabas de restaurar, así que además te servirá para producir tus propias réplicas del entorno.
+
+En la interfaz de Proxmox: **Datacenter → Backup → Add**.
+
+<figure class="screenshot">
+  <Image src={proxmoxBackupAdd} alt="Añadir un job de backup en Proxmox desde Datacenter, sección Backup" />
+  <figcaption>Datacenter → Backup → Add.</figcaption>
+</figure>
+
+En la pestaña **General**, selecciona el nodo, la planificación (por ejemplo `sun 01:00`), todas las VMs, el modo `Snapshot` y, en **Compression**, `ZSTD` — es el formato que asume el resto de esta documentación (los ficheros `.vma.zst` de restauración) y el que necesitas para que tus propias réplicas encajen con estas mismas instrucciones:
+
+<figure class="screenshot">
+  <Image src={proxmoxBackupGeneral} alt="Pestaña General del job de backup con nodo, planificación semanal, selección All y modo Snapshot" />
+  <figcaption>Configuración general del job de backup.</figcaption>
+</figure>
+
+En la pestaña **Retention**, define cuántas copias conservar (por ejemplo, 3):
+
+<figure class="screenshot">
+  <Image src={proxmoxBackupRetention} alt="Pestaña Retention del job de backup con política de retención de 3 copias" />
+  <figcaption>Política de retención.</figcaption>
+</figure>
+
+Por defecto, Proxmox guarda los backups en `/var/lib/vz/dump` (y las ISOs en `/var/lib/vz/template/iso`). Vigila el espacio de ese volumen: con la política de retención de 3 copias y el tamaño del entorno, hacen falta varios cientos de GB.
+
+Para que tus réplicas se puedan verificar igual que las de esta documentación (ver [Preparación](/docs/despliegue/restauracion/preparacion/#copia-y-verificación-de-los-backups)), enlaza en un directorio aparte el backup más reciente de cada VM y genera ahí el manifiesto — `/var/lib/vz/dump` tiene las 3 generaciones de la retención, y el manifiesto debe cubrir solo el juego que vayas a distribuir. Un hardlink (`ln`, no `cp`) no duplica espacio en disco, ya que `dump-distribuir` está en el mismo sistema de ficheros que `dump`:
+
+```bash
+mkdir -p /var/lib/vz/dump-distribuir
+for vmid in 100 101 102 103 104 105 106 108 109; do
+  ln "$(ls -t /var/lib/vz/dump/vzdump-qemu-${vmid}-*.vma.zst | head -1)" /var/lib/vz/dump-distribuir/
+done
+cd /var/lib/vz/dump-distribuir && sha256sum *.vma.zst > SHA256SUMS
+```
+
+<Aside type="caution" title="Antes de compartir tus backups fuera de tu centro">
+Si distribuyes tus propias réplicas, hereda las mismas revisiones que hicisteis en este mismo proceso de restauración: regenera las claves privadas de WireGuard y retira reglas o alias de firewall con IPs personales. Con las credenciales el cuidado es al revés que durante la validación: tus contraseñas reales viajan dentro del backup tal cual estén en ese momento, así que antes de exportar restaura las credenciales por defecto documentadas en cada página, o comunica las tuyas por un canal seguro aparte si necesitas conservarlas. Un backup exportado incluye todo lo que haya en el disco en ese momento, sin distinguir qué es reutilizable y qué es específico de tu despliegue.
+</Aside>

@@ -1,0 +1,244 @@
+---
+title: OPNsense
+description: Validación, riesgos y configuración de referencia del firewall OPNsense del entorno SOCIA.
+sidebar:
+  order: 12
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import opnsenseInterfaces from '../../../../assets/despliegue/opnsense-interfaces.png';
+import opnsenseAliases from '../../../../assets/despliegue/opnsense-aliases.png';
+import opnsenseAliasForm from '../../../../assets/despliegue/opnsense-alias-form.png';
+import opnsenseNatPortforward from '../../../../assets/despliegue/opnsense-nat-portforward.png';
+import opnsenseNatOutbound from '../../../../assets/despliegue/opnsense-nat-outbound.png';
+import opnsenseRules from '../../../../assets/despliegue/opnsense-rules.png';
+import opnsenseRuleForm from '../../../../assets/despliegue/opnsense-rule-form.png';
+
+OPNsense es el firewall del entorno: enruta el tráfico entre todas las redes SOCIA, aplica NAT, publica el honeypot T-Pot y da acceso remoto mediante WireGuard. Se restaura el primero pero **se valida y se conecta el último**, porque es el componente con más capacidad de romper la red que lo rodea.
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `100 · opnsense` |
+| Redes | `prod0` (LAN), `vmbr0` (WAN), `dmz0`, `vul0` (SNIF), `attack0` |
+| IP (`prod0`) | `172.17.33.1` (LAN) |
+| Acceso | `https://172.17.33.1/` |
+| Otros puertos | WireGuard `8822/udp` |
+| Versión probada | OPNsense 25.1.12 |
+| Depende de | todos los demás servicios |
+
+<Aside type="note" title="SSH disponible (a diferencia de fwlab)">
+A diferencia de `fwlab`, esta máquina sí tiene SSH accesible en el puerto 22. No entrega una shell directa: cae en el menú de consola de OPNsense (el mismo que verías por consola serie/VGA), donde la opción **8) Shell** abre una shell de administración.
+</Aside>
+
+## El riesgo principal del despliegue
+
+<Aside type="danger" title="No conectes la WAN sin revisión previa">
+No conectes la WAN de OPNsense a una red física antes de verificar: la asignación de interfaces, la dirección WAN y su gateway, la red LAN y las subredes internas, las reglas de firewall y NAT, la configuración WireGuard, y la ausencia de otro DHCP/gateway en el mismo segmento.
+
+Arrancar la VM no es el problema — mientras las bridges sean internas, OPNsense queda aislado dentro de Proxmox. El riesgo aparece al **conectarlo a la red física** sin haberlo revisado: IP duplicada, gateway duplicado, DHCP duplicado y **la pérdida del acceso remoto al propio Proxmox**.
+</Aside>
+
+## Validación
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+Mientras las bridges SOCIA sean redes internas sin puerto físico, puedes arrancar OPNsense de forma segura y validarlo desde dentro del entorno:
+
+```bash
+qm start 100
+qm status 100
+```
+
+Sobre desde dónde lanzar las siguientes comprobaciones, aplica el mismo criterio de la [página de OpenSearch](/docs/despliegue/restauracion/opensearch/#validación) (otra VM ya conectada a la red, o una IP temporal en el bridge desde el propio Proxmox):
+
+```bash
+ping -c 3 172.17.33.1
+curl -k -I https://172.17.33.1/
+```
+
+Comprueba en la interfaz web que la asignación de interfaces, alias, NAT, reglas y WireGuard corresponden con la referencia siguiente. Solo después de esta revisión se planifica la conexión de la WAN (`vmbr0`) a la red física.
+
+## Configuración aplicada
+
+La configuración siguiente **ya viene aplicada en el backup**. Es la referencia contra la que verificar el firewall restaurado.
+
+### Asignación de interfaces
+
+**Interfaces → Assignments**:
+
+| Interfaz | Dispositivo | Red Proxmox | IP |
+| -------- | ----------- | ----------- | --- |
+| LAN | `vtnet0` | `prod0` | `172.17.33.1/24` |
+| WAN | `vtnet1` | `vmbr0` | según tu red física |
+| DMZ | `vtnet2` | `dmz0` | `172.17.34.1/24` |
+| SNIF | `vtnet3` | `vul0` | `172.18.1.1/24` |
+| ATTACK | `vtnet4` | `attack0` | `172.31.0.1/24` |
+
+Existe además la interfaz de grupo **WireGuard**, que OPNsense crea automáticamente para la VPN. La dirección WAN y su gateway son lo único que tendrás que reconfigurar según tu red.
+
+<figure class="screenshot">
+  <Image src={opnsenseInterfaces} alt="Asignación de interfaces en OPNsense" />
+  <figcaption>Interfaces → Assignments.</figcaption>
+</figure>
+
+### Alias
+
+**Firewall → Aliases** — simplifican la definición de las reglas. Nombres, descripciones y contenidos son los valores literales configurados en el firewall:
+
+| Nombre | Tipo | Descripción | Contenido |
+| --- | --- | --- | --- |
+| `wgport` | Port(s) | puerto vpn wireguard | 8822 |
+| `wgnetwork` | Network(s) | red de la vpn wireguard | 10.0.3.0/24 |
+| `snif_network` | Network(s) | Lab Network to sniffing | 172.18.1.0/24 |
+| `tpotceports` | Port(s) | Puertos redirigidos a servicios de T-Pot | 22 80 443 8080 3306 |
+| `tpotcehost` | Host(s) | Host del T-Pot | 172.17.34.10 |
+| `prodnetwork` | Network(s) | Red de producción | 172.17.33.0/24 |
+| `internalnetworks` | Network(s) | redes internas privadas | snif_network prodnetwork |
+| `fwlab` | Host(s) | OPNSense Firewall Laboratorio | 172.18.1.200 |
+| `internal_labs_network` | Network(s) | Laboratories | 172.18.2.0/24 172.18.3.0/24 |
+| `all_labs_network` | Network(s) | All Internal Lab networks | snif_network internal_labs_network |
+| `wazuh_agent_ports` | Port(s) | Wazuh ports | 1515 1514 |
+| `Wazuh_host` | Host(s) | Wazuh host ip address | 172.17.33.101 |
+
+<figure class="screenshot">
+  <Image src={opnsenseAliases} alt="Listado de alias en OPNsense" />
+  <figcaption>Firewall → Aliases.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={opnsenseAliasForm} alt="Formulario de creación de un alias en OPNsense" />
+  <figcaption>Creación de un alias: nombre, tipo, contenido y descripción.</figcaption>
+</figure>
+
+### Gateways y rutas estáticas
+
+Las redes de laboratorio `vul1` y `vul2` no cuelgan directamente de OPNsense: están detrás de un **segundo firewall interno** (`fwlab`, `172.18.1.200`, en la red SNIF). OPNsense llega a ellas mediante un gateway y dos rutas estáticas:
+
+| Elemento | Valor |
+| --- | --- |
+| Gateway `LABGW` | `172.18.1.200` en la interfaz SNIF |
+| Ruta estática | `172.18.2.0/24` → `LABGW` |
+| Ruta estática | `172.18.3.0/24` → `LABGW` |
+
+El gateway WAN por defecto depende de tu red física; reconfigúralo junto con la dirección WAN.
+
+### NAT — Port Forward
+
+Una única regla, que publica los servicios del honeypot T-Pot hacia el exterior:
+
+| Estado | Interfaz | Protocolo | Destino | Puerto destino | IP NAT | Puerto NAT |
+| --- | --- | --- | --- | --- | --- | --- |
+| Enabled | WAN | TCP | This Firewall | `tpotceports` | `tpotcehost` | `tpotceports` |
+
+<figure class="screenshot">
+  <Image src={opnsenseNatPortforward} alt="Reglas de Port Forward en OPNsense" />
+  <figcaption>Firewall → NAT → Port Forward.</figcaption>
+</figure>
+
+### NAT — Outbound
+
+Modo: **Hybrid outbound NAT** (las reglas automáticas se aplican después de las manuales). Estas reglas dan salida hacia el exterior, a través de la dirección WAN, a la VPN y a las redes de laboratorio:
+
+| Estado | Interfaz | Origen | NAT | Puerto estático |
+| --- | --- | --- | --- | --- |
+| Enabled | WAN | `wgnetwork` | WAN address | NO |
+| Enabled | WAN | `all_labs_network` | Interface address | NO |
+| Enabled | WAN | `snif_network` | Interface address | NO |
+
+<figure class="screenshot">
+  <Image src={opnsenseNatOutbound} alt="Reglas de NAT Outbound en OPNsense" />
+  <figcaption>Firewall → NAT → Outbound.</figcaption>
+</figure>
+
+### Reglas de firewall
+
+**Firewall → Rules**, por interfaz:
+
+<figure class="screenshot">
+  <Image src={opnsenseRules} alt="Reglas de firewall por interfaz en OPNsense" />
+  <figcaption>Firewall → Rules.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={opnsenseRuleForm} alt="Formulario de creación de una regla de firewall" />
+  <figcaption>Creación de una regla: acción, protocolo, origen y destino.</figcaption>
+</figure>
+
+En las tablas siguientes, `(disabled)` marca una regla presente pero desactivada (no se aplica, se documenta para no perderla); `(last match)` marca una regla sin `quick` — no corta la evaluación al coincidir, así que solo decide si ninguna regla posterior con `quick` coincide antes.
+
+**ATTACK** — la red atacante puede alcanzar los laboratorios y salir al exterior, pero nadie entra en ella:
+
+| Acción | Protocolo | Origen | Destino |
+| --- | --- | --- | --- |
+| pass | IPv4* | ATTACK net | SNIF net |
+| pass | IPv4* | ATTACK net | `!internalnetworks` |
+| block | IPv4* | * | ATTACK net |
+
+**DMZ** — la VPN puede entrar, el honeypot T-Pot es alcanzable desde cualquier sitio y la DMZ puede salir hacia el exterior y hacia las redes de laboratorio, pero no hacia la producción ni la red de sniffing:
+
+| Acción | Protocolo | Origen | Destino |
+| --- | --- | --- | --- |
+| pass (disabled) | IPv4* | DMZ net | * |
+| pass | IPv4* | `wgnetwork` | DMZ net |
+| pass | IPv4* | DMZ net | `!internalnetworks` |
+| pass | IPv4* | * | `tpotcehost` |
+
+<Aside type="note" title="La DMZ alcanza vul1/vul2 a propósito">
+`internalnetworks` solo contiene `snif_network` y `prodnetwork` — no incluye `internal_labs_network` (`vul1`/`vul2`) a propósito. La regla `DMZ net → !internalnetworks` deja pasar tráfico desde la DMZ (donde vive el honeypot T-Pot) hacia las redes de laboratorio, vía el gateway `LABGW`, igual que hace la regla equivalente de **ATTACK** (`ATTACK net → !internalnetworks`, ver arriba), documentada como diseño intencional: la idea es que las redes "expuestas" del entorno (la atacante y la DMZ del honeypot) puedan alimentar los laboratorios con tráfico real, mientras que la producción y la red de sniffing quedan protegidas detrás de `internalnetworks`. Si no quieres que el honeypot llegue a los laboratorios en tu despliegue, añade `internal_labs_network` al alias `internalnetworks`.
+</Aside>
+
+**LAN** — la red de producción sale libremente; desde fuera solo entran los clientes VPN:
+
+| Acción | Protocolo | Origen | Destino |
+| --- | --- | --- | --- |
+| pass | IPv4* | LAN net | * |
+| pass (disabled) | IPv6* | LAN net | * |
+| pass | IPv4* | WireGuard net | LAN net |
+| pass (disabled) | IPv4* | * | LAN net |
+
+**SNIF** — las redes de laboratorio se comunican entre sí y con el exterior, con paso explícito de los agentes Wazuh hacia el manager:
+
+| Acción | Protocolo | Origen | Destino | Puerto destino |
+| --- | --- | --- | --- | --- |
+| pass | IPv4* | SNIF net | * | * |
+| block | IPv4* | * | ATTACK net | * |
+| pass | IPv4* | * | SNIF net | * |
+| pass | IPv4* | WireGuard net | `all_labs_network` | * |
+| pass | IPv4* | * | `all_labs_network` | * |
+| pass | IPv4* | `all_labs_network` | * | * |
+| pass | IPv4* TCP/UDP | `all_labs_network` | `Wazuh_host`, LAN net | `wazuh_agent_ports` |
+| pass (disabled) | IPv4* | * | `fwlab` | * |
+
+**WAN** — desde el exterior solo se publican la VPN WireGuard y el honeypot T-Pot:
+
+| Acción | Protocolo | Origen | Destino | Puerto destino |
+| --- | --- | --- | --- | --- |
+| pass (last match) | IPv4 UDP | * | This Firewall | `wgport` |
+| pass | IPv4 TCP | * | `tpotcehost` | `tpotceports` |
+| pass | IPv4* | `all_labs_network` | * | * |
+
+<Aside type="danger" title="Regla WAN sospechosa — revisa antes de publicar">
+La regla `pass IPv4* all_labs_network → *` en WAN no tiene descripción ni justificación aparente: acepta en la interfaz **externa** tráfico cuyo origen son direcciones privadas de las redes de laboratorio (172.18.x). Estas direcciones nunca deberían aparecer legítimamente como origen en la WAN, y la regla anula la protección antispoofing para ese rango si algún paquete llegara con ese origen falsificado. No hay comentario en la configuración que explique un propósito real (a diferencia de la regla de WireGuard, que sí lo tiene). Todo apunta a un resto de pruebas de alguna sesión de administración anterior. Revísala y, si no tiene un propósito documentado, elimínala antes de conectar la WAN a producción.
+</Aside>
+
+**WireGuard (grupo)** — los clientes VPN acceden a todo el entorno:
+
+| Acción | Protocolo | Origen | Destino |
+| --- | --- | --- | --- |
+| pass (last match) | IPv4* | `wgnetwork` | * |
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Interfaz web | `root` | `Root.Opnsense1!` |
+| SSH / consola | `root` | `Root.Opnsense1!` (misma cuenta que la web) |
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia estas credenciales inmediatamente después de validar el despliegue. Regenera las claves WireGuard sin excepción: el `config.xml` restaurado contiene la clave privada del servidor en texto plano, así que las del backup distribuido son públicas por definición — no solo si el backup procede de otro despliegue.
+</Aside>
+
+## Siguiente paso
+
+OPNsense es la última máquina que se valida. Con ella confirmada, todo el entorno está desplegado y probado — continúa con la [puesta en marcha](/docs/despliegue/restauracion/puesta-en-marcha/) para dejarlo listo en producción.

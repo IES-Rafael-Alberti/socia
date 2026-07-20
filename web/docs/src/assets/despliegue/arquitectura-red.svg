@@ -1,0 +1,117 @@
+<svg viewBox="0 0 920 660" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8a95a1"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="660" rx="12" fill="#ffffff"/>
+
+  <!-- Internet -->
+  <rect x="330" y="18" width="260" height="44" rx="22" fill="#eef1f5" stroke="#aeb8c2"/>
+  <text x="460" y="38" text-anchor="middle" font-size="13" font-weight="bold" fill="#33404d">Internet · red física</text>
+  <text x="460" y="54" text-anchor="middle" font-size="11" fill="#667">vmbr0 (WAN)</text>
+
+  <!-- VPN -->
+  <rect x="20" y="18" width="250" height="44" rx="22" fill="#eef1f5" stroke="#aeb8c2" stroke-dasharray="5 3"/>
+  <text x="145" y="38" text-anchor="middle" font-size="12" font-weight="bold" fill="#33404d">Alumnado y profesorado</text>
+  <text x="145" y="54" text-anchor="middle" font-size="11" fill="#667">VPN WireGuard · 10.0.3.0/24 · UDP 8822</text>
+
+  <!-- lines to OPNsense -->
+  <line x1="460" y1="62" x2="460" y2="100" stroke="#8a95a1" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M 145 62 L 145 125 L 318 125" stroke="#8a95a1" stroke-width="1.5" fill="none" stroke-dasharray="5 3" marker-end="url(#arr)"/>
+
+  <!-- OPNsense -->
+  <rect x="320" y="100" width="280" height="52" rx="8" fill="#fbe9eb" stroke="#b71c2b" stroke-width="1.5"/>
+  <text x="460" y="122" text-anchor="middle" font-size="13" font-weight="bold" fill="#b71c2b">OPNsense — firewall perimetral</text>
+  <text x="460" y="140" text-anchor="middle" font-size="11" fill="#7a2530">VM 100 · LAN 172.17.33.1 · rutas, NAT y VPN</text>
+
+  <!-- elbow lines to zones -->
+  <path d="M 380 152 L 380 175 L 100 175 L 100 208" stroke="#8a95a1" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 420 152 L 420 175 L 310 175 L 310 208" stroke="#8a95a1" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 540 152 L 540 175 L 590 175 L 590 208" stroke="#8a95a1" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 580 152 L 580 168 L 830 168 L 830 208" stroke="#8a95a1" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- attack0 -->
+  <rect x="20" y="210" width="160" height="130" rx="8" fill="#f4f6f8" stroke="#b9c2cc"/>
+  <text x="100" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#33404d">attack0</text>
+  <text x="100" y="247" text-anchor="middle" font-size="10" fill="#667">172.31.0.0/24 · red atacante</text>
+  <rect x="35" y="260" width="130" height="30" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+  <text x="100" y="279" text-anchor="middle" font-size="10.5" fill="#33404d">Máquinas atacantes</text>
+  <rect x="35" y="298" width="130" height="30" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+  <text x="100" y="317" text-anchor="middle" font-size="10.5" fill="#33404d">scripts (VM 211)</text>
+
+  <!-- laboratorios: vul0 -->
+  <rect x="200" y="210" width="220" height="160" rx="8" fill="#f4f6f8" stroke="#b9c2cc"/>
+  <text x="310" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#33404d">vul0</text>
+  <text x="310" y="247" text-anchor="middle" font-size="10" fill="#667">172.18.1.0/24 · sniffing y tránsito</text>
+  <rect x="215" y="260" width="190" height="30" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+  <text x="310" y="279" text-anchor="middle" font-size="10.5" fill="#33404d">Routers + captura de Malcolm</text>
+  <rect x="215" y="298" width="190" height="58" rx="5" fill="#fbe9eb" stroke="#b71c2b"/>
+  <text x="310" y="320" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#b71c2b">fwlab — router interno</text>
+  <text x="310" y="336" text-anchor="middle" font-size="10" fill="#7a2530">172.18.1.200 · une vul0, vul1 y vul2</text>
+
+  <!-- vul1 vul2 -->
+  <path d="M 265 356 L 265 400" stroke="#8a95a1" stroke-width="1.5" marker-end="url(#arr)"/>
+  <path d="M 355 356 L 355 400" stroke="#8a95a1" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="200" y="402" width="100" height="70" rx="8" fill="#f4f6f8" stroke="#b9c2cc"/>
+  <text x="250" y="422" text-anchor="middle" font-size="12" font-weight="bold" fill="#33404d">vul1</text>
+  <text x="250" y="438" text-anchor="middle" font-size="10" fill="#667">172.18.2.0/24</text>
+  <text x="250" y="454" text-anchor="middle" font-size="10" fill="#667">máq. vulnerables</text>
+  <rect x="320" y="402" width="100" height="70" rx="8" fill="#f4f6f8" stroke="#b9c2cc"/>
+  <text x="370" y="422" text-anchor="middle" font-size="12" font-weight="bold" fill="#33404d">vul2</text>
+  <text x="370" y="438" text-anchor="middle" font-size="10" fill="#667">172.18.3.0/24</text>
+  <text x="370" y="454" text-anchor="middle" font-size="10" fill="#667">máq. vulnerables</text>
+
+  <!-- prod0 -->
+  <rect x="440" y="210" width="300" height="352" rx="8" fill="#f4f6f8" stroke="#b9c2cc"/>
+  <text x="590" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#33404d">prod0</text>
+  <text x="590" y="247" text-anchor="middle" font-size="10" fill="#667">172.17.33.0/24 · producción SOC</text>
+
+  <g font-size="10.5">
+    <rect x="455" y="260" width="130" height="40" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+    <text x="520" y="276" text-anchor="middle" font-weight="bold" fill="#33404d">OpenSearch</text>
+    <text x="520" y="292" text-anchor="middle" fill="#667">.113 · VM 101</text>
+    <rect x="595" y="260" width="130" height="40" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+    <text x="660" y="276" text-anchor="middle" font-weight="bold" fill="#33404d">Graylog · Kafka</text>
+    <text x="660" y="292" text-anchor="middle" fill="#667">.153 · VM 102</text>
+    <rect x="455" y="310" width="130" height="40" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+    <text x="520" y="326" text-anchor="middle" font-weight="bold" fill="#33404d">Wazuh · Velociraptor</text>
+    <text x="520" y="342" text-anchor="middle" fill="#667">.101 · VM 103</text>
+    <rect x="595" y="310" width="130" height="40" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+    <text x="660" y="326" text-anchor="middle" font-weight="bold" fill="#33404d">Malcolm</text>
+    <text x="660" y="342" text-anchor="middle" fill="#667">.103 · VM 104</text>
+    <rect x="455" y="360" width="130" height="40" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+    <text x="520" y="376" text-anchor="middle" font-weight="bold" fill="#33404d">MISP</text>
+    <text x="520" y="392" text-anchor="middle" fill="#667">.145 · VM 105</text>
+    <rect x="595" y="360" width="130" height="40" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+    <text x="660" y="376" text-anchor="middle" font-weight="bold" fill="#33404d">TheHive · Cortex</text>
+    <text x="660" y="392" text-anchor="middle" fill="#667">.104 · VM 106</text>
+    <rect x="525" y="410" width="130" height="40" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+    <text x="590" y="426" text-anchor="middle" font-weight="bold" fill="#33404d">Grafana</text>
+    <text x="590" y="442" text-anchor="middle" fill="#667">.154 · VM 108</text>
+  </g>
+
+  <!-- log0 band -->
+  <rect x="455" y="500" width="270" height="44" rx="5" fill="#e8edf2" stroke="#b9c2cc"/>
+  <text x="590" y="518" text-anchor="middle" font-size="11" font-weight="bold" fill="#33404d">log0 · 172.19.1.0/24</text>
+  <text x="590" y="534" text-anchor="middle" font-size="10" fill="#667">red de logging — 2ª NIC de las VMs del SOC</text>
+
+  <!-- dmz0 -->
+  <rect x="760" y="210" width="140" height="130" rx="8" fill="#f4f6f8" stroke="#b9c2cc"/>
+  <text x="830" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#33404d">dmz0</text>
+  <text x="830" y="247" text-anchor="middle" font-size="10" fill="#667">172.17.34.0/24 · DMZ</text>
+  <rect x="775" y="260" width="110" height="52" rx="5" fill="#ffffff" stroke="#c6ccd2"/>
+  <text x="830" y="280" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#33404d">T-Pot honeypot</text>
+  <text x="830" y="296" text-anchor="middle" font-size="10" fill="#667">.10 · VM 301</text>
+
+  <!-- malcolm capture -->
+  <path d="M 725 330 L 750 330 L 750 192 L 380 192 L 380 208" stroke="#b71c2b" stroke-width="1.2" fill="none" stroke-dasharray="4 3" marker-end="url(#arr)" opacity="0.75"/>
+  <text x="470" y="188" text-anchor="middle" font-size="9.5" fill="#b71c2b">Malcolm captura tráfico de vul0</text>
+
+  <!-- tpot exposure -->
+  <text x="830" y="358" text-anchor="middle" font-size="9.5" fill="#667">expuesto al exterior vía NAT</text>
+
+  <!-- footer -->
+  <text x="460" y="640" text-anchor="middle" font-size="9.5" fill="#98a2ad">SOCIA — arquitectura de red del laboratorio · las redes son bridges internos de Proxmox enrutados por OPNsense</text>
+</svg>

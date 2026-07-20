@@ -1,12 +1,28 @@
 ---
 title: Bienvenida
-description: Página en construcción.
+description: Para quién es esta documentación, cómo está organizada y por dónde empezar según lo que busques.
 sidebar:
   order: 1
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+**SOCIA** es un SOC real con fines formativos: el alumnado de ciberseguridad aprende resolviendo incidentes reales, no simulaciones. Sobre una infraestructura Proxmox despliega un SOC completo con herramientas profesionales (Wazuh, OPNsense, TheHive…), al que añade una capa de IA con doble función: asistir al profesorado en la creación de casos y guiar y evaluar al alumnado durante su resolución. Lo desarrollan el IES Rafael Alberti (Cádiz), el CIFP N.º 1 (Cuenca) y Aktios Security Services.
 
-<Aside type="caution" title="En construcción">
-Esta página está en preparación. Mientras tanto, puedes consultar la **[web del proyecto](https://socia.fpciberseguridad.com/)** para una visión general de SOCIA.
-</Aside>
+Aquí encontrarás la **documentación técnica**: cómo desplegar y operar el entorno. Para una visión general del proyecto, tienes la [web de SOCIA](https://socia.fpciberseguridad.com/).
+
+## Para quién es
+
+Esta documentación está pensada sobre todo para **profesorado y centros educativos** que quieran replicar SOCIA en su propia aula, y para cualquiera que quiera entender cómo funciona por dentro. 
+
+## Cómo está organizada
+
+- **[Infraestructura](/docs/despliegue/resumen/)** — cómo levantar el laboratorio SOC: arquitectura de red y despliegue paso a paso de todas las máquinas.
+- **[Componentes de IA](/docs/ia/vision/)** — las extensiones MENTORA (profesorado) y SOCIA (alumnado) y el panel de gestión del docente.
+- **[Comunidad y eventos](/docs/comunidad/resumen/)** — jornadas formativas, encuentros y difusión del proyecto.
+- **[Referentes](/docs/referentes/intro/)** — iniciativas previas en las que nos hemos apoyado.
+
+## Por dónde empezar
+
+- ¿Quieres **montar el laboratorio** en tu centro? Empieza por [Infraestructura](/docs/despliegue/resumen/).
+- ¿Quieres **entender la capa de IA**? Ve a [Componentes de IA](/docs/ia/vision/).
+
+Todo SOCIA es **código abierto** y reproducible; el código está alojado en [GitHub](https://github.com/IES-Rafael-Alberti/socia).

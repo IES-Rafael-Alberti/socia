@@ -1,0 +1,99 @@
+---
+title: Grafana
+description: Arranque, validación y configuración de referencia de Grafana en el entorno SOCIA.
+sidebar:
+  order: 10
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import grafanaDatasources from '../../../../assets/despliegue/grafana-datasources.png';
+import grafanaDashboardNew from '../../../../assets/despliegue/grafana-dashboard-new.png';
+import grafanaDashboardPanels from '../../../../assets/despliegue/grafana-dashboard-panels.png';
+import grafanaDashboardVista from '../../../../assets/despliegue/grafana-dashboard-vista.png';
+
+Grafana es la capa de visualización del entorno: consume datos de MISP, OPNsense y Wazuh y los presenta en dashboards para el seguimiento del SOC.
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `108 · grafana` |
+| Redes | `prod0` + `log0` |
+| IP (`prod0`) | `172.17.33.154` |
+| Acceso | `http://172.17.33.154:3000/` |
+| Versión probada | Grafana 12.2.0 |
+| Depende de | Wazuh, MISP y OPNsense arrancados (orígenes de sus data sources; OPNsense se conecta el último — ver nota en Validación) |
+
+## Arranque
+
+```bash
+qm start 108
+qm status 108
+ping -c 3 172.17.33.154
+nc -zvw3 172.17.33.154 3000
+```
+
+## Validación
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+1. Abre la interfaz web y autentícate.
+2. En **Connections → Data sources**, confirma que existen los data sources: `misp-alerts`, `opensense-alerts`, `wazuh-alerts`, `wazuh-authentication` y `wazuh-rest-api`.
+3. Abre el dashboard principal y comprueba que todos los paneles cargan y reciben datos de su data source (los servicios origen deben estar arrancados).
+
+<Aside type="caution" title="Paneles de OPNsense sin datos por ahora">
+Los paneles que consumen `opensense-alerts` no recibirán datos hasta que OPNsense esté validado y conectado — y ese es, a propósito, el **último** paso del itinerario (ver [Siguiente paso](#siguiente-paso) más abajo). No lo interpretes como un fallo de Grafana: revisa esos paneles en concreto cuando llegues a la página de OPNsense.
+</Aside>
+
+## Configuración aplicada
+
+### Data sources
+
+<Aside type="note" title="Nombre literal, no errata">
+El data source `opensense-alerts` se llama así ("opensense", no "opnsense") en la Grafana real de este entorno — es el nombre heredado de como se configuró originalmente, no una errata de esta página. No lo corrijas al reconstruirlo.
+</Aside>
+
+<figure class="screenshot">
+  <Image src={grafanaDatasources} alt="Data sources de Grafana: misp-alerts, opensense-alerts, wazuh-alerts, wazuh-authentication y wazuh-rest-api" />
+  <figcaption>Connections → Data sources.</figcaption>
+</figure>
+
+<Aside type="caution" title="wazuh-authentication lleva una contraseña embebida">
+Este data source usa la contraseña de `wazuh-wui` para autenticar sus consultas contra la API de Wazuh. Si rotas esa contraseña, actualízala también aquí — ver el aviso correspondiente en [Wazuh y Velociraptor](/docs/despliegue/restauracion/wazuh-velociraptor/#credenciales).
+</Aside>
+
+### Dashboards
+
+Los dashboards se importan desde **Dashboards → New → Import dashboard**:
+
+<figure class="screenshot">
+  <Image src={grafanaDashboardNew} alt="Creación o importación de un dashboard en Grafana" />
+  <figcaption>Dashboards → New → Import dashboard.</figcaption>
+</figure>
+
+El dashboard del SOC incluye los paneles: Vulnerabilidades Críticas, Altas y Medias; Autenticaciones OK; Top 5 niveles de alerta; Top 5 eventos de hosts; Porcentaje de severidad; Top 5 MITRE ATT&CK; Top 10 conexiones de red; Mapa; e Issues.
+
+<figure class="screenshot">
+  <Image src={grafanaDashboardPanels} alt="Paneles del dashboard SOC de SOCIA en Grafana" />
+  <figcaption>Paneles del dashboard.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={grafanaDashboardVista} alt="Vista general del dashboard SOC con datos" />
+  <figcaption>Dashboard con datos en vivo.</figcaption>
+</figure>
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Consola/`su` | `root` | `Root.Grafana` |
+| SSH | `lab` | `Lab.Grafana` |
+| Interfaz web | `admin` | `Admin.Grafana1!` |
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia estas credenciales inmediatamente después de validar el despliegue.
+</Aside>
+
+## Siguiente paso
+
+Continúa con [fwlab](/docs/despliegue/restauracion/fwlab/), el firewall interno del laboratorio. Queda el componente más delicado para el final: [OPNsense](/docs/despliegue/restauracion/opnsense/), que se valida y conecta el último.

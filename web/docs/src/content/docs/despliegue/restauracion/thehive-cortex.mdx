@@ -1,0 +1,314 @@
+---
+title: TheHive y Cortex
+description: Arranque, validación, conectores y claves API de TheHive y Cortex en el entorno SOCIA.
+sidebar:
+  order: 9
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import thehiveConnectors from '../../../../assets/despliegue/thehive-connectors.png';
+import thehiveConnectorCortex from '../../../../assets/despliegue/thehive-connector-cortex.png';
+import thehiveConnectorCortexOrg from '../../../../assets/despliegue/thehive-connector-cortex-org.png';
+import thehiveConnectorMisp from '../../../../assets/despliegue/thehive-connector-misp.png';
+import thehiveConnectorMispConfig from '../../../../assets/despliegue/thehive-connector-misp-config.png';
+import thehiveConnectorMispOrg from '../../../../assets/despliegue/thehive-connector-misp-org.png';
+import thehiveConnectorsOk from '../../../../assets/despliegue/thehive-connectors-ok.png';
+import cortexAnalyzersAil from '../../../../assets/despliegue/cortex-analyzers-ail.png';
+import cortexAnalyzersAbuse from '../../../../assets/despliegue/cortex-analyzers-abuse.png';
+import cortexAnalyzerMisp from '../../../../assets/despliegue/cortex-analyzer-misp.png';
+import cortexAnalyzersVirustotal from '../../../../assets/despliegue/cortex-analyzers-virustotal.png';
+import cortexResponderVelociraptor from '../../../../assets/despliegue/cortex-responder-velociraptor.png';
+
+Una misma VM aloja **TheHive** (gestión de casos e incidentes; recibe las alertas críticas escaladas desde Graylog) y **Cortex** (análisis de observables mediante analyzers y respuesta mediante responders).
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `106 · thehive-cortex` |
+| Redes | `prod0` + `log0` |
+| IP (`prod0`) | `172.17.33.104` |
+| Acceso (TheHive) | `http://172.17.33.104:9000/` |
+| Acceso (Cortex) | `http://172.17.33.104:9001/` |
+| Versión probada | TheHive 5.4.8-1 · Cortex 3.1.8-1 |
+| Depende de | MISP arrancado (conector); Graylog para el flujo de alertas |
+
+## Arranque
+
+```bash
+qm start 106
+qm status 106
+```
+
+Espera entre 60 y 120 segundos antes de diagnosticar un fallo: TheHive y Cortex pueden responder a distinta velocidad aunque compartan VM.
+
+## Validación
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+### Red y puertos
+
+```bash
+ping -c 3 172.17.33.104
+nc -zvw3 172.17.33.104 22
+nc -zvw3 172.17.33.104 9000
+nc -zvw3 172.17.33.104 9001
+curl -sS --connect-timeout 10 http://172.17.33.104:9000/api/status
+curl -I --connect-timeout 10 http://172.17.33.104:9000/
+curl -I --connect-timeout 10 http://172.17.33.104:9001/
+```
+
+`api/status` debe devolver un JSON con la versión de TheHive.
+
+### Interfaz web
+
+1. La página de `:9000` corresponde a TheHive y la de `:9001` a Cortex.
+2. Es posible autenticarse con las credenciales entregadas.
+3. No aparecen errores de backend, base de datos o migraciones.
+
+No cambies conectores, analyzers ni responders durante la validación salvo incidencia demostrada.
+
+### Interna por SSH
+
+```bash
+systemctl status thehive --no-pager
+systemctl status cortex --no-pager
+ss -lntp | grep -E ':9000|:9001'
+df -h
+free -h
+find /opt/Cortex-Analyzers/analyzers -mindepth 1 -maxdepth 1 -type d | wc -l
+find /opt/Cortex-Analyzers/responders -mindepth 1 -maxdepth 1 -type d | wc -l
+```
+
+Ambos servicios deben estar `active (running)`, los dos puertos en escucha y debe existir un conjunto no vacío de analyzers y responders (como referencia, el entorno restaurado contiene 138 analyzers y 41 responders instalados).
+
+### Conectores
+
+Tras el acceso básico: entra en TheHive, revisa los conectores **MISP** y **Cortex** y confirma que ambos muestran estado `OK`. No regeneres claves API ni recrees conectores si los objetos restaurados siguen presentes.
+
+### Flujo extremo a extremo
+
+Cierra aquí la validación que quedó pendiente en la página de Graylog: confirma que una alerta crítica llega hasta TheHive con el `_createdBy` del feeder correcto.
+
+Provoca el evento desde otra máquina con varios intentos de login SSH fallidos contra el Wazuh Manager — basta con disparar la regla `100100` (nivel 10, ya dentro del rango `rule_level:[10 TO 15]` que dispara el escalado; no hace falta llegar a la regla `100101`):
+
+```bash
+for i in $(seq 1 8); do ssh usuario-inexistente@172.17.33.101; done
+```
+
+(escribe cualquier contraseña en cada intento; unos 8 intentos en menos de 2 minutos son suficientes para superar el `frequency`/`timeframe` de la regla.)
+
+Después:
+
+1. En Graylog, confirma que la definición de evento **`graylog2thehive - CRITICAL`** se disparó (**Alerts → Event Definitions → graylog2thehive - CRITICAL**, revisa su historial).
+2. En TheHive, confirma que aparece una alerta nueva y que su campo `_createdBy` corresponde al usuario feeder configurado en `THEHIVE_APIKEY`.
+3. Si la alerta no llega, revisa `journalctl -u graylog-thehive` en esta VM: ahí queda el registro de la llamada a la API de TheHive.
+
+## Configuración aplicada
+
+La integración siguiente **ya viene aplicada en el backup**. Documentamos cómo se construyó para verificarla o reconstruirla.
+
+### application.conf de TheHive
+
+Las conexiones con MISP y Cortex se definen en `/etc/thehive/application.conf`:
+
+```hocon
+# MISP
+misp {
+  interval = 1m
+  servers = [
+    {
+      name = "Misp-Prod"
+      url = "<URL_SERVIDOR_MISP>"
+      auth = {
+        type = "bearer"
+        key = "<CLAVE_API_MISP>"
+      }
+      ssl-skip-validation = true
+      published = false
+      importUnpublished = true
+      maxAge = 30d
+    }
+  ]
+}
+
+# CORTEX
+cortex {
+  servers = [
+    {
+      name = "Cortex-Prod"
+      url = "<URL_SERVIDOR_CORTEX>"
+      auth = {
+        type = "bearer"
+        key = "<CLAVE_API_CORTEX>"
+      }
+      default = true
+    }
+  ]
+}
+```
+
+Sustituye `<URL_SERVIDOR_MISP>` / `<URL_SERVIDOR_CORTEX>` por las direcciones de tus instancias y las claves por los tokens correspondientes (la de MISP se obtiene como se describe en [la página de MISP](/docs/despliegue/restauracion/misp/#clave-api); la de Cortex, desde la gestión de usuarios de la organización en Cortex).
+
+### Conectores en la interfaz de TheHive
+
+La integración se completa desde **Platform Management → Connectors**:
+
+<figure class="screenshot">
+  <Image src={thehiveConnectors} alt="Panel de conectores de TheHive" />
+  <figcaption>Platform Management → Connectors.</figcaption>
+</figure>
+
+**Cortex** — introduce la URL del servidor y la clave API:
+
+<figure class="screenshot">
+  <Image src={thehiveConnectorCortex} alt="Configuración del conector Cortex con URL y clave API" />
+  <figcaption>Conector Cortex: URL y clave API.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={thehiveConnectorCortexOrg} alt="Selección de organizaciones incluidas para el conector Cortex" />
+  <figcaption>Asignación del conector a la organización.</figcaption>
+</figure>
+
+**MISP** — introduce la URL, la clave API y las opciones de exportación:
+
+<figure class="screenshot">
+  <Image src={thehiveConnectorMisp} alt="Panel del conector MISP en TheHive" />
+  <figcaption>Conector MISP.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={thehiveConnectorMispConfig} alt="Configuración del conector MISP con URL, clave API y modo exportar solo" />
+  <figcaption>URL, clave API y modo de exportación.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={thehiveConnectorMispOrg} alt="Organizaciones y etiquetas de exportación del conector MISP" />
+  <figcaption>Organización y etiquetas de casos/observables.</figcaption>
+</figure>
+
+Con ambos configurados, el estado debe ser `OK`:
+
+<figure class="screenshot">
+  <Image src={thehiveConnectorsOk} alt="Panel de conectores de TheHive con Cortex y MISP en estado OK" />
+  <figcaption>Ambos conectores en estado OK.</figcaption>
+</figure>
+
+### Analyzers de Cortex
+
+En **Organization → Analyzers** están habilitados:
+
+- `AIL_OnionLookup_1_0`, `AbuseIPDB_1_0` y `Abuse_Finder_3_0` — análisis de amenazas e IPs maliciosas;
+- `MISP_2_1` — consulta de indicadores contra la instancia MISP del entorno;
+- `VirusTotal_GetReport_3_1` y `VirusTotal_Scan_3_1` — consulta de reportes y escaneo activo de observables.
+
+<figure class="screenshot">
+  <Image src={cortexAnalyzersAil} alt="Analyzer AIL OnionLookup habilitado en Cortex" />
+  <figcaption>Organization → Analyzers: AIL_OnionLookup.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={cortexAnalyzersAbuse} alt="Analyzers AbuseIPDB y Abuse_Finder habilitados en Cortex" />
+  <figcaption>AbuseIPDB y Abuse_Finder.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={cortexAnalyzerMisp} alt="Analyzer MISP habilitado en Cortex" />
+  <figcaption>MISP_2_1.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={cortexAnalyzersVirustotal} alt="Analyzers VirusTotal GetReport y Scan habilitados en Cortex" />
+  <figcaption>VirusTotal GetReport y Scan.</figcaption>
+</figure>
+
+### Responders de Cortex
+
+Para la respuesta ante incidentes mediante Velociraptor está habilitado el responder `Velociraptor_0_2`:
+
+<figure class="screenshot">
+  <Image src={cortexResponderVelociraptor} alt="Responder Velociraptor habilitado en Cortex" />
+  <figcaption>Responder Velociraptor_0_2.</figcaption>
+</figure>
+
+## Puente Graylog → TheHive (creación automática de alertas)
+
+Esta misma VM aloja también el servicio **`graylog-thehive.service`** (`/opt/graylog-thehive/`), un puente que recibe los webhooks de Graylog (evento crítico escalado) y crea la alerta correspondiente en TheHive vía su API.
+
+```bash
+systemctl status graylog-thehive --no-pager
+grep -c THEHIVE_APIKEY /opt/graylog-thehive/.env
+```
+
+El puente se autentica contra TheHive con la **clave API de un usuario analista existente** (el "feeder"), configurada en `THEHIVE_APIKEY` dentro de ese `.env`. Las alertas creadas quedan registradas como creadas por ese mismo usuario (campo `_createdBy`).
+
+<Aside type="danger" title="El usuario feeder no puede desaparecer ni perder su clave">
+Si el usuario feeder se **elimina**, o si se **regenera su clave API** sin actualizar `/opt/graylog-thehive/.env` con el nuevo valor, el puente deja de crear alertas — y como no da ningún error visible en Graylog (el webhook se sigue disparando, solo falla la llamada a TheHive), el fallo puede pasar desapercibido durante mucho tiempo.
+
+Antes de eliminar o modificar cualquier cuenta de analista, comprueba primero cuál es el usuario feeder actual pidiéndoselo a la propia API, sin volcar la clave a pantalla:
+
+```bash
+FEEDER_KEY=$(grep -oP '(?<=THEHIVE_APIKEY=).*' /opt/graylog-thehive/.env)
+curl -sS -H "Authorization: Bearer ${FEEDER_KEY}" http://172.17.33.104:9000/api/v1/user/current
+unset FEEDER_KEY
+```
+
+La respuesta incluye el `login` del usuario feeder — verifica que esa cuenta no se toque.
+</Aside>
+
+## Claves API que debes registrar
+
+<Aside type="caution" title="Claves de servicios externos — no incluidas">
+Los backups **no incluyen** las claves API de servicios de terceros. Para que los analyzers correspondientes funcionen, cada organización debe registrarse y configurar sus propias claves en Cortex (**Organization → Analyzers → ⚙ del analyzer**):
+
+- **VirusTotal** (`VirusTotal_GetReport`, `VirusTotal_Scan`) — regístrate en [virustotal.com](https://www.virustotal.com/) y obtén tu API key. La cuenta gratuita es suficiente para uso docente (con límite de peticiones por minuto).
+- **AbuseIPDB** (`AbuseIPDB_1_0`) — regístrate en [abuseipdb.com](https://www.abuseipdb.com/) y obtén tu API key. También con nivel gratuito suficiente.
+
+Las claves **internas** del entorno (MISP ↔ TheHive/Cortex, Cortex ↔ TheHive, responder Velociraptor) vienen restauradas y funcionando; solo tendrás que regenerarlas si rotas credenciales, y en ese caso recuerda actualizarlas en todos los puntos indicados arriba.
+</Aside>
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Consola/`su` | `root` | `Root.TheHive` |
+| SSH | `lab` | `Lab.TheHive` |
+| TheHive web | `admin@thehive.local` | `secret` |
+| TheHive web | `analista1@thehive.local` | `analista1` |
+| TheHive web | `analista2@thehive.local` | `analista2` |
+| Cortex web | `sysadm` | *(contraseña de fábrica, nunca registrada — resetéala con la API, ver nota abajo)* |
+
+<Aside type="note" title="Resetear la contraseña de sysadm en Cortex">
+Cortex no trae una herramienta de línea de comandos para esto, pero su clave API sí es recuperable: Cortex usa un Elasticsearch **propio y local** en esta misma VM (`127.0.0.1:9200`, no el OpenSearch compartido del SOC), y el documento del usuario guarda su `key` en texto plano. Por SSH a la VM:
+
+```bash
+curl -s 'http://127.0.0.1:9200/cortex_*/_search?q=_id:sysadm&size=1' \
+  | grep -oP '(?<="key":")[^"]+'
+```
+
+No copies la clave obtenida a registros ni documentación: es un procedimiento de recuperación, no hay alternativa razonable a volcarla a la terminal, pero no debe quedar rastro más allá de ese momento.
+
+Con esa clave como token Bearer, usa el endpoint de reseteo:
+
+```bash
+curl -sS -H "Authorization: Bearer <clave_obtenida_arriba>" \
+  -H 'Content-Type: application/json' \
+  -X POST http://172.17.33.104:9001/api/user/sysadm/password/set \
+  -d '{"password":"<NUEVA_CONTRASEÑA>"}'
+```
+
+No es la misma clave que `<CLAVE_API_CORTEX>` de `application.conf` en TheHive: aquella pertenece a la organización configurada para el conector; esta es la propia de `sysadm`.
+</Aside>
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia estas credenciales inmediatamente después de validar el despliegue.
+</Aside>
+
+## Recursos adicionales
+
+- [Crear organizaciones en TheHive](https://docs.strangebee.com/thehive/administration/organizations/create-an-organization/)
+- [Crear usuarios en TheHive](https://docs.strangebee.com/thehive/user-guides/organization/configure-organization/manage-user-accounts/create-a-user-account/)
+
+## Siguiente paso
+
+Continúa con [Grafana](/docs/despliegue/restauracion/grafana/).

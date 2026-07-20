@@ -1,0 +1,151 @@
+---
+title: Restauración de las VMs
+description: Inventario de las VMs del entorno, procedimiento qmrestore y orden recomendado de restauración.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import proxmoxVmHardware from '../../../../assets/despliegue/proxmox-vm-hardware.png';
+
+Con los backups verificados y las redes creadas, se restauran las VMs una a una. **Ninguna se arranca en esta fase**: restaurar, revisar y dejar apagada.
+
+## Inventario y numeración de las VMs
+
+El entorno usa una numeración por bloques funcionales. Es la recomendada; si un VMID está ocupado en tu Proxmox, no lo sobrescribas — usa otro libre y anota la equivalencia.
+
+| VMID | VM | Función |
+| --- | --- | --- |
+| 100 | `opnsense` | Firewall, routing, NAT y VPN WireGuard |
+| 101 | `opensearch` | Backend de datos (índices de Graylog y Wazuh) |
+| 102 | `graylog` | Gestión de logs y alertas |
+| 103 | `wazuh-velociraptor` | SIEM/EDR y DFIR |
+| 104 | `malcolm` | Análisis de tráfico de red |
+| 105 | `misp` | Threat intelligence |
+| 106 | `thehive-cortex` | Gestión de incidentes y análisis de observables |
+| 108 | `grafana` | Visualización y dashboards |
+| 109 | `fwlab` | Firewall interno del laboratorio (segundo OPNsense, une `vul0`/`vul1`/`vul2`) |
+| 200–209 | Gestión y administración (`passbolt-admin`…) | |
+| 210–219 | Operación, ataque, talleres y PoC (`scripts`, `runbook`…) | |
+| 300–399 | Laboratorio vulnerable, honeypots y deception (`tpot`, máquinas vulnerables…) | |
+
+El criterio de ordenación: firewall primero, backend de datos antes que sus consumidores, y visualización al final.
+
+<Aside type="note">
+El inventario exacto de VMs puede variar. Restaura solo las que aparezcan en la página de [descargas](/docs/despliegue/restauracion/descargas/) o las que necesites para tu caso.
+</Aside>
+
+## Procedimiento por VM
+
+Para cada máquina:
+
+**1. Verifica el backup contra el manifiesto:**
+
+```bash
+cd <DESTINO_STAGING>
+grep '<BACKUP>.vma.zst' SHA256SUMS | sha256sum -c -
+```
+
+Debe devolver `OK`. Si devuelve `FAILED`, vuelve a copiar el fichero; si el `grep` no encuentra la entrada, revisa el nombre.
+
+**2. Confirma que el VMID está libre:**
+
+```bash
+qm status <VMID>
+```
+
+El resultado debe indicar que la VM no existe.
+
+**3. Restaura la VM (queda apagada):**
+
+```bash
+qmrestore <DESTINO_STAGING>/<BACKUP>.vma.zst <VMID> --storage <DESTINO_STORAGE_VM>
+```
+
+`<DESTINO_STORAGE_VM>` es el storage donde irán los discos de la VM: su nombre aparece en la columna `Name` de `pvesm status` (habitualmente `local-lvm`).
+
+<Aside type="note" title="Siempre desde disco">
+Restaura siempre desde el fichero ya copiado y verificado en el staging: `qmrestore` no procesa bien un `.vma.zst` recibido por stdin/streaming y puede dejar una VM con configuración vacía sin dar un error claro.
+</Aside>
+
+**4. Desactiva el arranque automático:**
+
+```bash
+qm set <VMID> --onboot 0
+```
+
+Esto evita que una VM a medio validar arranque sola si el host se reinicia. Es especialmente importante para OPNsense y para cualquier servicio que pueda duplicar IPs o rutas.
+
+**5. Revisa la configuración restaurada:**
+
+```bash
+qm config <VMID>
+```
+
+Presta atención a: nombre, discos, memoria, CPU, interfaces de red, `onboot` y orden de arranque.
+
+También puedes revisarlo desde la interfaz: selecciona la VM → **Hardware** → comprueba las interfaces de red.
+
+<figure class="screenshot">
+  <Image src={proxmoxVmHardware} alt="Vista Hardware de una VM en Proxmox mostrando sus interfaces de red" />
+  <figcaption>Verificación de las interfaces de red de una VM restaurada.</figcaption>
+</figure>
+
+**6. Confirma que la VM sigue apagada:**
+
+```bash
+qm status <VMID>
+```
+
+**7. Libera espacio del staging:**
+
+```bash
+rm <DESTINO_STAGING>/<BACKUP>.vma.zst
+```
+
+Antes de borrar, confirma los pasos 5 y 6 —`qm config` coherente y VM apagada— y que no vas a necesitar el fichero para un reintento inmediato.
+
+**8. Pasa a la siguiente VM.**
+
+## Orden recomendado de restauración
+
+1. `100 opnsense`
+2. VMs de infraestructura SOC: `101 opensearch`, `102 graylog`, `103 wazuh-velociraptor`, `104 malcolm`, `105 misp`, `106 thehive-cortex`, `108 grafana`
+3. `109 fwlab`, el firewall interno del laboratorio
+4. VMs auxiliares y de laboratorio: agentes Wazuh, máquinas vulnerables, `tpot`, etc.
+
+## Comprobaciones antes de arrancar
+
+Antes de arrancar cualquier VM:
+
+```bash
+qm list
+qm config <VMID>
+```
+
+Comprueba que todas las NICs apuntan a bridges existentes (`prod0`, `dmz0`, `log0`, `vul0`, `vul1`, `vul2`, `attack0`, y `vmbr0` para la WAN de OPNsense).
+
+<Aside type="caution" title="ISOs heredadas">
+Si alguna VM conserva una referencia a una ISO de instalación que no existe en tu Proxmox y el disco del sistema es el primer dispositivo de arranque, vacía la unidad óptica antes de arrancar:
+
+```bash
+qm set <VMID> --ide2 none,media=cdrom
+```
+</Aside>
+
+## Rollback de una restauración fallida
+
+Si una VM se restauró mal y **no se ha llegado a arrancar**:
+
+```bash
+qm destroy <VMID> --purge
+```
+
+Úsalo solo tras confirmar que se trata de una restauración fallida y que el backup original verificado sigue disponible para repetir el proceso.
+
+## Siguiente paso
+
+Con todas las VMs restauradas y apagadas, comienza la validación servicio a servicio empezando por [OpenSearch](/docs/despliegue/restauracion/opensearch/), el backend de datos del que dependen los demás.
+
+Los servicios arrancan con las **credenciales por defecto** documentadas en la página de cada herramienta, para que puedas validar el despliegue — cámbialas inmediatamente después: un laboratorio de ciberseguridad con credenciales por defecto es, irónicamente, lo primero que vulnerará tu alumnado.

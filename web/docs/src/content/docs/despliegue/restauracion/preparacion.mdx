@@ -1,0 +1,96 @@
+---
+title: Preparación del Proxmox destino
+description: Verificación de los backups y creación de las redes SOCIA antes de restaurar.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import proxmoxNetworkCreate from '../../../../assets/despliegue/proxmox-network-create.png';
+
+Antes de ejecutar el primer `qmrestore`, el servidor destino debe tener los backups verificados y las redes internas creadas.
+
+## Datos que debes definir antes de empezar
+
+Completa estos valores y mantenlos a mano durante todo el proceso:
+
+```text
+DESTINO_HOST=<hostname destino>
+DESTINO_IP=<ip destino accesible>
+DESTINO_STORAGE_VM=<storage destino para discos VM>
+DESTINO_STAGING=<ruta temporal para backups>
+PAQUETE_BACKUPS=<ruta del medio, NAS o descarga recibida>
+MANIFIESTO_SHA256=<ruta del fichero SHA256SUMS>
+```
+
+Ejemplo de valores habituales:
+
+```text
+DESTINO_STORAGE_VM=local-lvm
+DESTINO_STAGING=/socia/restore-backups/dump
+PAQUETE_BACKUPS=/mnt/usb/socia
+MANIFIESTO_SHA256=/mnt/usb/socia/SHA256SUMS
+```
+
+## Copia y verificación de los backups
+
+Copia los backups descargados a la ruta de staging — créala antes si no existe (`mkdir -p <DESTINO_STAGING>`):
+
+```bash
+cp <PAQUETE_BACKUPS>/*.vma.zst <DESTINO_STAGING>/
+cp <MANIFIESTO_SHA256> <DESTINO_STAGING>/SHA256SUMS
+```
+
+Si los backups te llegan por red desde otro servidor, copia directamente al staging:
+
+```bash
+rsync -avh --progress root@<SERVIDOR_ORIGEN>:<RUTA_BACKUPS>/ <DESTINO_STAGING>/
+```
+
+(`rsync` es preferible a `scp` con ficheros de decenas de GB: si la transferencia se corta, la reanuda en lugar de empezar de cero.)
+
+Verifica todos los ficheros **antes** de restaurar nada. El manifiesto `SHA256SUMS` contiene el hash calculado en origen de cada backup, una línea por fichero:
+
+```text
+7d166226e278a881edfb2c378cb67296f2a4f2f011d54f678b4af1ed22e76d4d  vzdump-qemu-100-....vma.zst
+5393d5ce211f4e23d2227bbcc55d4fa28375a46997d359dbf572b025e56d0928  vzdump-qemu-109-....vma.zst
+```
+
+El siguiente comando recalcula el hash de cada fichero de tu staging y lo compara con el del manifiesto, detectando cualquier corrupción durante la transferencia (copia interrumpida, disco defectuoso…):
+
+```bash
+cd <DESTINO_STAGING>
+sha256sum -c SHA256SUMS
+```
+
+Todos los ficheros deben devolver `OK`. Si alguno devuelve `FAILED`, vuelve a copiarlo.
+
+<Aside type="tip" title="Staging con poco espacio">
+La ruta de staging no tiene por qué ser almacenamiento definitivo. Si el espacio es limitado, trabaja por tandas: copia un backup, restáuralo, bórralo y pasa al siguiente.
+</Aside>
+
+## Redes destino
+
+Las redes SOCIA se crean como **OVS Bridge, sin IP y sin puertos físicos**. El firewall OPNsense será quien enrute el tráfico entre ellas cuando arranque.
+
+Se crean desde la interfaz de Proxmox, una a una, seleccionando el nodo y después **Network → Create → OVS Bridge**. Es el tipo usado en el entorno probado; Linux Bridge debería funcionar, pero no está validado:
+
+<figure class="screenshot">
+  <Image src={proxmoxNetworkCreate} alt="Creación de una red en Proxmox desde el nodo, sección Network" />
+  <figcaption>Creación de redes: nodo → Network → Create.</figcaption>
+</figure>
+
+Las redes a crear, con la subred que enrutará OPNsense en cada una y su papel en el laboratorio:
+
+| Red | Subred | Propósito |
+| --- | --- | --- |
+| `prod0` | 172.17.33.0/24 | Producción interna. Aloja los servicios principales del SOC. |
+| `dmz0` | 172.17.34.0/24 | Zona desmilitarizada. Servicios expuestos (T-Pot). |
+| `log0` | 172.19.1.0/24 | Red de logging: telemetría de las VMs del SOC. |
+| `vul0` | 172.18.1.0/24 | Sniffing y tránsito. |
+| `vul1` | 172.18.2.0/24 | Laboratorio: máquinas vulnerables. |
+| `vul2` | 172.18.3.0/24 | Laboratorio: máquinas vulnerables. |
+| `attack0` | 172.31.0.0/24 | Red atacante. Máquinas desde las que se lanzan ataques controlados. |
+
+La **WAN** de OPNsense no es una de estas redes internas: se conecta al bridge físico del propio Proxmox (habitualmente `vmbr0`), que es el que da salida a Internet o a la red del centro. Ese bridge ya existe; no hay que crearlo.

@@ -40,3 +40,7 @@ apps/server/data/
 
 # local scratch
 .scratch/
+
+# Documentación de trabajo interna — NO subir al repo público (bitácoras con datos operativos)
+Documentación SOCIA/
+Documentacio*n SOCIA/

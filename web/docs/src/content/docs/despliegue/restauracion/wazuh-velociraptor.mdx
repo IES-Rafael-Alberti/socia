@@ -1,0 +1,203 @@
+---
+title: Wazuh y Velociraptor
+description: Arranque, validación y configuración de referencia de la VM Wazuh + Velociraptor del entorno SOCIA.
+sidebar:
+  order: 6
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import wazuhAgentControl from '../../../../assets/despliegue/wazuh-agent-control.png';
+
+Esta VM aloja dos servicios: el **Wazuh Manager** (SIEM/EDR — recibe los eventos de los agentes, aplica reglas de detección y reenvía las alertas vía Filebeat/Kafka a Graylog, que las indexa en OpenSearch) y el **servidor Velociraptor** (DFIR — respuesta a incidentes sobre los endpoints).
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `103 · wazuh-velociraptor` |
+| Redes | `prod0` + `log0` |
+| IP (`prod0`) | `172.17.33.101` |
+| Acceso | Velociraptor GUI: `https://172.17.33.101:8000/` |
+| Otros puertos | Wazuh `1514` (eventos), `1515` (enrolamiento), `55000` (API) |
+| Versión probada | Wazuh 4.10.3 · Velociraptor 0.73.3 |
+| Depende de | OpenSearch en `green`; Graylog arrancado con el input `Wazuh` en `RUNNING` |
+
+Wazuh no expone interfaz web en este despliegue: el manager se administra por SSH y sus eventos se consultan en Graylog y Grafana. La única interfaz gráfica de la VM es la de Velociraptor.
+
+## Arranque
+
+```bash
+qm start 103
+qm status 103
+ping -c 3 172.17.33.101
+```
+
+## Validación
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+### Servicios
+
+```bash
+rpm -q wazuh-manager filebeat
+systemctl is-active wazuh-manager
+systemctl is-active filebeat
+systemctl is-active velociraptor_server
+```
+
+### Componentes y agentes de Wazuh
+
+```bash
+sudo /var/ossec/bin/wazuh-control status
+sudo /var/ossec/bin/agent_control -l
+```
+
+<Aside type="note">
+Los agentes cuyas VMs sigan apagadas aparecerán como `Disconnected`. Eso no indica un fallo del manager.
+</Aside>
+
+### Reglas personalizadas
+
+```bash
+sudo grep -nE 'rule id="100100"|rule id="100101"' /var/ossec/etc/rules/local_rules.xml
+sudo /var/ossec/bin/wazuh-analysisd -t
+```
+
+El segundo comando debe terminar con código `0`.
+
+### Filebeat (salida hacia Kafka/Graylog)
+
+```bash
+sudo filebeat test output
+```
+
+El parseo de host, la resolución DNS y la conexión deben devolver `OK`.
+
+### Velociraptor
+
+```bash
+velociraptor version
+systemctl status velociraptor_server
+sudo test -s /root/Velociraptor/config/client.config.yaml
+sudo stat /root/Velociraptor/config/client.config.yaml
+```
+
+El fichero `client.config.yaml` debe existir, no estar vacío y tener permisos restrictivos. **No muestres ni copies su contenido** en registros ni documentación: contiene el material criptográfico de enrolamiento de clientes.
+
+### Errores de arranque
+
+Aunque los tres servicios figuren activos, revisa si han registrado errores desde el arranque:
+
+```bash
+sudo journalctl -b -u wazuh-manager -u filebeat -u velociraptor_server -p err --no-pager
+```
+
+La salida debe estar vacía. Si aparecen errores, investígalos antes de dar la VM por validada.
+
+### Flujo extremo a extremo
+
+Por último, confirma que un evento recorre la cadena completa Wazuh → Filebeat → Graylog → OpenSearch. Para provocar uno no necesitas agentes de laboratorio: el manager se monitoriza a sí mismo, así que basta un login SSH fallido contra la propia VM. Desde otra máquina:
+
+```bash
+ssh usuario-inexistente@172.17.33.101
+```
+
+(escribe una contraseña cualquiera y falla el login un par de veces).
+
+Después comprueba cada eslabón:
+
+1. En Graylog, busca el evento en el stream de Wazuh (aparecerá como `authentication_failed` en pocos segundos).
+2. Confirma que el input Wazuh sigue en `RUNNING`.
+3. En OpenSearch, verifica que el contador de documentos del índice Wazuh activo ha aumentado y que el clúster sigue en `green`:
+
+```bash
+curl -sS 'http://172.17.33.113:9200/_cat/indices/wazuh*?v&h=index,docs.count'
+```
+
+## Configuración aplicada
+
+Wazuh incluye un amplio conjunto de reglas de detección de serie; sobre ellas, el entorno SOCIA añade algunas **reglas personalizadas** propias del laboratorio (ya vienen aplicadas en el backup; se recogen para poder verificarlas o reconstruirlas). Se encuentran al final de `/var/ossec/etc/rules/local_rules.xml`, que es también el sitio donde ampliar la detección propia. Como ejemplo, estas dos detectan intentos de fuerza bruta:
+
+```xml
+<!-- Brute Force -->
+<group name="authentication,brute_force,">
+        <!-- Brute force grouping for different protocols (ssh, ftp, etc.) -->
+        <rule id="100100" level="10" frequency="8" timeframe="120">
+                <if_matched_group>authentication_failed</if_matched_group>
+                <same_source_ip/>
+                <description>Brute Force detected from $(srcip) via $(program_name)</description>
+                <group>brute_force,</group>
+                <options>no_full_log</options>
+        </rule>
+
+        <!-- Persistent Brute Force -->
+        <rule id="100101" level="15" frequency="8" timeframe="600">
+                <if_matched_group>brute_force</if_matched_group>
+                <same_source_ip/>
+                <description>Persistent Brute Force from $(srcip) via $(program_name)</description>
+                <group>brute_force,brute_force_persistent,</group>
+                <options>no_full_log</options>
+        </rule>
+</group>
+```
+
+La regla `100101` (nivel 15) es una de las que dispara el escalado automático a TheHive vía Graylog (`rule_level:[10 TO 15]`).
+
+## Incorporar máquinas al laboratorio
+
+Cuando añadas nuevas VMs al laboratorio (máquinas vulnerables, equipos a monitorizar…), incorpóralas a la telemetría del SOC instalando en ellas el agente Wazuh y el cliente Velociraptor.
+
+### Agente Wazuh
+
+Para instalar el agente en nuevas máquinas Linux, sigue la [documentación oficial de Wazuh](https://documentation.wazuh.com/4.10/installation-guide/wazuh-agent/wazuh-agent-package-linux.html).
+
+<Aside type="caution">
+La versión de los agentes debe corresponderse con la del Wazuh Manager (4.10.3) para garantizar el correcto funcionamiento.
+</Aside>
+
+Tras instalarlo, comprueba que la nueva máquina aparece registrada en el manager:
+
+```bash
+/var/ossec/bin/agent_control -l
+```
+
+<figure class="screenshot">
+  <Image src={wazuhAgentControl} alt="Salida de agent_control -l con el listado de agentes Wazuh registrados" />
+  <figcaption>Listado de agentes registrados en el manager.</figcaption>
+</figure>
+
+### Cliente Velociraptor
+
+Para conectar nuevos clientes al servidor Velociraptor se usa el fichero `/root/Velociraptor/config/client.config.yaml`, que debe distribuirse a cada máquina que se quiera incorporar. En Linux:
+
+```bash
+wget https://github.com/Velocidex/velociraptor/releases/download/v0.73/velociraptor-v0.73.3-linux-amd64
+chmod +x velociraptor-v0.73.3-linux-amd64
+./velociraptor-v0.73.3-linux-amd64 --config client.config.yaml debian client
+sudo dpkg -i velociraptor_client_*.deb
+systemctl status velociraptor_client
+```
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Consola/`su` | `root` | `Root.Wazuh` |
+| SSH | `lab` | `Lab.Wazuh` |
+| API Wazuh (55000) | `wazuh` | `Wazuh.WazuhApi1!` |
+| API Wazuh (55000) | `wazuh-wui` | `WazuhWui.WazuhApi1!` |
+| Velociraptor GUI (8000) | `admin` | `Admin.Velociraptor` |
+| Velociraptor GUI (8000) | `analista` | `Analista.Velociraptor` |
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia estas credenciales inmediatamente después de validar el despliegue.
+</Aside>
+
+<Aside type="danger" title="La contraseña de wazuh-wui está embebida en Grafana">
+La cuenta de la API de Wazuh **`wazuh-wui`** no solo se usa para acceder a la API — su contraseña también está guardada dentro del datasource **`wazuh-authentication`** de Grafana (Connections → Data sources), que la usa para autenticar sus consultas contra `https://172.17.33.101:55000`.
+
+Si cambias la contraseña de `wazuh-wui` en esta máquina, **debes actualizarla también en ese datasource de Grafana**, o el panel dejará de recibir datos (error `401 Unauthorized`). Verifica con `/api/datasources/uid/<uid>/health` desde Grafana tras el cambio.
+</Aside>
+
+## Siguiente paso
+
+Continúa con [Malcolm](/docs/despliegue/restauracion/malcolm/), el analizador de tráfico de red.

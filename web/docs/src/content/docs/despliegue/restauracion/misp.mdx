@@ -1,0 +1,134 @@
+---
+title: MISP
+description: Arranque, validación y gestión de la clave API de MISP en el entorno SOCIA.
+sidebar:
+  order: 8
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import mispApiKey from '../../../../assets/despliegue/misp-api-key.png';
+
+MISP es la plataforma de threat intelligence del entorno. TheHive y Cortex la consultan para enriquecer casos y observables con indicadores de compromiso.
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `105 · misp` |
+| Redes | `prod0` |
+| IP (`prod0`) | `172.17.33.145` |
+| Acceso | `https://172.17.33.145/users/login` |
+| Versión probada | MISP 2.5.22 |
+| Depende de | — (servicio autónomo) |
+
+## Arranque
+
+```bash
+qm start 105
+qm status 105
+ping -c 3 172.17.33.145
+nc -zvw3 172.17.33.145 22
+nc -zvw3 172.17.33.145 80
+nc -zvw3 172.17.33.145 443
+curl -k -I http://172.17.33.145/
+curl -k -I https://172.17.33.145/
+```
+
+Resultados esperados:
+
+- HTTP redirige a HTTPS (la cabecera muestra `Location: https://misp.local`; ver nota abajo sobre ese nombre);
+- HTTPS redirige a `/users/login`;
+- MariaDB (`3306/tcp`) **no** se publica hacia la red.
+
+<Aside type="note" title="Nota">
+El acceso por `http://` redirige a `https://misp.local`, un nombre que tu equipo no sabrá resolver. No hace falta para nada si entras siempre por `https://` con la IP; si quieres que también funcione el acceso por nombre, añade `172.17.33.145  misp.local` a tu fichero `hosts` o DNS interno. No cambies el hostname de MISP solo para superar una prueba.
+</Aside>
+
+## Validación interna por SSH
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+```bash
+cat /var/www/MISP/VERSION.json
+systemctl is-active apache2
+systemctl is-active mariadb
+systemctl is-active redis-server
+systemctl is-active supervisor
+free -h
+df -h /
+ss -lnt | grep -E ':80 |:443 |:3306 |:6379 '
+```
+
+Comprueba que la versión coincide con la documentada, que los cuatro servicios están activos y que MariaDB y Redis escuchan solo en localhost.
+
+Workers (gestionados por Supervisor):
+
+```bash
+sudo supervisorctl status
+```
+
+Deben existir workers de las colas `default`, `email`, `cache`, `prio` y `update`. No busques una unidad `misp-workers.service`: en este despliegue los workers se gestionan mediante Supervisor.
+
+## Validación web
+
+Abre `https://172.17.33.145/users/login` y, tras autenticarte:
+
+1. Confirma que la versión mostrada coincide.
+2. Abre **Administration → Server Settings & Maintenance** y revisa diagnósticos y workers.
+3. Confirma que no hay errores críticos de base de datos, Redis, permisos o workers.
+4. Abre **Administration → Jobs** y revisa trabajos bloqueados o fallidos.
+
+No cambies ajustes durante la validación salvo incidencia demostrada y documentada.
+
+## Clave API
+
+La clave API de MISP es la que usan el conector MISP de TheHive y el analyzer `MISP_2_1` de Cortex.
+
+<Aside type="note" title="Al restaurar de backup">
+La clave restaurada sigue siendo válida y es la que TheHive/Cortex tienen configurada. **No generes una nueva** salvo que el conector no pueda recuperarse con la existente — si la regeneras, tendrás que actualizarla en TheHive y Cortex.
+</Aside>
+
+Para consultar o crear una clave: **Administration → My Profile → Add authentication key**.
+
+<figure class="screenshot">
+  <Image src={mispApiKey} alt="Creación de una clave de autenticación API desde el perfil de administrador de MISP" />
+  <figcaption>Admin → My Profile → Add authentication key.</figcaption>
+</figure>
+
+Si necesitas probarla desde consola, evita que quede en el historial:
+
+```bash
+read -s MISP_API_KEY
+curl -k -sS \
+  -H "Authorization: ${MISP_API_KEY}" \
+  -H 'Accept: application/json' \
+  https://172.17.33.145/servers/getVersion.json
+unset MISP_API_KEY
+```
+
+Debe devolver la versión de MISP. No copies la clave ni la respuesta completa a ningún registro o documentación.
+
+## Integración con TheHive/Cortex
+
+Cuando TheHive/Cortex esté arrancado:
+
+1. Confirma que el conector MISP usa la URL correcta.
+2. Confirma estado `OK`.
+3. Ejecuta una consulta controlada de un indicador no sensible.
+4. Verifica que MISP registra la petición sin error.
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Consola/`su` | `root` | `Root.Misp` |
+| SSH | `lab` | `Lab.Misp` |
+| Web (`/users/login`) | `admin@admin.test` | `Admin.Misp2026!!` |
+| Web (`/users/login`) | `org_admin@admin.test` | `OrgAdmin.Misp2026!!` |
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia estas credenciales inmediatamente después de validar el despliegue. Las contraseñas web llevan un sufijo numérico y de símbolos porque la política de contraseñas de MISP exige 12+ caracteres con mayúscula, minúscula y dígito o símbolo (o 16+ caracteres); el patrón `Usuario.Servicio` a secas no la cumple.
+</Aside>
+
+## Siguiente paso
+
+Continúa con [TheHive y Cortex](/docs/despliegue/restauracion/thehive-cortex/).

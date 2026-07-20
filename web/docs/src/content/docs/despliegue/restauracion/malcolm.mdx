@@ -1,0 +1,144 @@
+---
+title: Malcolm
+description: Arranque y validación de Malcolm, la plataforma de análisis de tráfico de red del entorno SOCIA.
+sidebar:
+  order: 7
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Malcolm es la plataforma de análisis de tráfico de red: agrupa Zeek, Suricata, Arkime, OpenSearch Dashboards y CyberChef tras un único frontal HTTPS. Captura tráfico de las redes de laboratorio (`vul0`) y permite el análisis forense de PCAP.
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `104 · malcolm` |
+| Redes | `prod0` + `log0` + `vul0` (captura) |
+| IP (`prod0`) | `172.17.33.103` |
+| Acceso | `https://172.17.33.103/` (autenticación básica) |
+| Versión probada | Malcolm 25.09.0 |
+| Depende de | — (usa su propio OpenSearch interno, no la VM `101 · opensearch`) |
+
+## Arranque
+
+```bash
+qm start 104
+qm status 104
+```
+
+<Aside type="note" title="Paciencia con la inicialización">
+Malcolm inicializa numerosos contenedores e índices. Espera **al menos 5 minutos** antes de diagnosticar un fallo; en servidores lentos puede necesitar 10–15. Durante el arranque puede observarse que el puerto 443 acepta TCP pero el handshake TLS no completa: es normal hasta que terminan de levantar los contenedores. En una intervención real la VM leyó ~45 GB del disco durante la inicialización.
+</Aside>
+
+Puedes comprobar que la inicialización avanza desde Proxmox:
+
+```bash
+qm status 104 --verbose | \
+  grep -E '^(status|uptime|mem:|freemem:|diskread:|diskwrite:|netin:|netout:)'
+```
+
+Lecturas y escrituras crecientes indican que sigue arrancando.
+
+## Validación
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+### Red y HTTPS
+
+```bash
+ping -c 3 172.17.33.103
+nc -zvw3 172.17.33.103 22
+nc -zvw3 172.17.33.103 443
+curl -k -I --connect-timeout 15 --max-time 30 https://172.17.33.103/
+```
+
+Resultados esperados: ICMP responde, `443/tcp` abierto y HTTPS sin credenciales devuelve `401 Unauthorized` con `WWW-Authenticate: Basic`. Los puertos internos (80, 5601, 8000, 8080, 9200, 9600) **no** deben estar publicados directamente.
+
+### Acceso web
+
+Abre `https://172.17.33.103/` y autentícate con las credenciales web. La página inicial debe mostrar: Dashboards, Arkime, CyberChef, PCAP Upload, documentación, gestión de autenticación, archivos extraídos y Malcolm API.
+
+Si usas `curl`, no pongas la contraseña en la línea de comandos (quedaría en el historial):
+
+```bash
+curl -k -u <USUARIO_WEB> https://172.17.33.103/
+```
+
+### Estado de componentes
+
+```text
+https://172.17.33.103/mapi/ready
+```
+
+En el perfil SOCIA deben aparecer en `true`:
+
+```text
+arkime, dashboards, dashboards_maps, freq, logstash_lumberjack,
+opensearch, pcap_monitor, zeek_extracted_file_logger,
+zeek_extracted_file_monitor
+```
+
+El `opensearch` de esta lista es el interno de Malcolm (parte de su propio stack docker-compose), no la VM `101 · opensearch` independiente del SOC — son dos instancias distintas, no confundir una con otra.
+
+Pueden aparecer sin habilitar (`false`) y es correcto: `filebeat_tcp`, `logstash_pipelines`, `netbox`. No los actives automáticamente; son componentes opcionales.
+
+### Interfaces web
+
+Comprueba una a una (todas deben acabar en HTTP `200` tras sus redirecciones):
+
+```text
+https://172.17.33.103/dashboards/
+https://172.17.33.103/arkime/
+https://172.17.33.103/upload/
+https://172.17.33.103/extracted-files/
+```
+
+### Revisión interna por SSH
+
+Conéctate por SSH (credenciales al final de la página) y revisa:
+
+```bash
+free -h
+df -h
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+```
+
+El proyecto Compose vive en `/opt/malcolm`; entra ahí para revisar el estado de los contenedores:
+
+```bash
+cd /opt/malcolm
+docker compose ps
+docker compose ps --status exited
+docker compose ps --status restarting
+docker ps --filter health=unhealthy --format 'table {{.Names}}\t{{.Status}}'
+```
+
+No debe haber contenedores esenciales en `exited`, `restarting` o `unhealthy`. Para un contenedor con fallo, registra el error antes de reiniciar nada:
+
+```bash
+docker logs --since 15m --tail 200 <CONTENEDOR>
+```
+
+### Prueba PCAP extremo a extremo
+
+1. Consigue un PCAP de prueba **sin información sensible** — por ejemplo, cualquiera de las [capturas de ejemplo de Wireshark](https://wiki.wireshark.org/SampleCaptures).
+2. Súbelo desde `https://172.17.33.103/upload/`.
+3. Consulta `https://172.17.33.103/mapi/ingest-stats` y confirma que `latest_ingest_age_seconds` se reduce.
+4. Abre `https://172.17.33.103/arkime/sessions`, filtra por el intervalo de la carga y confirma que aparecen sesiones.
+5. Abre Dashboards y confirma que aparecen eventos Zeek/Suricata asociados.
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Consola/`su` | `root` | `Root.Malcolm` |
+| SSH | `lab` | `Lab.Malcolm` |
+| Interfaz web | `sysadm` | `Sysadm.Malcolm` |
+| Interfaz web | `analista` | `Analista.Malcolm` |
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia estas credenciales inmediatamente después de validar el despliegue. La gestión de autenticación web de Malcolm está disponible desde su página inicial.
+</Aside>
+
+## Siguiente paso
+
+Continúa con [MISP](/docs/despliegue/restauracion/misp/), la plataforma de threat intelligence.

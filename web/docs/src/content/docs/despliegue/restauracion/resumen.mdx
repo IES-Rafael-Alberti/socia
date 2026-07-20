@@ -1,0 +1,22 @@
+---
+title: Resumen
+description: Formas de desplegar el laboratorio SOCIA en una infraestructura propia.
+sidebar:
+  order: 1
+---
+
+El entorno SOCIA es un laboratorio completo de entrenamiento SOC: firewall OPNsense, stack de detección y respuesta (Wazuh, Graylog, OpenSearch, Malcolm, MISP, TheHive/Cortex, Velociraptor, Grafana), redes segmentadas de laboratorio y máquinas vulnerables. Esta sección documenta cómo levantar esa infraestructura.
+
+## Formas de desplegar el entorno
+
+| Método | Estado | Descripción |
+| --- | --- | --- |
+| [Restauración de backups](/docs/despliegue/restauracion/introduccion/) | ✅ Disponible | Restauración de las máquinas virtuales completas del entorno en un servidor Proxmox a partir de sus backups. Es el método probado y documentado actualmente. |
+| [Despliegue automatizado](/docs/despliegue/automatizado/) | 🚧 En desarrollo | Contenerización de los servicios (Docker) y, más adelante, despliegue como infraestructura como código. |
+
+Cada método define sus propios requisitos de hardware y software, que encontrarás en su documentación.
+
+## Por dónde empezar
+
+1. Revisa la [arquitectura](/docs/despliegue/arquitectura/) del entorno para entender sus redes y servicios.
+2. Elige el método de despliegue y sigue su introducción — hoy, la [restauración de backups](/docs/despliegue/restauracion/introduccion/).

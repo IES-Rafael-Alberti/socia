@@ -1,0 +1,79 @@
+---
+title: Arquitectura
+description: Redes, segmentación y máquinas que componen el laboratorio SOCIA.
+sidebar:
+  order: 2
+---
+
+import { Image } from 'astro:assets';
+import arquitecturaRed from '../../../assets/despliegue/arquitectura-red.svg';
+
+El laboratorio se estructura en varias redes aisladas que un firewall **OPNsense** enruta y controla: una zona de producción donde se aloja el SOC, redes de laboratorio donde se practican ataque y defensa, y una DMZ con un honeypot. Las redes del laboratorio son bridges internos de Proxmox; solo vmbr0, la salida al exterior, es el bridge físico existente.
+
+<figure class="screenshot">
+  <Image src={arquitecturaRed} alt="Diagrama de red del laboratorio SOCIA: VPN e Internet hacia OPNsense, y desde él las redes attack0, vul0/vul1/vul2, prod0 con log0 y dmz0" />
+  <figcaption>Arquitectura de red de SOCIA.</figcaption>
+</figure>
+
+## Redes
+
+Cada red es un segmento aislado con un propósito. 
+
+| Red | Subred | Interfaz OPNsense | Propósito |
+| --- | --- | --- | --- |
+| `prod0` | 172.17.33.0/24 | LAN | Producción del SOC: aloja los servicios de detección y análisis. |
+| `log0` | 172.19.1.0/24 | — | Red de logging: segunda tarjeta de las VMs del SOC, por la que viaja la telemetría. |
+| `dmz0` | 172.17.34.0/24 | DMZ | Zona desmilitarizada: servicios expuestos, como el honeypot T-Pot. |
+| `vul0` | 172.18.1.0/24 | SNIF | Segmento de sniffing y tránsito: por él se comunican el firewall perimetral y `fwlab`, y es donde Malcolm captura el tráfico. |
+| `vul1` | 172.18.2.0/24 | — (tras `fwlab`) | Laboratorio: máquinas vulnerables y de práctica. |
+| `vul2` | 172.18.3.0/24 | — (tras `fwlab`) | Laboratorio: máquinas vulnerables y de práctica. |
+| `attack0` | 172.31.0.0/24 | ATTACK | Red atacante: desde aquí se lanzan los ataques controlados. |
+| `vmbr0` | según red física | WAN | Salida a Internet / red del centro (bridge físico de Proxmox, ya existente). |
+
+## Segmentación y control de tráfico
+
+La lógica del firewall convierte esas redes en un entorno donde se puede atacar sin riesgo:
+
+La **red atacante** (`attack0`) puede alcanzar los laboratorios y salir al exterior, pero **no admite conexiones entrantes desde el resto de redes del laboratorio (solo desde la VPN)** — así el atacante queda contenido.
+
+Las **redes de laboratorio** (`vul0`, `vul1`, `vul2`) las une un **segundo firewall OPNsense interno** (`fwlab`, con una interfaz en cada una), separado del perimetral. Las **máquinas vulnerables** —las que se atacan, defienden y monitorizan— está en `vul1` y `vul2`. `vul0` **no aloja objetivos**: es el segmento de sniffing y tránsito por el que pasan ambos firewalls (el perimetral y `fwlab`) y donde captura Malcolm. El firewall perimetral llega a `vul1` y `vul2` mediante rutas estáticas a través de `fwlab` (que en su configuración figura como el gateway `LABGW`, en `172.18.1.200`).
+
+La red de producción (prod0) aloja el SOC y solo es accesible desde dentro o vía VPN. La DMZ (dmz0) hospeda el honeypot T-Pot, expuesto al exterior a propósito para recibir ataques reales. Y la red de logging (log0) está dedicada a la telemetría: las VMs del SOC se conectan a ella con una segunda interfaz, para que los logs no compitan con el tráfico de servicio.
+
+## Acceso: la VPN WireGuard
+
+Alumnado y profesorado no entran por Internet a las máquinas: se conectan mediante una **VPN WireGuard** (red `10.0.3.0/24`, puerto UDP `8822`) que termina en OPNsense. Cada usuario tiene su propio peer, y las reglas del firewall determinan a qué redes puede llegar según su rol. Es la única vía de administración remota del entorno.
+
+## Máquinas
+
+### Producción — el SOC (`prod0` + `log0`)
+
+El corazón del laboratorio. Cada componente principal es una VM, todas con una segunda tarjeta en `log0`:
+
+| Servicio | Función |
+| --- | --- |
+| **OpenSearch** | Backend de almacenamiento e indexación de todos los eventos. |
+| **Graylog** (+ Kafka) | Gestión de logs: recibe, procesa y escala alertas críticas a TheHive. |
+| **Wazuh** + **Velociraptor** | SIEM/EDR (detección sobre endpoints) y DFIR (respuesta forense). |
+| **Malcolm** | Análisis de tráfico de red: Zeek, Suricata, Arkime. Captura de `vul0`. |
+| **MISP** | Threat intelligence: indicadores de compromiso. |
+| **TheHive** + **Cortex** | Gestión de incidentes y análisis automatizado de observables. |
+| **Grafana** | Visualización y cuadros de mando del SOC. |
+
+Un evento recorre la cadena de punta a punta: un agente Wazuh detecta algo en una máquina, el servidor Wazuh lo reenvía mediante Filebeat por Kafka a Graylog, que lo indexa en OpenSearch y, si es crítico, abre un caso en TheHive; desde ahí Cortex puede enriquecer el observable consultando MISP o servicios externos, y Grafana lo muestra en sus paneles.
+
+### Laboratorio (`vul0`, `vul1`, `vul2`)
+
+Las máquinas vulnerables y de práctica sobre las que trabaja el alumnado —objetivos a atacar, defender y monitorizar— se encuentran en `vul1` y `vul2`, detrás del firewall interno `fwlab`. Son segmentos abiertos: puedes añadir tantas máquinas como necesites. `vul0` queda como segmento de sniffing por el que pasa el tráfico y donde Malcolm lo captura.
+
+### Ataque (`attack0`)
+
+Las máquinas desde las que se generan los ataques controlados, junto con utilidades de operación como la VM de `scripts`.
+
+### DMZ (`dmz0`)
+
+El honeypot **T-Pot**, expuesto al exterior mediante NAT para capturar ataques reales y alimentar el laboratorio con tráfico auténtico.
+
+## Siguiente paso
+
+Para levantar esta arquitectura en tu propio servidor, sigue la [restauración de backups](/docs/despliegue/restauracion/introduccion/).

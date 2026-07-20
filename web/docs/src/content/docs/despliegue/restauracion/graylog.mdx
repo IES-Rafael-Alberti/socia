@@ -1,0 +1,179 @@
+---
+title: Graylog
+description: Arranque, validación y configuración de referencia de Graylog en el entorno SOCIA.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import graylogInputOpnsense from '../../../../assets/despliegue/graylog-input-opnsense.png';
+import graylogInputWazuh from '../../../../assets/despliegue/graylog-input-wazuh.png';
+import graylogIndexsetThehive from '../../../../assets/despliegue/graylog-indexset-thehive.png';
+import graylogIndexsetOpnsense from '../../../../assets/despliegue/graylog-indexset-opnsense.png';
+import graylogIndexsetWazuh from '../../../../assets/despliegue/graylog-indexset-wazuh.png';
+import graylogStreams from '../../../../assets/despliegue/graylog-streams.png';
+import graylogNotifications from '../../../../assets/despliegue/graylog-notifications.png';
+import graylogEventDefinition from '../../../../assets/despliegue/graylog-event-definition.png';
+import graylogEventDetails from '../../../../assets/despliegue/graylog-event-details.png';
+import graylogFilterAggregation from '../../../../assets/despliegue/graylog-filter-aggregation.png';
+import graylogCustomFields from '../../../../assets/despliegue/graylog-custom-fields.png';
+import graylogEventNotifications from '../../../../assets/despliegue/graylog-event-notifications.png';
+
+Graylog centraliza los logs del entorno: recibe los eventos de los firewalls OPNsense y del Wazuh Manager (vía Kafka), los indexa en OpenSearch y escala las alertas críticas a TheHive.
+
+| Parámetro | Valor |
+| --- | --- |
+| VM | `102 · graylog` |
+| Redes | `prod0` + `log0` |
+| IP (`prod0`) | `172.17.33.153` |
+| Acceso | `http://172.17.33.153:9000/` |
+| Otros puertos | Kafka `9092` (broker, sin interfaz web) |
+| Versión probada | Graylog 6.3.4-1 |
+| Depende de | OpenSearch arrancado y en `green` |
+
+## Arranque
+
+```bash
+qm start 102
+qm status 102
+```
+
+## Validación
+
+No basta con que la VM figure como `running` en Proxmox: estas comprobaciones confirman que el componente funciona correctamente y se comunica con el resto del entorno.
+
+Dentro de la VM:
+
+```bash
+systemctl status graylog-server
+ss -lntup
+curl -I http://172.17.33.153:9000/
+```
+
+Desde la interfaz web o la API, verifica:
+
+- el nodo aparece `running`, `alive` y procesando mensajes;
+- los inputs `OPNSense` y `Wazuh` están en estado `RUNNING`;
+- existen los index sets `TheHive`, `OPNSense FW` y `wazuh_all`;
+- los streams están habilitados;
+- existe la definición de evento `graylog2thehive - CRITICAL`;
+- existen las notificaciones `Kafka graylog-alerts` y `Thehive`;
+- hay un índice activo creado en OpenSearch;
+- no hay fallos de indexación **nuevos** (no confundas fallos históricos conservados por el backup con fallos posteriores al arranque: compara las marcas de tiempo).
+
+La validación de las notificaciones hacia TheHive queda pendiente hasta que TheHive esté arrancado.
+
+## Configuración aplicada
+
+La configuración siguiente **ya viene aplicada en el backup**. Úsala para verificar el estado restaurado o para reconstruirla si fuera necesario.
+
+### Inputs
+
+Dos inputs configurados en **System → Inputs**:
+
+- `OPNSense`: recibe los logs de los dos firewalls OPNsense — el perimetral (WAN) y el de los laboratorios internos.
+- `Wazuh`: recibe los eventos procesados por el Wazuh Manager, enviados a través de Kafka.
+
+<figure class="screenshot">
+  <Image src={graylogInputOpnsense} alt="Input OPNsense configurado en Graylog" />
+  <figcaption>System → Inputs: input OPNsense.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={graylogInputWazuh} alt="Input Wazuh configurado en Graylog" />
+  <figcaption>System → Inputs: input Wazuh.</figcaption>
+</figure>
+
+### Index sets
+
+En **System → Indices** hay tres index sets, uno por origen de datos:
+
+<figure class="screenshot">
+  <Image src={graylogIndexsetThehive} alt="Index set TheHive en Graylog" />
+  <figcaption>Index set TheHive.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={graylogIndexsetOpnsense} alt="Index set OPNsense FW en Graylog" />
+  <figcaption>Index set OPNSense FW.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={graylogIndexsetWazuh} alt="Index set wazuh_all en Graylog" />
+  <figcaption>Index set wazuh_all.</figcaption>
+</figure>
+
+### Streams
+
+Los streams clasifican y enrutan los mensajes entrantes según su origen: `OPNSense FW`, `Thehive` y `Wazuh`.
+
+<Aside type="note" title="Casing literal, no erratas">
+Los nombres de objetos en Graylog no siguen un casing consistente entre sí (herencia de cómo se configuraron originalmente): el index set se llama `TheHive` (H mayúscula) pero el stream y la notificación asociados se llaman `Thehive` (h minúscula); el input y el stream del firewall usan `OPNSense` (S mayúscula). Los nombres de esta página son literales, tal como aparecen en la interfaz — no los corrijas al reconstruirlos.
+</Aside>
+
+<figure class="screenshot">
+  <Image src={graylogStreams} alt="Streams OPNSense FW, Thehive y Wazuh configurados en Graylog" />
+  <figcaption>Streams configurados.</figcaption>
+</figure>
+
+### Alertas y escalado a TheHive
+
+En **Alerts → Notifications** existen dos notificaciones: `Kafka graylog-alerts` y `Thehive`.
+
+<figure class="screenshot">
+  <Image src={graylogNotifications} alt="Notificaciones Kafka graylog-alerts y Thehive en Graylog" />
+  <figcaption>Alerts → Notifications.</figcaption>
+</figure>
+
+Sobre ellas se apoya la definición de evento **`graylog2thehive - CRITICAL`**, que envía las alertas críticas a TheHive:
+
+<figure class="screenshot">
+  <Image src={graylogEventDefinition} alt="Definición de evento graylog2thehive CRITICAL" />
+  <figcaption>Alerts → Event Definitions → graylog2thehive - CRITICAL.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={graylogEventDetails} alt="Detalles del evento graylog2thehive CRITICAL con prioridad Critical" />
+  <figcaption>Detalles del evento: prioridad Critical.</figcaption>
+</figure>
+
+El filtro que dispara el evento:
+
+```text
+rule_level:[10 TO 15] OR rule_description:"SQL injection attempt."
+```
+
+<figure class="screenshot">
+  <Image src={graylogFilterAggregation} alt="Filtro y agregación de la definición de evento sobre el stream Thehive" />
+  <figcaption>Filter &amp; Aggregation del evento.</figcaption>
+</figure>
+
+La definición añade campos personalizados que viajan con la alerta hacia TheHive: `Destination_IP`, `Full_log`, `ID`, `Mitre` y `Source_IP`.
+
+<figure class="screenshot">
+  <Image src={graylogCustomFields} alt="Campos personalizados Destination_IP, Full_log, ID, Mitre y Source_IP" />
+  <figcaption>Campos personalizados del evento.</figcaption>
+</figure>
+
+<figure class="screenshot">
+  <Image src={graylogEventNotifications} alt="Notificaciones Kafka graylog-alerts y Thehive asociadas al evento" />
+  <figcaption>Notificaciones asociadas al evento.</figcaption>
+</figure>
+
+## Credenciales
+
+| Acceso | Usuario | Contraseña |
+| --- | --- | --- |
+| Consola/`su` | `root` | `Root.Graylog` |
+| SSH | `lab` | `Lab.Graylog` |
+| Web (9000) | `admin` | `Admin.Graylog` |
+| Web (9000) | `analista` | `Analista.Graylog` |
+
+<Aside type="caution" title="Cambia las credenciales por defecto">
+Cambia estas credenciales inmediatamente después de validar el despliegue.
+</Aside>
+
+## Siguiente paso
+
+Con Graylog procesando, continúa con [Wazuh y Velociraptor](/docs/despliegue/restauracion/wazuh-velociraptor/).

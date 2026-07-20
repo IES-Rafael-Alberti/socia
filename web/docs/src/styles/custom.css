@@ -615,3 +615,9 @@ header.header {
   color: var(--sl-color-gray-3);
   font-style: italic;
 }
+
+/* Evitar que los nombres en código dentro de tablas se partan en dos líneas
+   (p. ej. `attack0` en la tabla de redes) */
+.sl-markdown-content table code {
+  white-space: nowrap;
+}
