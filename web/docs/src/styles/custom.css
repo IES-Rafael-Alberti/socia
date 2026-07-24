@@ -426,6 +426,9 @@ a {
 :root[data-theme='dark'] .sl-markdown-content .starlight-aside__title {
   color: var(--socia-ink-50) !important;
 }
+:root[data-theme='dark'] .sl-markdown-content .starlight-aside p {
+  color: var(--socia-ink-50) !important;
+}
 :root[data-theme='dark'] .sl-markdown-content .starlight-aside--tip .starlight-aside__title {
   color: var(--socia-red-300) !important;
 }
