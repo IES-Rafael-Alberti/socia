@@ -10,6 +10,7 @@ let chunkCount = 0;
 let audioChunkIndex = 0;
 let audioChunkTimer: number | null = null;
 const pendingAudioChunkSaves = new Set<Promise<void>>();
+const audioChunkEndTimes = new WeakMap<MediaRecorder, number>();
 let microphoneStream: MediaStream | null = null;
 let displayStream: MediaStream | null = null;
 let audioContext: AudioContext | null = null;
@@ -19,8 +20,17 @@ let mixedAudioTrack: MediaStreamTrack | null = null;
 let dataRequestTimer: number | null = null;
 let finalVideoSentPromise: Promise<void> | null = null;
 let resolveFinalVideoSent: (() => void) | null = null;
+let captureStartedAt: number | null = null;
+let capturePausedAt: number | null = null;
+let totalPausedDuration = 0;
 
-const AUDIO_CHUNK_DURATION_MS = 5 * 60 * 1000; // 5 minutes per audio chunk
+const AUDIO_CHUNK_DURATION_MS = 60 * 1000;
+
+function getCaptureTime(): number {
+  if (captureStartedAt === null) return 0;
+  const now = capturePausedAt ?? performance.now();
+  return Math.max(0, (now - captureStartedAt - totalPausedDuration) / 1000);
+}
 
 function buildCombinedStream(audioTrack: MediaStreamTrack | null): MediaStream {
   if (!displayStream) {
@@ -190,7 +200,7 @@ function buildAudioOnlyStream(audioTrack: MediaStreamTrack | null): MediaStream 
 }
 
 /**
- * Start recording audio in 10-minute chunks.
+ * Start recording audio in one-minute chunks.
  * Each chunk is sent to background as AUDIO_CHUNK for later transcription.
  */
 function startAudioChunkRecording(stream: MediaStream): void {
@@ -199,22 +209,26 @@ function startAudioChunkRecording(stream: MediaStream): void {
 
   // Every AUDIO_CHUNK_DURATION_MS, stop the current chunk and start a new one
   audioChunkTimer = window.setInterval(() => {
-    rotateAudioChunk(stream);
+    if (audioChunkRecorder?.state === 'recording') {
+      rotateAudioChunk(stream);
+    }
   }, AUDIO_CHUNK_DURATION_MS);
 }
 
 function startNextAudioChunk(stream: MediaStream): void {
   const chunkIndex = audioChunkIndex;
+  const startedAt = getCaptureTime();
   audioChunkIndex += 1;
 
   // Use webm/opus which is compact (~6KB/s mono) and Whisper accepts directly
   const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
     ? 'audio/webm;codecs=opus'
     : 'audio/webm';
-  audioChunkRecorder = new MediaRecorder(stream, {
+  const recorder = new MediaRecorder(stream, {
     mimeType,
-    audioBitsPerSecond: 48000, // 48 kbps mono ≈ ~3.5 MB per 10 min
+    audioBitsPerSecond: 48000, // 48 kbps mono ≈ 0.35 MB per minute
   });
+  audioChunkRecorder = recorder;
 
   const chunks: Blob[] = [];
   let resolveSaved!: () => void;
@@ -223,19 +237,20 @@ function startNextAudioChunk(stream: MediaStream): void {
   });
   pendingAudioChunkSaves.add(saved);
 
-  audioChunkRecorder.ondataavailable = (event) => {
+  recorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
       chunks.push(event.data);
     }
   };
 
-  audioChunkRecorder.onstop = async () => {
+  recorder.onstop = async () => {
+    const endedAt = audioChunkEndTimes.get(recorder) ?? getCaptureTime();
     try {
       if (chunks.length === 0) return;
       const blob = new Blob(chunks, { type: 'audio/webm' });
       console.log(`[Offscreen] Audio chunk ${chunkIndex} complete: ${(blob.size / 1024).toFixed(0)} KB`);
       const buffer = await blob.arrayBuffer();
-      await sendAudioChunk(chunkIndex, buffer);
+      await sendAudioChunk(chunkIndex, buffer, startedAt, endedAt);
     } catch (error) {
       console.error(`[Offscreen] Failed to save audio chunk ${chunkIndex}:`, error);
     } finally {
@@ -245,7 +260,7 @@ function startNextAudioChunk(stream: MediaStream): void {
   };
 
   try {
-    audioChunkRecorder.start(1000); // collect data every second internally
+    recorder.start(1000); // collect data every second internally
   } catch (error) {
     pendingAudioChunkSaves.delete(saved);
     resolveSaved();
@@ -254,12 +269,19 @@ function startNextAudioChunk(stream: MediaStream): void {
   console.log(`[Offscreen] Audio chunk recorder started (chunk ${chunkIndex})`);
 }
 
-function sendAudioChunk(index: number, buffer: ArrayBuffer): Promise<void> {
+function sendAudioChunk(
+  index: number,
+  buffer: ArrayBuffer,
+  startedAt: number,
+  endedAt: number
+): Promise<void> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
       {
         type: 'AUDIO_CHUNK',
         index,
+        startTime: startedAt,
+        endTime: endedAt,
         data: Array.from(new Uint8Array(buffer)),
         target: 'background',
       },
@@ -280,6 +302,7 @@ function sendAudioChunk(index: number, buffer: ArrayBuffer): Promise<void> {
 
 function rotateAudioChunk(stream: MediaStream): void {
   if (audioChunkRecorder && audioChunkRecorder.state !== 'inactive') {
+    audioChunkEndTimes.set(audioChunkRecorder, getCaptureTime());
     audioChunkRecorder.stop(); // triggers onstop → sends chunk
   }
   startNextAudioChunk(stream);
@@ -291,6 +314,7 @@ async function stopAudioChunkRecording(): Promise<void> {
     audioChunkTimer = null;
   }
   if (audioChunkRecorder && audioChunkRecorder.state !== 'inactive') {
+    audioChunkEndTimes.set(audioChunkRecorder, getCaptureTime());
     audioChunkRecorder.stop(); // sends the last partial chunk
   }
   audioChunkRecorder = null;
@@ -399,6 +423,10 @@ async function startCapture() {
       return { success: false, error: 'No video track available for recording' };
     }
 
+    captureStartedAt = performance.now();
+    capturePausedAt = null;
+    totalPausedDuration = 0;
+
     // Start recording with 1 second chunks for incremental saving
     startIncrementalRecorder(combinedStream);
     startFinalRecorder(combinedStream);
@@ -447,6 +475,7 @@ function pauseCapture() {
     audioChunkRecorder.pause();
   }
   if (paused) {
+    capturePausedAt = performance.now();
     chrome.runtime.sendMessage({ type: 'CAPTURE_PAUSED', target: 'background' });
     return { success: true };
   }
@@ -471,6 +500,10 @@ function resumeCapture() {
     audioChunkRecorder.resume();
   }
   if (resumed) {
+    if (capturePausedAt !== null) {
+      totalPausedDuration += performance.now() - capturePausedAt;
+      capturePausedAt = null;
+    }
     chrome.runtime.sendMessage({ type: 'CAPTURE_RESUMED', target: 'background' });
     return { success: true };
   }
@@ -571,6 +604,9 @@ function cleanup() {
   chunkCount = 0;
   finalVideoSentPromise = null;
   resolveFinalVideoSent = null;
+  captureStartedAt = null;
+  capturePausedAt = null;
+  totalPausedDuration = 0;
 }
 
 // Notify background that offscreen is ready

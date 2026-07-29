@@ -3,9 +3,11 @@
  *
  * The endpoint returns only `{ text, usage }` — no segment-level timestamps.
  * We emit one SRT entry per audio chunk using `usage.seconds` as duration,
- * which gives the guide-generator skill rough temporal anchors against the
- * activity log. Not intended as synchronised subtitles.
+ * with capture times saved alongside each chunk. These are coarse anchors,
+ * not synchronised subtitles.
  */
+
+import type { RecordedAudioChunk } from './db';
 
 const OPENROUTER_API_KEY = import.meta.env.EXT_OPENROUTER_API_KEY as string | undefined;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/audio/transcriptions';
@@ -13,6 +15,8 @@ const TRANSCRIPTION_MODEL =
   (import.meta.env.EXT_OPENROUTER_MODEL_TRANSCRIPTION as string | undefined) ??
   'openai/whisper-large-v3-turbo';
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const REQUEST_TIMEOUT_MS = 75_000;
+const MAX_ATTEMPTS = 3;
 
 export interface TranscriptionSegment {
   id: number;
@@ -25,6 +29,14 @@ export interface TranscriptionResult {
   text: string;
   segments: TranscriptionSegment[];
   duration: number;
+  attemptedChunks: number;
+  transcribedChunks: number;
+  failures: TranscriptionFailure[];
+}
+
+export interface TranscriptionFailure {
+  chunkIndex: number;
+  error: string;
 }
 
 export function isTranscriptionAvailable(): boolean {
@@ -44,6 +56,23 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+class TranscriptionHttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 async function transcribeChunk(
   chunk: Blob,
   format: 'webm' | 'wav' | 'mp3' | 'ogg',
@@ -59,46 +88,84 @@ async function transcribeChunk(
   const data = await blobToBase64(chunk);
 
   console.log(`[Transcription] Sending chunk ${chunkIndex + 1} to OpenRouter (${TRANSCRIPTION_MODEL})...`);
-  const response = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://socia-extension.local',
-      'X-Title': 'MENTORA',
-    },
-    body: JSON.stringify({
-      model: TRANSCRIPTION_MODEL,
-      input_audio: { data, format },
-      language: 'es',
-    }),
-  });
+  let response: Response | null = null;
+  let lastError: unknown = null;
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('[Transcription] API error:', error);
-    throw new Error(`OpenRouter transcription error: ${response.status} - ${error}`);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      response = await fetch(OPENROUTER_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://socia-extension.local',
+          'X-Title': 'MENTORA',
+        },
+        body: JSON.stringify({
+          model: TRANSCRIPTION_MODEL,
+          input_audio: { data, format },
+          language: 'es',
+        }),
+        signal: controller.signal,
+      });
+
+      if (response.ok) break;
+
+      const errorBody = (await response.text()).slice(0, 1000);
+      const error = new TranscriptionHttpError(
+        response.status,
+        `OpenRouter transcription error: ${response.status} - ${errorBody}`
+      );
+      if (!isRetryableStatus(response.status)) throw error;
+      lastError = error;
+    } catch (error) {
+      if (error instanceof TranscriptionHttpError && !isRetryableStatus(error.status)) {
+        throw error;
+      }
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      await wait(500 * 2 ** (attempt - 1));
+    }
   }
 
-  const result = await response.json();
+  if (!response?.ok) {
+    throw lastError instanceof Error ? lastError : new Error('OpenRouter transcription failed');
+  }
+
+  const result = (await response.json()) as {
+    text?: unknown;
+    usage?: { seconds?: unknown; cost?: unknown };
+  };
+  const text = typeof result.text === 'string' ? result.text : '';
+  const duration =
+    typeof result.usage?.seconds === 'number' && Number.isFinite(result.usage.seconds)
+      ? result.usage.seconds
+      : 0;
   console.log(`[Transcription] Chunk ${chunkIndex + 1} response:`, {
-    text: result.text?.substring(0, 100),
-    duration: result.usage?.seconds,
+    text: text.substring(0, 100),
+    duration,
     cost: result.usage?.cost,
   });
 
   return {
-    text: result.text || '',
-    duration: result.usage?.seconds ?? 0,
+    text,
+    duration,
   };
 }
 
 /**
- * Transcribe pre-recorded audio chunks (webm/opus, ~5 min each).
+ * Transcribe pre-recorded audio chunks (webm/opus, about one minute each).
  * Each chunk yields a single SRT segment spanning its full duration.
  */
 export async function transcribeAudioChunks(
-  audioChunks: ArrayBuffer[]
+  audioChunks: RecordedAudioChunk[]
 ): Promise<TranscriptionResult | null> {
   if (!isTranscriptionAvailable()) {
     console.log('[Transcription] Skipping - no OpenRouter API key configured');
@@ -113,13 +180,21 @@ export async function transcribeAudioChunks(
 
   let fullText = '';
   const segments: TranscriptionSegment[] = [];
-  let timeOffset = 0;
+  const failures: TranscriptionFailure[] = [];
+  let timelineEnd = 0;
+  let transcribedChunks = 0;
 
   for (let i = 0; i < audioChunks.length; i++) {
-    const blob = new Blob([audioChunks[i]], { type: 'audio/webm' });
+    const chunk = audioChunks[i];
+    const blob = new Blob([chunk.data], { type: 'audio/webm' });
+    const hasCaptureTimes = chunk.end > chunk.start;
+    const start = hasCaptureTimes ? chunk.start : timelineEnd;
     try {
       const result = await transcribeChunk(blob, 'webm', i);
       const trimmed = result.text.trim();
+      const end = hasCaptureTimes ? chunk.end : start + result.duration;
+      timelineEnd = Math.max(timelineEnd, end);
+      transcribedChunks += 1;
 
       if (fullText && trimmed) fullText += ' ';
       fullText += trimmed;
@@ -127,25 +202,32 @@ export async function transcribeAudioChunks(
       if (trimmed) {
         segments.push({
           id: segments.length,
-          start: timeOffset,
-          end: timeOffset + result.duration,
+          start,
+          end,
           text: trimmed,
         });
       }
-      timeOffset += result.duration;
     } catch (error) {
       console.error(`[Transcription] Failed to transcribe chunk ${i}:`, error);
+      timelineEnd = Math.max(timelineEnd, hasCaptureTimes ? chunk.end : start);
+      failures.push({
+        chunkIndex: chunk.index,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
   console.log(
-    `[Transcription] Completed. Duration: ${timeOffset.toFixed(1)}s, Segments: ${segments.length}`
+    `[Transcription] Completed. Duration: ${timelineEnd.toFixed(1)}s, Segments: ${segments.length}`
   );
 
   return {
     text: fullText.trim(),
     segments,
-    duration: timeOffset,
+    duration: timelineEnd,
+    attemptedChunks: audioChunks.length,
+    transcribedChunks,
+    failures,
   };
 }
 
@@ -178,10 +260,25 @@ export async function transcribeVideo(videoData: ArrayBuffer): Promise<Transcrip
         ? [{ id: 0, start: 0, end: result.duration, text: trimmed }]
         : [],
       duration: result.duration,
+      attemptedChunks: 1,
+      transcribedChunks: 1,
+      failures: [],
     };
   } catch (error) {
     console.error('[Transcription] Failed:', error);
-    return null;
+    return {
+      text: '',
+      segments: [],
+      duration: 0,
+      attemptedChunks: 1,
+      transcribedChunks: 0,
+      failures: [
+        {
+          chunkIndex: 0,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
   }
 }
 
@@ -217,18 +314,20 @@ export function formatAsReadableText(segments: TranscriptionSegment[]): string {
 }
 
 function formatSRTTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  const ms = Math.round((seconds % 1) * 1000);
+  const totalMs = Math.max(0, Math.round(seconds * 1000));
+  const hours = Math.floor(totalMs / 3_600_000);
+  const minutes = Math.floor((totalMs % 3_600_000) / 60_000);
+  const secs = Math.floor((totalMs % 60_000) / 1000);
+  const ms = totalMs % 1000;
   return `${pad(hours, 2)}:${pad(minutes, 2)}:${pad(secs, 2)},${pad(ms, 3)}`;
 }
 
 function formatVTTTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  const ms = Math.round((seconds % 1) * 1000);
+  const totalMs = Math.max(0, Math.round(seconds * 1000));
+  const hours = Math.floor(totalMs / 3_600_000);
+  const minutes = Math.floor((totalMs % 3_600_000) / 60_000);
+  const secs = Math.floor((totalMs % 60_000) / 1000);
+  const ms = totalMs % 1000;
   return `${pad(hours, 2)}:${pad(minutes, 2)}:${pad(secs, 2)}.${pad(ms, 3)}`;
 }
 

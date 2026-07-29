@@ -73,7 +73,7 @@ export default defineBackground(() => {
   });
 
   async function handleMessage(
-    message: { type: string; action?: ActionLog; networkEvent?: { method: string; url: string; status: number; contentType: string; requestBody: string | null; responseBody: string | null }; chunk?: number[]; data?: number[]; index?: number; target?: string },
+    message: { type: string; action?: ActionLog; networkEvent?: { method: string; url: string; status: number; contentType: string; requestBody: string | null; responseBody: string | null }; chunk?: number[]; data?: number[]; index?: number; startTime?: number; endTime?: number; target?: string },
     sender: chrome.runtime.MessageSender
   ): Promise<unknown> {
     if (sender.url?.includes('offscreen.html') && message.target !== 'background') {
@@ -134,12 +134,25 @@ export default defineBackground(() => {
         }
         return { success: true };
       case 'AUDIO_CHUNK':
-        if (currentRecordingId && message.data && message.index !== undefined) {
+        if (
+          currentRecordingId &&
+          message.data &&
+          message.index !== undefined &&
+          message.startTime !== undefined &&
+          message.endTime !== undefined
+        ) {
           const buffer = new Uint8Array(message.data).buffer;
-          await saveAudioChunk(currentRecordingId, message.index, buffer);
+          await saveAudioChunk(
+            currentRecordingId,
+            message.index,
+            buffer,
+            message.startTime,
+            message.endTime
+          );
           console.log(`[Background] Audio chunk ${message.index} saved, size: ${message.data.length}`);
+          return { success: true };
         }
-        return { success: true };
+        return { success: false, error: 'Audio chunk is missing recording data' };
       case 'CAPTURE_STARTED':
         console.log('[Background] Capture started confirmed');
         await ensureRecordingState();

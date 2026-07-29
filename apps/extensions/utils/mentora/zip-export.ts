@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import type { ActionLog, Screenshot, RecordingMetadata, NetworkEvent } from './messages';
+import type { RecordedAudioChunk } from './db';
 import {
   transcribeAudioChunks,
   transcribeVideo,
@@ -17,7 +18,7 @@ export async function exportToZip(
   screenshots: Screenshot[],
   videoChunks: ArrayBuffer[],
   finalVideo?: ArrayBuffer,
-  audioChunks?: ArrayBuffer[],
+  audioChunks?: RecordedAudioChunk[],
   networkEvents?: NetworkEvent[]
 ): Promise<Blob> {
   const zip = new JSZip();
@@ -67,6 +68,21 @@ export async function exportToZip(
     if (transcription && transcription.segments.length > 0) {
       console.log('[Export] Adding transcription file...');
       folder.file('transcription.srt', formatAsSRT(transcription.segments));
+    }
+    if (transcription) {
+      folder.file(
+        'transcription-status.json',
+        JSON.stringify(
+          {
+            attemptedChunks: transcription.attemptedChunks,
+            transcribedChunks: transcription.transcribedChunks,
+            failedChunks: transcription.failures,
+            requestsComplete: transcription.failures.length === 0,
+          },
+          null,
+          2
+        )
+      );
     }
   }
 
@@ -127,7 +143,14 @@ export async function exportToZip(
   folder.file('metadata.json', JSON.stringify(finalMetadata, null, 2));
 
   // 7. Add LLM instructions file
-  const llmInstructions = generateLLMInstructions(metadata, actions.length, screenshots.length, !!transcription, networkEvents?.length || 0);
+  const transcriptionState = getTranscriptionState(transcription);
+  const llmInstructions = generateLLMInstructions(
+    metadata,
+    actions.length,
+    screenshots.length,
+    transcriptionState,
+    networkEvents?.length || 0
+  );
   folder.file('README-FOR-LLM.md', llmInstructions);
 
   // Generate ZIP with compression
@@ -136,6 +159,16 @@ export async function exportToZip(
     compression: 'DEFLATE',
     compressionOptions: { level: 6 },
   });
+}
+
+type TranscriptionState = 'none' | 'complete' | 'partial' | 'empty' | 'failed';
+
+function getTranscriptionState(transcription: TranscriptionResult | null): TranscriptionState {
+  if (!transcription) return 'none';
+  if (transcription.segments.length === 0) {
+    return transcription.failures.length > 0 ? 'failed' : 'empty';
+  }
+  return transcription.failures.length > 0 ? 'partial' : 'complete';
 }
 
 /**
@@ -206,23 +239,36 @@ function generateLLMInstructions(
   metadata: RecordingMetadata,
   actionCount: number,
   screenshotCount: number,
-  hasTranscription: boolean,
+  transcriptionState: TranscriptionState,
   networkEventCount: number
 ): string {
+  const hasTranscription = transcriptionState === 'complete' || transcriptionState === 'partial';
+  const hasTranscriptionStatus = transcriptionState !== 'none';
   const networkFiles = networkEventCount > 0
     ? `- \`network-log.json\` - Captured API calls (HTTP method, URL, request/response bodies)
 `
     : '';
 
   const transcriptionFiles = hasTranscription
-    ? `- \`transcription.srt\` - Audio transcription of the recording, segmented by chunk
+    ? `- \`transcription.srt\` - Audio transcription, segmented in one-minute chunks
+`
+    : '';
+  const transcriptionStatusFile = hasTranscriptionStatus
+    ? `- \`transcription-status.json\` - Result of each transcription request
 `
     : '';
 
   const transcriptionNote = hasTranscription
-    ? `5. **Read \`transcription.srt\`** for what was said during the recording. Use the action timestamps in the activity log to locate the relevant chunk; chunk boundaries are coarse (~5 min) and not aligned to individual phrases.
+    ? `5. **Read \`transcription.srt\`** for what was said during the recording. Match its one-minute ranges with the action timestamps. Chunk boundaries are not aligned to individual phrases.
 `
     : '';
+  const transcriptionLabel = {
+    none: 'No',
+    complete: 'Complete',
+    partial: 'Partial',
+    empty: 'Empty',
+    failed: 'Failed',
+  }[transcriptionState];
 
   return `# MENTORA Recording Package
 
@@ -235,7 +281,7 @@ This package contains a tutorial recording captured by the MENTORA browser exten
 - \`activity-log.json\` - Structured JSON log of all user actions
 - \`activity-log-readable.txt\` - Human-readable timeline of actions
 - \`metadata.json\` - Recording session metadata
-${networkFiles}${transcriptionFiles}
+${networkFiles}${transcriptionFiles}${transcriptionStatusFile}
 ## Recording Summary
 
 - **Extension**: ${metadata.extensionName} v${metadata.version}
@@ -245,7 +291,7 @@ ${networkFiles}${transcriptionFiles}
 - **Total Screenshots**: ${screenshotCount}
 - **Pages Visited**: ${metadata.pages.length}
 - **Network Events Captured**: ${networkEventCount}
-- **Audio Transcription**: ${hasTranscription ? 'Yes' : 'No'}
+- **Audio Transcription**: ${transcriptionLabel}
 
 ## How to Use This Recording
 

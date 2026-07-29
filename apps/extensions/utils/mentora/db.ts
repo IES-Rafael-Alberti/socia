@@ -1,6 +1,13 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { ActionLog, Screenshot, RecordingMetadata, NetworkEvent } from './messages';
 
+export interface RecordedAudioChunk {
+  index: number;
+  data: ArrayBuffer;
+  start: number;
+  end: number;
+}
+
 interface TeachSociaDB extends DBSchema {
   videoChunks: {
     key: number;
@@ -27,6 +34,8 @@ interface TeachSociaDB extends DBSchema {
       recordingId: string;
       index: number;
       data: ArrayBuffer;
+      start?: number;
+      end?: number;
       timestamp: number;
     };
     indexes: { 'by-recording': string };
@@ -153,7 +162,9 @@ export async function getFinalVideo(recordingId: string): Promise<ArrayBuffer | 
 export async function saveAudioChunk(
   recordingId: string,
   index: number,
-  data: ArrayBuffer
+  data: ArrayBuffer,
+  start: number,
+  end: number
 ): Promise<void> {
   const db = await getDB();
   await db.add('audioChunks', {
@@ -161,14 +172,29 @@ export async function saveAudioChunk(
     recordingId,
     index,
     data,
+    start,
+    end,
     timestamp: Date.now(),
   });
 }
 
-export async function getAudioChunks(recordingId: string): Promise<ArrayBuffer[]> {
+export async function getAudioChunks(recordingId: string): Promise<RecordedAudioChunk[]> {
   const db = await getDB();
   const chunks = await db.getAllFromIndex('audioChunks', 'by-recording', recordingId);
-  return chunks.sort((a, b) => a.index - b.index).map((c) => c.data);
+  let fallbackStart = 0;
+  return chunks
+    .sort((a, b) => a.index - b.index)
+    .map((chunk) => {
+      const start = chunk.start ?? fallbackStart;
+      const end = chunk.end ?? start;
+      fallbackStart = end;
+      return {
+        index: chunk.index,
+        data: chunk.data,
+        start,
+        end,
+      };
+    });
 }
 
 // Screenshot operations
