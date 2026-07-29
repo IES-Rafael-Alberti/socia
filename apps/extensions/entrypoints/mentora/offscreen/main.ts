@@ -12,24 +12,23 @@ let audioChunkTimer: number | null = null;
 let microphoneStream: MediaStream | null = null;
 let displayStream: MediaStream | null = null;
 let audioContext: AudioContext | null = null;
+let audioDestination: MediaStreamAudioDestinationNode | null = null;
+let audioSourceNodes: MediaStreamAudioSourceNode[] = [];
+let mixedAudioTrack: MediaStreamTrack | null = null;
 let dataRequestTimer: number | null = null;
 let finalVideoSentPromise: Promise<void> | null = null;
 let resolveFinalVideoSent: (() => void) | null = null;
 
 const AUDIO_CHUNK_DURATION_MS = 5 * 60 * 1000; // 5 minutes per audio chunk
 
-function buildCombinedStream(): MediaStream {
+function buildCombinedStream(audioTrack: MediaStreamTrack | null): MediaStream {
   if (!displayStream) {
     return new MediaStream();
   }
 
   const combinedStream = new MediaStream();
   displayStream.getVideoTracks().forEach((track) => combinedStream.addTrack(track));
-  displayStream.getAudioTracks().forEach((track) => combinedStream.addTrack(track));
-
-  if (microphoneStream) {
-    microphoneStream.getAudioTracks().forEach((track) => combinedStream.addTrack(track));
-  }
+  if (audioTrack) combinedStream.addTrack(audioTrack);
 
   return combinedStream;
 }
@@ -150,10 +149,11 @@ function startFinalRecorder(stream: MediaStream): void {
 }
 
 /**
- * Build an audio-only stream from all available audio sources (display + mic).
- * Used to record audio chunks independently for transcription.
+ * Mix display and microphone audio into one track. Chromium's MediaRecorder
+ * records only the first audio track, so passing both tracks separately can
+ * drop the microphone when display audio is present.
  */
-function buildAudioOnlyStream(): MediaStream | null {
+async function buildMixedAudioTrack(): Promise<MediaStreamTrack | null> {
   const audioTracks: MediaStreamTrack[] = [];
 
   if (displayStream) {
@@ -164,10 +164,28 @@ function buildAudioOnlyStream(): MediaStream | null {
   }
 
   if (audioTracks.length === 0) return null;
+  if (audioTracks.length === 1) return audioTracks[0];
 
-  const stream = new MediaStream();
-  audioTracks.forEach((t) => stream.addTrack(t));
-  return stream;
+  audioContext = new AudioContext();
+  audioDestination = audioContext.createMediaStreamDestination();
+  audioSourceNodes = audioTracks.map((track) => {
+    const source = audioContext!.createMediaStreamSource(new MediaStream([track]));
+    source.connect(audioDestination!);
+    return source;
+  });
+
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
+
+  return audioDestination.stream.getAudioTracks()[0] ?? null;
+}
+
+/**
+ * Build an audio-only stream for transcription from the mixed audio track.
+ */
+function buildAudioOnlyStream(audioTrack: MediaStreamTrack | null): MediaStream | null {
+  return audioTrack ? new MediaStream([audioTrack]) : null;
 }
 
 /**
@@ -342,7 +360,8 @@ async function startCapture() {
       };
     });
 
-    const combinedStream = buildCombinedStream();
+    mixedAudioTrack = await buildMixedAudioTrack();
+    const combinedStream = buildCombinedStream(mixedAudioTrack);
     if (combinedStream.getVideoTracks().length === 0) {
       console.error('[Offscreen] No video track in combined stream');
       return { success: false, error: 'No video track available for recording' };
@@ -354,7 +373,7 @@ async function startCapture() {
 
     // Start audio-only chunk recording for transcription (non-critical)
     try {
-      const audioStream = buildAudioOnlyStream();
+      const audioStream = buildAudioOnlyStream(mixedAudioTrack);
       if (audioStream) {
         startAudioChunkRecording(audioStream);
         console.log('[Offscreen] Audio chunk recording started');
@@ -498,8 +517,11 @@ function cleanup() {
   // Stop all tracks
   displayStream?.getTracks().forEach((track) => track.stop());
   microphoneStream?.getTracks().forEach((track) => track.stop());
+  mixedAudioTrack?.stop();
 
   // Close audio context
+  audioSourceNodes.forEach((source) => source.disconnect());
+  audioDestination?.disconnect();
   if (audioContext && audioContext.state !== 'closed') {
     audioContext.close();
   }
@@ -507,6 +529,9 @@ function cleanup() {
   displayStream = null;
   microphoneStream = null;
   audioContext = null;
+  audioDestination = null;
+  audioSourceNodes = [];
+  mixedAudioTrack = null;
   incrementalRecorder = null;
   finalRecorder = null;
   audioChunkRecorder = null;
