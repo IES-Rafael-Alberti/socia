@@ -28,6 +28,7 @@ import {
 } from '../../utils/mentora/storage';
 import type { ActionLog, NetworkEvent, Screenshot, StateResponse } from '../../utils/mentora/messages';
 import { exportToZip } from '../../utils/mentora/zip-export';
+import { loadTranscriptionSettings } from '../../utils/mentora/transcription-settings';
 
 export default defineBackground(() => {
   console.log('[Background] Service worker started');
@@ -510,6 +511,7 @@ export default defineBackground(() => {
       const finalVideo = await getFinalVideo(recordingId);
       const videoChunks = finalVideo ? [] : await getVideoChunks(recordingId);
       const audioChunks = await getAudioChunks(recordingId);
+      const transcriptionSettings = await loadTranscriptionSettings();
 
       const totalVideoBytes = videoChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
       console.log('[Background] Data collected:', {
@@ -526,7 +528,16 @@ export default defineBackground(() => {
         return { success: false, error: 'Recording metadata not found' };
       }
 
-      const zipBlob = await exportToZip(metadata, actions, screenshots, videoChunks, finalVideo || undefined, audioChunks, networkEvents);
+      const zipBlob = await exportToZip(
+        metadata,
+        actions,
+        screenshots,
+        videoChunks,
+        finalVideo || undefined,
+        audioChunks,
+        networkEvents,
+        transcriptionSettings.openRouterApiKey ?? undefined
+      );
 
       // Convert blob to base64 data URL (Service Workers don't have URL.createObjectURL)
       const arrayBuffer = await zipBlob.arrayBuffer();

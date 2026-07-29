@@ -9,7 +9,6 @@
 
 import type { RecordedAudioChunk } from './db';
 
-const OPENROUTER_API_KEY = import.meta.env.EXT_OPENROUTER_API_KEY as string | undefined;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/audio/transcriptions';
 const TRANSCRIPTION_MODEL =
   (import.meta.env.EXT_OPENROUTER_MODEL_TRANSCRIPTION as string | undefined) ??
@@ -37,10 +36,6 @@ export interface TranscriptionResult {
 export interface TranscriptionFailure {
   chunkIndex: number;
   error: string;
-}
-
-export function isTranscriptionAvailable(): boolean {
-  return !!OPENROUTER_API_KEY;
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -76,9 +71,10 @@ function wait(milliseconds: number): Promise<void> {
 async function transcribeChunk(
   chunk: Blob,
   format: 'webm' | 'wav' | 'mp3' | 'ogg',
-  chunkIndex: number
+  chunkIndex: number,
+  apiKey: string
 ): Promise<{ text: string; duration: number }> {
-  if (!OPENROUTER_API_KEY) {
+  if (!apiKey) {
     throw new Error('OpenRouter API key not configured');
   }
 
@@ -99,7 +95,7 @@ async function transcribeChunk(
       response = await fetch(OPENROUTER_URL, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://socia-extension.local',
           'X-Title': 'MENTORA',
@@ -165,9 +161,10 @@ async function transcribeChunk(
  * Each chunk yields a single SRT segment spanning its full duration.
  */
 export async function transcribeAudioChunks(
-  audioChunks: RecordedAudioChunk[]
+  audioChunks: RecordedAudioChunk[],
+  apiKey: string
 ): Promise<TranscriptionResult | null> {
-  if (!isTranscriptionAvailable()) {
+  if (!apiKey) {
     console.log('[Transcription] Skipping - no OpenRouter API key configured');
     return null;
   }
@@ -190,7 +187,7 @@ export async function transcribeAudioChunks(
     const hasCaptureTimes = chunk.end > chunk.start;
     const start = hasCaptureTimes ? chunk.start : timelineEnd;
     try {
-      const result = await transcribeChunk(blob, 'webm', i);
+      const result = await transcribeChunk(blob, 'webm', i, apiKey);
       const trimmed = result.text.trim();
       const end = hasCaptureTimes ? chunk.end : start + result.duration;
       timelineEnd = Math.max(timelineEnd, end);
@@ -236,8 +233,11 @@ export async function transcribeAudioChunks(
  * video container directly. Whisper extracts the audio track. Limited to
  * ~25 MB to stay safely within the upstream provider's timeout.
  */
-export async function transcribeVideo(videoData: ArrayBuffer): Promise<TranscriptionResult | null> {
-  if (!isTranscriptionAvailable()) {
+export async function transcribeVideo(
+  videoData: ArrayBuffer,
+  apiKey: string
+): Promise<TranscriptionResult | null> {
+  if (!apiKey) {
     console.log('[Transcription] Skipping - no OpenRouter API key configured');
     return null;
   }
@@ -252,7 +252,7 @@ export async function transcribeVideo(videoData: ArrayBuffer): Promise<Transcrip
 
   try {
     console.log('[Transcription] Transcribing video directly (small file)...');
-    const result = await transcribeChunk(videoBlob, 'webm', 0);
+    const result = await transcribeChunk(videoBlob, 'webm', 0, apiKey);
     const trimmed = result.text.trim();
     return {
       text: trimmed,

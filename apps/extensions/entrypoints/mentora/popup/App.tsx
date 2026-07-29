@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import type { StateResponse, RecordingState } from '../../../utils/mentora/messages';
 import { useSessionState } from '../../../utils/shared/popup-session';
+import {
+  loadTranscriptionSettings,
+  saveTranscriptionSettings,
+} from '../../../utils/mentora/transcription-settings';
 
 function sendMessage<T>(message: Record<string, unknown>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -24,6 +28,9 @@ export default function App() {
   const [hasRecording, setHasRecording] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [hasDownloaded, setHasDownloaded] = useState(false);
+  const [openRouterApiKey, setOpenRouterApiKey] = useState('');
+  const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [timerCache, setTimerCache] = useSessionState('mentora.timerCache', {
     elapsedTime: 0,
     lastPolledAt: 0,
@@ -106,6 +113,12 @@ export default function App() {
   useEffect(() => {
     fetchState();
   }, [fetchState]);
+
+  useEffect(() => {
+    loadTranscriptionSettings().then((settings) => {
+      setOpenRouterApiKey(settings.openRouterApiKey ?? '');
+    });
+  }, []);
 
   // Sync state updates from storage changes
   useEffect(() => {
@@ -218,6 +231,19 @@ export default function App() {
       setError('Failed to start recording');
       setIsLoading(false);
       await fetchState();
+    }
+  };
+
+  const handleSaveApiKey = async () => {
+    try {
+      await saveTranscriptionSettings({
+        openRouterApiKey: openRouterApiKey || null,
+      });
+      const trimmed = openRouterApiKey.trim();
+      setOpenRouterApiKey(trimmed);
+      setApiKeyStatus(trimmed ? 'Clave guardada.' : 'Clave eliminada.');
+    } catch {
+      setApiKeyStatus('No se pudo guardar la clave.');
     }
   };
 
@@ -365,23 +391,63 @@ export default function App() {
 
         {/* Idle state: clean hero, primary action */}
         {isIdle && (
-          <div className="idle-hero">
-            <div className="idle-pulse" />
-            <h2>
-              {!hasRecording
-                ? 'Lista para grabar'
-                : hasDownloaded
-                  ? 'ZIP descargado'
-                  : 'Tu grabación está lista'}
-            </h2>
-            <p>
-              {!hasRecording
-                ? 'MENTORA captura pantalla, micro y todas las acciones del navegador.'
-                : hasDownloaded
-                  ? 'Empieza una grabación nueva o vuelve a descargar el ZIP.'
-                  : 'Preparando el ZIP…'}
-            </p>
-          </div>
+          <>
+            <div className="idle-hero">
+              <div className="idle-pulse" />
+              <h2>
+                {!hasRecording
+                  ? 'Lista para grabar'
+                  : hasDownloaded
+                    ? 'ZIP descargado'
+                    : 'Tu grabación está lista'}
+              </h2>
+              <p>
+                {!hasRecording
+                  ? 'MENTORA captura pantalla, micro y todas las acciones del navegador.'
+                  : hasDownloaded
+                    ? 'Empieza una grabación nueva o vuelve a descargar el ZIP.'
+                    : 'Preparando el ZIP…'}
+              </p>
+            </div>
+
+            <section className="transcription-settings">
+              <label htmlFor="openrouter-api-key">Clave de OpenRouter</label>
+              <div className="transcription-settings__row">
+                <input
+                  id="openrouter-api-key"
+                  type={showApiKey ? 'text' : 'password'}
+                  placeholder="sk-or-v1-…"
+                  value={openRouterApiKey}
+                  onChange={(event) => {
+                    setOpenRouterApiKey(event.target.value);
+                    setApiKeyStatus(null);
+                  }}
+                />
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  onClick={handleSaveApiKey}
+                >
+                  Guardar
+                </button>
+              </div>
+              <label className="transcription-settings__show">
+                <input
+                  type="checkbox"
+                  checked={showApiKey}
+                  onChange={(event) => setShowApiKey(event.target.checked)}
+                />
+                Mostrar clave
+              </label>
+              <p>
+                Al descargar el ZIP, MENTORA envía el audio a OpenRouter. Sin
+                clave no crea la transcripción.
+              </p>
+              {apiKeyStatus && (
+                <span className="transcription-settings__saved">{apiKeyStatus}</span>
+              )}
+            </section>
+          </>
         )}
 
         <div className={`controls ${isRecording || isPaused ? 'controls--row' : ''}`}>

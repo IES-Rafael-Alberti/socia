@@ -29,7 +29,7 @@ cp apps/extensions/.env.example apps/extensions/.env
 
 Las más relevantes:
 
-- **`EXT_OPENROUTER_API_KEY`** → SOCIA + MENTORA. En SOCIA, la usa para generar pistas y la evaluación en standalone (en la práctica el alumno la mete por Ajustes; solo tiene sentido fijarla aquí si vas a distribuir un build con la clave preconfigurada, no si se usa el panel de control). En MENTORA, habilita la transcripción Whisper del audio del recording (`transcription.srt`); sin ella la grabación se exporta sin la transcripción en el archivo ZIP.
+- **`EXT_OPENROUTER_API_KEY`** → SOCIA. La usa para generar pistas y la evaluación en modo autónomo. En la práctica, el alumno la introduce en Ajustes. MENTORA guarda su propia clave desde el popup para no incluirla en la extensión compilada.
 
 > Todas las variables empiezan por **`EXT_`** (configurado en `apps/extensions/wxt.config.ts`). Cualquier variable sin ese prefijo se ignora.
 

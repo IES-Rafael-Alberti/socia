@@ -4,7 +4,6 @@ import type { RecordedAudioChunk } from './db';
 import {
   transcribeAudioChunks,
   transcribeVideo,
-  isTranscriptionAvailable,
   formatAsSRT,
   type TranscriptionResult,
 } from './transcription';
@@ -19,7 +18,8 @@ export async function exportToZip(
   videoChunks: ArrayBuffer[],
   finalVideo?: ArrayBuffer,
   audioChunks?: RecordedAudioChunk[],
-  networkEvents?: NetworkEvent[]
+  networkEvents?: NetworkEvent[],
+  openRouterApiKey?: string
 ): Promise<Blob> {
   const zip = new JSZip();
 
@@ -53,16 +53,16 @@ export async function exportToZip(
 
   // 2. Transcribe audio if API key is available
   let transcription: TranscriptionResult | null = null;
-  if (isTranscriptionAvailable()) {
+  if (openRouterApiKey) {
     console.log('[Export] Transcribing audio...');
     if (audioChunks && audioChunks.length > 0) {
       // Use pre-recorded audio chunks (supports any recording length)
       console.log(`[Export] Using ${audioChunks.length} pre-recorded audio chunks`);
-      transcription = await transcribeAudioChunks(audioChunks);
+      transcription = await transcribeAudioChunks(audioChunks, openRouterApiKey);
     } else if (videoData) {
       // Fallback: send video directly (only works for small files < 25MB)
       console.log('[Export] No audio chunks, falling back to video transcription');
-      transcription = await transcribeVideo(videoData);
+      transcription = await transcribeVideo(videoData, openRouterApiKey);
     }
 
     if (transcription && transcription.segments.length > 0) {
