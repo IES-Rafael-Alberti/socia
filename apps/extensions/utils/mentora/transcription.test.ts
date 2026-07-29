@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { RecordedAudioChunk } from './db';
-import { formatAsSRT, transcribeAudioChunks } from './transcription';
+import {
+  buildTranscriptionRequest,
+  formatAsSRT,
+  transcribeAudioChunks,
+} from './transcription';
 
 function chunk(index: number, start: number, end: number): RecordedAudioChunk {
   return {
@@ -11,6 +15,13 @@ function chunk(index: number, start: number, end: number): RecordedAudioChunk {
     data: new ArrayBuffer(1),
   };
 }
+
+test('requests word and segment timestamps from OpenRouter', () => {
+  const request = buildTranscriptionRequest('audio-data', 'webm');
+
+  assert.equal(request.response_format, 'verbose_json');
+  assert.deepEqual(request.timestamp_granularities, ['word', 'segment']);
+});
 
 test('keeps capture times when a middle chunk fails', async () => {
   const chunks = [
@@ -66,6 +77,68 @@ test('uses reported duration for old chunks without capture times', async () => 
       { start: 10, end: 22 },
     ]
   );
+});
+
+test('moves provider segment and word times onto the recording timeline', async () => {
+  const result = await transcribeAudioChunks(
+    [chunk(0, 300, 360)],
+    'test-key',
+    async () => ({
+      text: 'Hola mundo',
+      duration: 60,
+      segments: [
+        {
+          start: 1.25,
+          end: 2.75,
+          text: 'Hola mundo',
+        },
+      ],
+      words: [
+        { word: 'Hola', start: 1.25, end: 1.7 },
+        { word: 'mundo', start: 2, end: 2.75 },
+      ],
+    })
+  );
+
+  assert.ok(result);
+  assert.deepEqual(result.segments, [
+    {
+      id: 0,
+      start: 301.25,
+      end: 302.75,
+      text: 'Hola mundo',
+    },
+  ]);
+  assert.deepEqual(result.words, [
+    { word: 'Hola', start: 301.25, end: 301.7 },
+    { word: 'mundo', start: 302, end: 302.75 },
+  ]);
+});
+
+test('keeps provider timestamps inside each recorded chunk', async () => {
+  const result = await transcribeAudioChunks(
+    [chunk(0, 10, 20)],
+    'test-key',
+    async () => ({
+      text: 'Prueba',
+      duration: 12,
+      segments: [{ start: -1, end: 12, text: 'Prueba' }],
+      words: [{ word: 'Prueba', start: 9, end: 12 }],
+    })
+  );
+
+  assert.ok(result);
+  assert.deepEqual(result.segments[0], {
+    id: 0,
+    start: 10,
+    end: 20,
+    text: 'Prueba',
+  });
+  assert.deepEqual(result.words[0], {
+    word: 'Prueba',
+    start: 19,
+    end: 20,
+  });
 });
 
 test('carries rounded milliseconds into the next second', () => {

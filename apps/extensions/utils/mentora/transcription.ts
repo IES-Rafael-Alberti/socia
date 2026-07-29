@@ -1,10 +1,9 @@
 /**
  * Audio transcription via OpenRouter.
  *
- * The endpoint returns only `{ text, usage }` — no segment-level timestamps.
- * We emit one SRT entry per audio chunk using `usage.seconds` as duration,
- * with capture times saved alongside each chunk. These are coarse anchors,
- * not synchronised subtitles.
+ * OpenAI-compatible providers return segment and word timestamps when
+ * `verbose_json` is requested. Capture times saved with each chunk let us
+ * place those local timestamps on the recording timeline.
  */
 
 import type { RecordedAudioChunk } from './db';
@@ -27,6 +26,7 @@ export interface TranscriptionSegment {
 export interface TranscriptionResult {
   text: string;
   segments: TranscriptionSegment[];
+  words: TranscriptionWord[];
   duration: number;
   attemptedChunks: number;
   transcribedChunks: number;
@@ -38,12 +38,37 @@ export interface TranscriptionFailure {
   error: string;
 }
 
+export interface TranscriptionWord {
+  start: number;
+  end: number;
+  word: string;
+}
+
+interface ProviderSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+interface ProviderWord {
+  start: number;
+  end: number;
+  word: string;
+}
+
+interface ChunkTranscriptionResult {
+  text: string;
+  duration: number;
+  segments?: ProviderSegment[];
+  words?: ProviderWord[];
+}
+
 type TranscribeChunk = (
   chunk: Blob,
   format: 'webm' | 'wav' | 'mp3' | 'ogg',
   chunkIndex: number,
   apiKey: string
-) => Promise<{ text: string; duration: number }>;
+) => Promise<ChunkTranscriptionResult>;
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -75,12 +100,25 @@ function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+export function buildTranscriptionRequest(
+  data: string,
+  format: 'webm' | 'wav' | 'mp3' | 'ogg'
+) {
+  return {
+    model: TRANSCRIPTION_MODEL,
+    input_audio: { data, format },
+    language: 'es',
+    response_format: 'verbose_json',
+    timestamp_granularities: ['word', 'segment'],
+  };
+}
+
 async function transcribeChunk(
   chunk: Blob,
   format: 'webm' | 'wav' | 'mp3' | 'ogg',
   chunkIndex: number,
   apiKey: string
-): Promise<{ text: string; duration: number }> {
+): Promise<ChunkTranscriptionResult> {
   if (!apiKey) {
     throw new Error('OpenRouter API key not configured');
   }
@@ -107,11 +145,7 @@ async function transcribeChunk(
           'HTTP-Referer': 'https://socia-extension.local',
           'X-Title': 'MENTORA',
         },
-        body: JSON.stringify({
-          model: TRANSCRIPTION_MODEL,
-          input_audio: { data, format },
-          language: 'es',
-        }),
+        body: JSON.stringify(buildTranscriptionRequest(data, format)),
         signal: controller.signal,
       });
 
@@ -144,28 +178,103 @@ async function transcribeChunk(
 
   const result = (await response.json()) as {
     text?: unknown;
+    duration?: unknown;
+    segments?: unknown;
+    words?: unknown;
     usage?: { seconds?: unknown; cost?: unknown };
   };
   const text = typeof result.text === 'string' ? result.text : '';
-  const duration =
-    typeof result.usage?.seconds === 'number' && Number.isFinite(result.usage.seconds)
+  const reportedDuration =
+    typeof result.duration === 'number' && Number.isFinite(result.duration)
+      ? result.duration
+      : typeof result.usage?.seconds === 'number' && Number.isFinite(result.usage.seconds)
       ? result.usage.seconds
       : 0;
+  const segments = parseProviderSegments(result.segments);
+  const words = parseProviderWords(result.words);
+  const duration = getResultDuration({
+    text,
+    duration: reportedDuration,
+    segments,
+    words,
+  });
   console.log(`[Transcription] Chunk ${chunkIndex + 1} response:`, {
     text: text.substring(0, 100),
     duration,
+    segments: segments.length,
+    words: words.length,
     cost: result.usage?.cost,
   });
 
   return {
     text,
     duration,
+    segments,
+    words,
   };
 }
 
+function parseProviderSegments(value: unknown): ProviderSegment[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((segment) => {
+    if (
+      !segment ||
+      typeof segment !== 'object' ||
+      typeof segment.start !== 'number' ||
+      typeof segment.end !== 'number' ||
+      typeof segment.text !== 'string' ||
+      !Number.isFinite(segment.start) ||
+      !Number.isFinite(segment.end)
+    ) {
+      return [];
+    }
+    return [{
+      start: segment.start,
+      end: segment.end,
+      text: segment.text,
+    }];
+  });
+}
+
+function parseProviderWords(value: unknown): ProviderWord[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (
+      !entry ||
+      typeof entry !== 'object' ||
+      typeof entry.start !== 'number' ||
+      typeof entry.end !== 'number' ||
+      typeof entry.word !== 'string' ||
+      !Number.isFinite(entry.start) ||
+      !Number.isFinite(entry.end)
+    ) {
+      return [];
+    }
+    return [{
+      start: entry.start,
+      end: entry.end,
+      word: entry.word,
+    }];
+  });
+}
+
+function getResultDuration(result: ChunkTranscriptionResult): number {
+  return Math.max(
+    0,
+    result.duration,
+    ...result.segments?.map((segment) => segment.end) ?? [],
+    ...result.words?.map((word) => word.end) ?? []
+  );
+}
+
+function clampLocalTime(value: number, duration: number): number {
+  const time = Math.max(0, value);
+  return duration > 0 ? Math.min(time, duration) : time;
+}
+
 /**
- * Transcribe pre-recorded audio chunks (webm/opus, about 30 seconds each).
- * Each chunk yields a single SRT segment spanning its full duration.
+ * Transcribe pre-recorded audio chunks and move provider timestamps onto the
+ * full recording timeline.
  */
 export async function transcribeAudioChunks(
   audioChunks: RecordedAudioChunk[],
@@ -185,6 +294,7 @@ export async function transcribeAudioChunks(
 
   let fullText = '';
   const segments: TranscriptionSegment[] = [];
+  const words: TranscriptionWord[] = [];
   const failures: TranscriptionFailure[] = [];
   let timelineEnd = 0;
   let transcribedChunks = 0;
@@ -197,19 +307,46 @@ export async function transcribeAudioChunks(
     try {
       const result = await transcriber(blob, 'webm', i, apiKey);
       const trimmed = result.text.trim();
-      const end = hasCaptureTimes ? chunk.end : start + result.duration;
+      const resultDuration = getResultDuration(result);
+      const end = hasCaptureTimes ? chunk.end : start + resultDuration;
+      const localDuration = end - start;
       timelineEnd = Math.max(timelineEnd, end);
       transcribedChunks += 1;
 
       if (fullText && trimmed) fullText += ' ';
       fullText += trimmed;
 
-      if (trimmed) {
+      if (result.segments && result.segments.length > 0) {
+        for (const segment of result.segments) {
+          const text = segment.text.trim();
+          if (!text) continue;
+          const localStart = clampLocalTime(segment.start, localDuration);
+          const localEnd = Math.max(
+            localStart,
+            clampLocalTime(segment.end, localDuration)
+          );
+          segments.push({
+            id: segments.length,
+            start: start + localStart,
+            end: start + localEnd,
+            text,
+          });
+        }
+      } else if (trimmed) {
         segments.push({
           id: segments.length,
           start,
           end,
           text: trimmed,
+        });
+      }
+      for (const word of result.words ?? []) {
+        const localStart = clampLocalTime(word.start, localDuration);
+        const localEnd = Math.max(localStart, clampLocalTime(word.end, localDuration));
+        words.push({
+          start: start + localStart,
+          end: start + localEnd,
+          word: word.word,
         });
       }
     } catch (error) {
@@ -229,6 +366,7 @@ export async function transcribeAudioChunks(
   return {
     text: fullText.trim(),
     segments,
+    words,
     duration: timelineEnd,
     attemptedChunks: audioChunks.length,
     transcribedChunks,
@@ -262,12 +400,33 @@ export async function transcribeVideo(
     console.log('[Transcription] Transcribing video directly (small file)...');
     const result = await transcribeChunk(videoBlob, 'webm', 0, apiKey);
     const trimmed = result.text.trim();
+    const duration = getResultDuration(result);
     return {
       text: trimmed,
       segments: trimmed
-        ? [{ id: 0, start: 0, end: result.duration, text: trimmed }]
+        ? result.segments && result.segments.length > 0
+          ? result.segments.flatMap((segment) => {
+              const text = segment.text.trim();
+              if (!text) return [];
+              const start = clampLocalTime(segment.start, duration);
+              return [{
+                id: 0,
+                start,
+                end: Math.max(start, clampLocalTime(segment.end, duration)),
+                text,
+              }];
+            }).map((segment, index) => ({ ...segment, id: index }))
+          : [{ id: 0, start: 0, end: duration, text: trimmed }]
         : [],
-      duration: result.duration,
+      words: (result.words ?? []).map((word) => {
+        const start = clampLocalTime(word.start, duration);
+        return {
+          start,
+          end: Math.max(start, clampLocalTime(word.end, duration)),
+          word: word.word,
+        };
+      }),
+      duration,
       attemptedChunks: 1,
       transcribedChunks: 1,
       failures: [],
@@ -277,6 +436,7 @@ export async function transcribeVideo(
     return {
       text: '',
       segments: [],
+      words: [],
       duration: 0,
       attemptedChunks: 1,
       transcribedChunks: 0,

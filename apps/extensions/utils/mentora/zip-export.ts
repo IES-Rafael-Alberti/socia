@@ -71,11 +71,26 @@ export async function exportToZip(
     }
     if (transcription) {
       folder.file(
+        'transcription.json',
+        JSON.stringify(
+          {
+            text: transcription.text,
+            duration: transcription.duration,
+            segments: transcription.segments,
+            words: transcription.words,
+          },
+          null,
+          2
+        )
+      );
+      folder.file(
         'transcription-status.json',
         JSON.stringify(
           {
             attemptedChunks: transcription.attemptedChunks,
             transcribedChunks: transcription.transcribedChunks,
+            segments: transcription.segments.length,
+            words: transcription.words.length,
             failedChunks: transcription.failures,
             requestsComplete: transcription.failures.length === 0,
           },
@@ -250,7 +265,11 @@ function generateLLMInstructions(
     : '';
 
   const transcriptionFiles = hasTranscription
-    ? `- \`transcription.srt\` - Audio transcription, segmented in 30-second chunks
+    ? `- \`transcription.srt\` - Audio transcription with segment timestamps
+`
+    : '';
+  const transcriptionDataFile = hasTranscriptionStatus
+    ? `- \`transcription.json\` - Full text, segments and word timestamps
 `
     : '';
   const transcriptionStatusFile = hasTranscriptionStatus
@@ -259,7 +278,7 @@ function generateLLMInstructions(
     : '';
 
   const transcriptionNote = hasTranscription
-    ? `5. **Read \`transcription.srt\`** for what was said during the recording. Match its 30-second ranges with the action timestamps. Chunk boundaries are not aligned to individual phrases.
+    ? `5. **Read \`transcription.json\`** for what was said during the recording. Match its segment or word timestamps with the action log.
 `
     : '';
   const transcriptionLabel = {
@@ -281,7 +300,7 @@ This package contains a tutorial recording captured by the MENTORA browser exten
 - \`activity-log.json\` - Structured JSON log of all user actions
 - \`activity-log-readable.txt\` - Human-readable timeline of actions
 - \`metadata.json\` - Recording session metadata
-${networkFiles}${transcriptionFiles}${transcriptionStatusFile}
+${networkFiles}${transcriptionFiles}${transcriptionDataFile}${transcriptionStatusFile}
 ## Recording Summary
 
 - **Extension**: ${metadata.extensionName} v${metadata.version}

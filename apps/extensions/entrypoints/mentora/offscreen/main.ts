@@ -25,7 +25,7 @@ let captureStartedAt: number | null = null;
 let capturePausedAt: number | null = null;
 let totalPausedDuration = 0;
 
-const AUDIO_CHUNK_DURATION_MS = 30 * 1000;
+const AUDIO_CHUNK_DURATION_MS = 5 * 60 * 1000;
 
 function getCaptureTime(): number {
   if (captureStartedAt === null) return 0;
@@ -201,7 +201,7 @@ function buildAudioOnlyStream(audioTrack: MediaStreamTrack | null): MediaStream 
 }
 
 /**
- * Start recording audio in 30-second chunks.
+ * Start recording audio in five-minute chunks.
  * Each chunk is sent to background as AUDIO_CHUNK for later transcription.
  */
 function startAudioChunkRecording(stream: MediaStream): void {
@@ -227,7 +227,7 @@ function startNextAudioChunk(stream: MediaStream): void {
     : 'audio/webm';
   const recorder = new MediaRecorder(stream, {
     mimeType,
-    audioBitsPerSecond: 48000, // 48 kbps mono ≈ 0.18 MB per chunk
+    audioBitsPerSecond: 48000, // 48 kbps mono ≈ 1.8 MB per chunk
   });
   audioChunkRecorder = recorder;
 
