@@ -250,7 +250,7 @@ function generateLLMInstructions(
     : '';
 
   const transcriptionFiles = hasTranscription
-    ? `- \`transcription.srt\` - Audio transcription, segmented in one-minute chunks
+    ? `- \`transcription.srt\` - Audio transcription, segmented in 30-second chunks
 `
     : '';
   const transcriptionStatusFile = hasTranscriptionStatus
@@ -259,7 +259,7 @@ function generateLLMInstructions(
     : '';
 
   const transcriptionNote = hasTranscription
-    ? `5. **Read \`transcription.srt\`** for what was said during the recording. Match its one-minute ranges with the action timestamps. Chunk boundaries are not aligned to individual phrases.
+    ? `5. **Read \`transcription.srt\`** for what was said during the recording. Match its 30-second ranges with the action timestamps. Chunk boundaries are not aligned to individual phrases.
 `
     : '';
   const transcriptionLabel = {

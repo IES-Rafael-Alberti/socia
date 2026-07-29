@@ -164,7 +164,7 @@ async function transcribeChunk(
 }
 
 /**
- * Transcribe pre-recorded audio chunks (webm/opus, about one minute each).
+ * Transcribe pre-recorded audio chunks (webm/opus, about 30 seconds each).
  * Each chunk yields a single SRT segment spanning its full duration.
  */
 export async function transcribeAudioChunks(

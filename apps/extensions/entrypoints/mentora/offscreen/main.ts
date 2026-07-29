@@ -20,11 +20,12 @@ let mixedAudioTrack: MediaStreamTrack | null = null;
 let dataRequestTimer: number | null = null;
 let finalVideoSentPromise: Promise<void> | null = null;
 let resolveFinalVideoSent: (() => void) | null = null;
+let stopCapturePromise: Promise<{ success: boolean; error?: string }> | null = null;
 let captureStartedAt: number | null = null;
 let capturePausedAt: number | null = null;
 let totalPausedDuration = 0;
 
-const AUDIO_CHUNK_DURATION_MS = 60 * 1000;
+const AUDIO_CHUNK_DURATION_MS = 30 * 1000;
 
 function getCaptureTime(): number {
   if (captureStartedAt === null) return 0;
@@ -200,7 +201,7 @@ function buildAudioOnlyStream(audioTrack: MediaStreamTrack | null): MediaStream 
 }
 
 /**
- * Start recording audio in one-minute chunks.
+ * Start recording audio in 30-second chunks.
  * Each chunk is sent to background as AUDIO_CHUNK for later transcription.
  */
 function startAudioChunkRecording(stream: MediaStream): void {
@@ -226,7 +227,7 @@ function startNextAudioChunk(stream: MediaStream): void {
     : 'audio/webm';
   const recorder = new MediaRecorder(stream, {
     mimeType,
-    audioBitsPerSecond: 48000, // 48 kbps mono ≈ 0.35 MB per minute
+    audioBitsPerSecond: 48000, // 48 kbps mono ≈ 0.18 MB per chunk
   });
   audioChunkRecorder = recorder;
 
@@ -409,9 +410,9 @@ async function startCapture() {
     // Add video track from display
     displayVideoTracks.forEach((track) => {
       // Handle track ending (user stops sharing)
-      track.onended = () => {
+      track.onended = async () => {
         console.log('[Offscreen] Display track ended');
-        stopCapture();
+        await stopCapture();
         chrome.runtime.sendMessage({ type: 'CAPTURE_STOPPED_BY_USER', target: 'background' });
       };
     });
@@ -510,7 +511,16 @@ function resumeCapture() {
   return { success: false, error: 'Not paused' };
 }
 
-async function stopCapture(): Promise<{ success: boolean; error?: string }> {
+function stopCapture(): Promise<{ success: boolean; error?: string }> {
+  if (!stopCapturePromise) {
+    stopCapturePromise = performStopCapture().finally(() => {
+      stopCapturePromise = null;
+    });
+  }
+  return stopCapturePromise;
+}
+
+async function performStopCapture(): Promise<{ success: boolean; error?: string }> {
   console.log('[Offscreen] Stop requested');
 
   // Stop audio recording and wait until the last chunk is stored.
