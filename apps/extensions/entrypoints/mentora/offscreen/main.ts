@@ -9,6 +9,7 @@ let audioChunkRecorder: MediaRecorder | null = null;
 let chunkCount = 0;
 let audioChunkIndex = 0;
 let audioChunkTimer: number | null = null;
+const pendingAudioChunkSaves = new Set<Promise<void>>();
 let microphoneStream: MediaStream | null = null;
 let displayStream: MediaStream | null = null;
 let audioContext: AudioContext | null = null;
@@ -203,6 +204,9 @@ function startAudioChunkRecording(stream: MediaStream): void {
 }
 
 function startNextAudioChunk(stream: MediaStream): void {
+  const chunkIndex = audioChunkIndex;
+  audioChunkIndex += 1;
+
   // Use webm/opus which is compact (~6KB/s mono) and Whisper accepts directly
   const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
     ? 'audio/webm;codecs=opus'
@@ -213,6 +217,11 @@ function startNextAudioChunk(stream: MediaStream): void {
   });
 
   const chunks: Blob[] = [];
+  let resolveSaved!: () => void;
+  const saved = new Promise<void>((resolve) => {
+    resolveSaved = resolve;
+  });
+  pendingAudioChunkSaves.add(saved);
 
   audioChunkRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
@@ -220,31 +229,53 @@ function startNextAudioChunk(stream: MediaStream): void {
     }
   };
 
-  audioChunkRecorder.onstop = () => {
-    if (chunks.length === 0) return;
-    const blob = new Blob(chunks, { type: 'audio/webm' });
-    console.log(`[Offscreen] Audio chunk ${audioChunkIndex} complete: ${(blob.size / 1024).toFixed(0)} KB`);
-
-    blob.arrayBuffer().then((buffer) => {
-      chrome.runtime.sendMessage(
-        {
-          type: 'AUDIO_CHUNK',
-          index: audioChunkIndex,
-          data: Array.from(new Uint8Array(buffer)),
-          target: 'background',
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            console.error('[Offscreen] AUDIO_CHUNK send error:', chrome.runtime.lastError);
-          }
-        }
-      );
-      audioChunkIndex++;
-    });
+  audioChunkRecorder.onstop = async () => {
+    try {
+      if (chunks.length === 0) return;
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      console.log(`[Offscreen] Audio chunk ${chunkIndex} complete: ${(blob.size / 1024).toFixed(0)} KB`);
+      const buffer = await blob.arrayBuffer();
+      await sendAudioChunk(chunkIndex, buffer);
+    } catch (error) {
+      console.error(`[Offscreen] Failed to save audio chunk ${chunkIndex}:`, error);
+    } finally {
+      pendingAudioChunkSaves.delete(saved);
+      resolveSaved();
+    }
   };
 
-  audioChunkRecorder.start(1000); // collect data every second internally
-  console.log(`[Offscreen] Audio chunk recorder started (chunk ${audioChunkIndex})`);
+  try {
+    audioChunkRecorder.start(1000); // collect data every second internally
+  } catch (error) {
+    pendingAudioChunkSaves.delete(saved);
+    resolveSaved();
+    throw error;
+  }
+  console.log(`[Offscreen] Audio chunk recorder started (chunk ${chunkIndex})`);
+}
+
+function sendAudioChunk(index: number, buffer: ArrayBuffer): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        type: 'AUDIO_CHUNK',
+        index,
+        data: Array.from(new Uint8Array(buffer)),
+        target: 'background',
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (!response?.success) {
+          reject(new Error(response?.error || 'Audio chunk was not saved'));
+          return;
+        }
+        resolve();
+      }
+    );
+  });
 }
 
 function rotateAudioChunk(stream: MediaStream): void {
@@ -254,7 +285,7 @@ function rotateAudioChunk(stream: MediaStream): void {
   startNextAudioChunk(stream);
 }
 
-function stopAudioChunkRecording(): void {
+async function stopAudioChunkRecording(): Promise<void> {
   if (audioChunkTimer) {
     clearInterval(audioChunkTimer);
     audioChunkTimer = null;
@@ -263,6 +294,7 @@ function stopAudioChunkRecording(): void {
     audioChunkRecorder.stop(); // sends the last partial chunk
   }
   audioChunkRecorder = null;
+  await Promise.all([...pendingAudioChunkSaves]);
 }
 
 // Listen for messages from background
@@ -448,8 +480,8 @@ function resumeCapture() {
 async function stopCapture(): Promise<{ success: boolean; error?: string }> {
   console.log('[Offscreen] Stop requested');
 
-  // Stop audio chunk recording first (sends last chunk via onstop)
-  stopAudioChunkRecording();
+  // Stop audio recording and wait until the last chunk is stored.
+  await stopAudioChunkRecording();
 
   const canStopIncremental = incrementalRecorder && incrementalRecorder.state !== 'inactive';
   const canStopFinal = finalRecorder && finalRecorder.state !== 'inactive';
