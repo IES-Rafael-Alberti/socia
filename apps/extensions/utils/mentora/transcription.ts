@@ -11,7 +11,7 @@ import type { RecordedAudioChunk } from './db';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/audio/transcriptions';
 const TRANSCRIPTION_MODEL =
-  (import.meta.env.EXT_OPENROUTER_MODEL_TRANSCRIPTION as string | undefined) ??
+  (import.meta.env?.EXT_OPENROUTER_MODEL_TRANSCRIPTION as string | undefined) ??
   'openai/whisper-large-v3-turbo';
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 75_000;
@@ -37,6 +37,13 @@ export interface TranscriptionFailure {
   chunkIndex: number;
   error: string;
 }
+
+type TranscribeChunk = (
+  chunk: Blob,
+  format: 'webm' | 'wav' | 'mp3' | 'ogg',
+  chunkIndex: number,
+  apiKey: string
+) => Promise<{ text: string; duration: number }>;
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -162,7 +169,8 @@ async function transcribeChunk(
  */
 export async function transcribeAudioChunks(
   audioChunks: RecordedAudioChunk[],
-  apiKey: string
+  apiKey: string,
+  transcriber: TranscribeChunk = transcribeChunk
 ): Promise<TranscriptionResult | null> {
   if (!apiKey) {
     console.log('[Transcription] Skipping - no OpenRouter API key configured');
@@ -187,7 +195,7 @@ export async function transcribeAudioChunks(
     const hasCaptureTimes = chunk.end > chunk.start;
     const start = hasCaptureTimes ? chunk.start : timelineEnd;
     try {
-      const result = await transcribeChunk(blob, 'webm', i, apiKey);
+      const result = await transcriber(blob, 'webm', i, apiKey);
       const trimmed = result.text.trim();
       const end = hasCaptureTimes ? chunk.end : start + result.duration;
       timelineEnd = Math.max(timelineEnd, end);
