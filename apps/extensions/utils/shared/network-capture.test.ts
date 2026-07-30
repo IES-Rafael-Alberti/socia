@@ -18,10 +18,11 @@ test('truncates bodies at 16 KiB and reports their original length', () => {
 });
 
 test('redacts secrets in JSON and form bodies', () => {
-  const body = captureText(
-    '{"password":"one","access_token":"two"}&api_key=three&name=visible'
-  );
+  const original =
+    '{"password":"one","access_token":"two"}&api_key=three&name=visible';
+  const body = captureText(original);
 
+  assert.equal(body.originalLength, original.length);
   assert.equal(body.value?.includes('one'), false);
   assert.equal(body.value?.includes('two'), false);
   assert.equal(body.value?.includes('three'), false);

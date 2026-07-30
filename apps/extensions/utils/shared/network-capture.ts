@@ -76,7 +76,7 @@ export function captureText(value: string | null): CapturedBody {
     value: truncated
       ? `${redacted.slice(0, NETWORK_BODY_LIMIT)}...[truncated]`
       : redacted,
-    originalLength: redacted.length,
+    originalLength: value.length,
     truncated,
   };
 }
