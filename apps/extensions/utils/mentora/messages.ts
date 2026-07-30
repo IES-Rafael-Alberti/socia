@@ -128,15 +128,19 @@ export interface RecordingMetadata {
   totalScreenshots: number;
   videoDuration?: string;
   pages: string[];
+  /** Whether this recording may send audio to OpenRouter during export. */
+  transcriptionEnabled?: boolean;
 }
 
 // Messages from popup to background
 export type PopupToBackgroundMessage =
-  | { type: 'START_RECORDING' }
+  | { type: 'START_RECORDING'; allowWithoutTranscription?: boolean }
   | { type: 'PAUSE_RECORDING' }
   | { type: 'RESUME_RECORDING' }
   | { type: 'STOP_RECORDING' }
+  | { type: 'STOP_AND_DOWNLOAD' }
   | { type: 'GET_STATE' }
+  | { type: 'VALIDATE_OPENROUTER_KEY'; apiKey: string }
   | { type: 'DOWNLOAD_RECORDING' };
 
 // Messages from background to offscreen
@@ -176,6 +180,21 @@ export interface StateResponse {
   hasRecordingData?: boolean;
   /** True while `DOWNLOAD_RECORDING` is in flight in the background. */
   isExporting?: boolean;
+  exportStage?: ExportStage;
+}
+
+export type ExportStage = 'idle' | 'stopping' | 'preparing' | 'downloading';
+
+export type StartRecordingErrorCode =
+  | 'OPENROUTER_INVALID'
+  | 'OPENROUTER_EXHAUSTED'
+  | 'OPENROUTER_UNAVAILABLE';
+
+export interface StartRecordingResponse {
+  success: boolean;
+  error?: string;
+  errorCode?: StartRecordingErrorCode;
+  transcriptionEnabled?: boolean;
 }
 
 export interface DownloadResponse {

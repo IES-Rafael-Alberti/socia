@@ -1,10 +1,19 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
-import type { StateResponse, RecordingState } from '../../../utils/mentora/messages';
+import type {
+  ExportStage,
+  RecordingState,
+  StartRecordingResponse,
+  StateResponse,
+} from '../../../utils/mentora/messages';
 import { useSessionState } from '../../../utils/shared/popup-session';
 import {
   loadTranscriptionSettings,
   saveTranscriptionSettings,
 } from '../../../utils/mentora/transcription-settings';
+import {
+  isOpenRouterKeyFormatValid,
+  type OpenRouterValidationResult,
+} from '../../../utils/mentora/openrouter-validation';
 
 function sendMessage<T>(message: Record<string, unknown>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -26,10 +35,14 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasRecording, setHasRecording] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [exportStage, setExportStage] = useState<ExportStage>('idle');
+  const [exportRequest, setExportRequest] = useState<'stop' | 'download' | null>(null);
   const [hasDownloaded, setHasDownloaded] = useState(false);
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
   const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
+  const [apiKeyStatusIsError, setApiKeyStatusIsError] = useState(false);
+  const [isValidatingApiKey, setIsValidatingApiKey] = useState(false);
+  const [canStartWithoutTranscription, setCanStartWithoutTranscription] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [timerCache, setTimerCache] = useSessionState('mentora.timerCache', {
     elapsedTime: 0,
@@ -74,7 +87,7 @@ export default function App() {
       setState(response.state);
       setActionCount(response.actionCount || 0);
       setScreenshotCount(response.screenshotCount || 0);
-      setIsExporting(response.isExporting ?? false);
+      setExportStage(response.exportStage ?? (response.isExporting ? 'preparing' : 'idle'));
 
       // Set elapsed time from background
       if (response.elapsedTime !== undefined) {
@@ -116,7 +129,12 @@ export default function App() {
 
   useEffect(() => {
     loadTranscriptionSettings().then((settings) => {
-      setOpenRouterApiKey(settings.openRouterApiKey ?? '');
+      const apiKey = settings.openRouterApiKey ?? '';
+      setOpenRouterApiKey(apiKey);
+      if (apiKey && !isOpenRouterKeyFormatValid(apiKey)) {
+        setApiKeyStatus('La clave guardada debe empezar por sk-.');
+        setApiKeyStatusIsError(true);
+      }
     });
   }, []);
 
@@ -164,7 +182,7 @@ export default function App() {
 
   // Poll for action/screenshot counts (or export progress when idle).
   useEffect(() => {
-    if (state !== 'recording' && state !== 'paused' && !isExporting) return;
+    if (state !== 'recording' && state !== 'paused' && exportStage === 'idle') return;
     const pollInterval = setInterval(async () => {
       try {
         const response: StateResponse = await sendMessage<StateResponse>({
@@ -172,7 +190,7 @@ export default function App() {
         });
         setActionCount(response.actionCount || 0);
         setScreenshotCount(response.screenshotCount || 0);
-        setIsExporting(response.isExporting ?? false);
+        setExportStage(response.exportStage ?? (response.isExporting ? 'preparing' : 'idle'));
 
         // If paused, also sync the elapsed time
         if (state === 'paused' && response.elapsedTime !== undefined) {
@@ -189,7 +207,7 @@ export default function App() {
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [state, isExporting]);
+  }, [state, exportStage]);
 
   const formatTime = (ms: number): string => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -203,18 +221,32 @@ export default function App() {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const handleStart = async () => {
+  const handleStart = async (allowWithoutTranscription = false) => {
     setIsLoading(true);
     setError(null);
+    setCanStartWithoutTranscription(false);
     try {
       console.log('[Popup] Starting recording...');
-      const response = await sendMessage<{ success: boolean; error?: string }>({
+      const response = await sendMessage<StartRecordingResponse>({
         type: 'START_RECORDING',
+        allowWithoutTranscription,
       });
       console.log('[Popup] Start response:', response);
 
       if (!response || !response.success) {
-        setError(response?.error || 'Failed to start recording. Make sure to allow screen sharing.');
+        if (response?.errorCode === 'OPENROUTER_INVALID') {
+          setError('La clave de OpenRouter no es válida. Corrígela antes de grabar.');
+        } else if (response?.errorCode === 'OPENROUTER_EXHAUSTED') {
+          setError('La clave de OpenRouter no tiene saldo disponible.');
+        } else if (response?.errorCode === 'OPENROUTER_UNAVAILABLE') {
+          setError('No se pudo comprobar OpenRouter. Puedes grabar sin transcripción.');
+          setCanStartWithoutTranscription(true);
+        } else {
+          setError(
+            response?.error ||
+              'No se pudo empezar. Comprueba el permiso para compartir la pantalla.'
+          );
+        }
         setIsLoading(false);
         await fetchState();
       } else {
@@ -235,15 +267,45 @@ export default function App() {
   };
 
   const handleSaveApiKey = async () => {
+    const trimmed = openRouterApiKey.trim();
+    setApiKeyStatusIsError(false);
+
+    if (trimmed && !isOpenRouterKeyFormatValid(trimmed)) {
+      setApiKeyStatus('La clave debe empezar por sk-.');
+      setApiKeyStatusIsError(true);
+      return;
+    }
+
+    setIsValidatingApiKey(true);
     try {
+      if (trimmed) {
+        const validation = await sendMessage<OpenRouterValidationResult>({
+          type: 'VALIDATE_OPENROUTER_KEY',
+          apiKey: trimmed,
+        });
+        if (validation.status !== 'valid') {
+          const message =
+            validation.status === 'exhausted'
+              ? 'La clave no tiene saldo disponible.'
+              : validation.status === 'unavailable'
+                ? 'No se pudo comprobar OpenRouter.'
+                : 'La clave no es válida.';
+          setApiKeyStatus(message);
+          setApiKeyStatusIsError(true);
+          return;
+        }
+      }
+
       await saveTranscriptionSettings({
-        openRouterApiKey: openRouterApiKey || null,
+        openRouterApiKey: trimmed || null,
       });
-      const trimmed = openRouterApiKey.trim();
       setOpenRouterApiKey(trimmed);
-      setApiKeyStatus(trimmed ? 'Clave guardada.' : 'Clave eliminada.');
+      setApiKeyStatus(trimmed ? 'Clave comprobada y guardada.' : 'Clave eliminada.');
     } catch {
-      setApiKeyStatus('No se pudo guardar la clave.');
+      setApiKeyStatus('No se pudo comprobar ni guardar la clave.');
+      setApiKeyStatusIsError(true);
+    } finally {
+      setIsValidatingApiKey(false);
     }
   };
 
@@ -288,7 +350,7 @@ export default function App() {
   };
 
   const handleDownload = useCallback(async () => {
-    setIsLoading(true);
+    setExportRequest('download');
     setError(null);
     try {
       console.log('[Popup] Downloading...');
@@ -306,33 +368,38 @@ export default function App() {
       }
     } catch (err) {
       console.error('[Popup] Download error:', err);
-      setError('Failed to download recording');
+      setError('No se pudo preparar la descarga.');
     } finally {
-      setIsLoading(false);
+      setExportRequest(null);
+      setExportStage('idle');
     }
   }, []);
 
   const handleStop = async () => {
-    setIsLoading(true);
+    setExportRequest('stop');
+    setError(null);
     try {
       console.log('[Popup] Stopping...');
       const response = await sendMessage<{ success: boolean; error?: string }>({
-        type: 'STOP_RECORDING',
+        type: 'STOP_AND_DOWNLOAD',
       });
       console.log('[Popup] Stop response:', response);
 
       if (response?.success) {
         setState('idle');
         setHasRecording(true);
-        setHasDownloaded(false);
-        // Auto-export the ZIP so the user doesn't need an extra click. The
-        // save dialog will appear once the background finishes packaging.
-        await handleDownload();
+        setHasDownloaded(true);
+      } else {
+        setError(response?.error || 'No se pudo preparar la descarga.');
+        await fetchState();
       }
     } catch (err) {
       console.error('[Popup] Stop error:', err);
+      setError('No se pudo detener y preparar la grabación.');
+      await fetchState();
     } finally {
-      setIsLoading(false);
+      setExportRequest(null);
+      setExportStage('idle');
     }
   };
 
@@ -350,6 +417,32 @@ export default function App() {
   const isRecording = state === 'recording';
   const isPaused = state === 'paused';
   const isIdle = state === 'idle';
+  const isPreparingDownload = exportRequest !== null || exportStage !== 'idle';
+  const trimmedApiKey = openRouterApiKey.trim();
+  const hasInvalidApiKeyFormat =
+    trimmedApiKey.length > 0 && !isOpenRouterKeyFormatValid(trimmedApiKey);
+
+  if (isPreparingDownload) {
+    const processingText =
+      exportStage === 'downloading'
+        ? 'Abriendo la descarga…'
+        : exportStage === 'stopping' || exportRequest === 'stop'
+          ? 'Finalizando la grabación y preparando el ZIP…'
+          : 'Preparando el ZIP y la transcripción…';
+
+    return (
+      <div className="popup">
+        <header className="header">
+          <h1>MENTORA</h1>
+        </header>
+        <div className="processing" role="status" aria-live="polite">
+          <span className="spinner" aria-hidden="true" />
+          <h2>Procesando la grabación</h2>
+          <p>{processingText}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="popup">
@@ -420,15 +513,24 @@ export default function App() {
                   value={openRouterApiKey}
                   onChange={(event) => {
                     setOpenRouterApiKey(event.target.value);
-                    setApiKeyStatus(null);
+                    const value = event.target.value.trim();
+                    if (value && !isOpenRouterKeyFormatValid(value)) {
+                      setApiKeyStatus('La clave debe empezar por sk-.');
+                      setApiKeyStatusIsError(true);
+                    } else {
+                      setApiKeyStatus(null);
+                      setApiKeyStatusIsError(false);
+                    }
                   }}
+                  aria-invalid={hasInvalidApiKeyFormat}
                 />
                 <button
                   className="btn btn-secondary"
                   type="button"
                   onClick={handleSaveApiKey}
+                  disabled={hasInvalidApiKeyFormat || isValidatingApiKey}
                 >
-                  Guardar
+                  {isValidatingApiKey ? 'Comprobando…' : 'Guardar'}
                 </button>
               </div>
               <label className="transcription-settings__show">
@@ -444,7 +546,15 @@ export default function App() {
                 clave no crea la transcripción.
               </p>
               {apiKeyStatus && (
-                <span className="transcription-settings__saved">{apiKeyStatus}</span>
+                <span
+                  className={
+                    apiKeyStatusIsError
+                      ? 'transcription-settings__error'
+                      : 'transcription-settings__saved'
+                  }
+                >
+                  {apiKeyStatus}
+                </span>
               )}
             </section>
           </>
@@ -455,24 +565,31 @@ export default function App() {
             <>
               <button
                 className="btn btn-primary btn-big btn-block"
-                onClick={handleStart}
+                onClick={() => void handleStart()}
                 disabled={isLoading}
               >
                 {isLoading ? 'Iniciando…' : 'Empezar'}
               </button>
+              {canStartWithoutTranscription && (
+                <button
+                  className="btn btn-secondary btn-block"
+                  onClick={() => void handleStart(true)}
+                  disabled={isLoading}
+                >
+                  Grabar sin transcripción
+                </button>
+              )}
               {hasRecording && (
                 <button
                   className="btn btn-secondary btn-block"
                   onClick={handleDownload}
-                  disabled={isLoading || isExporting}
+                  disabled={isLoading}
                 >
-                  {isExporting
-                    ? 'Exportando…'
-                    : isLoading
-                      ? 'Preparando…'
-                      : hasDownloaded
-                        ? 'Volver a descargar'
-                        : 'Descargar ZIP'}
+                  {isLoading
+                    ? 'Preparando…'
+                    : hasDownloaded
+                      ? 'Volver a descargar'
+                      : 'Descargar ZIP'}
                 </button>
               )}
             </>

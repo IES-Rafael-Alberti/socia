@@ -26,9 +26,17 @@ import {
   stopRecording as stopRecordingState,
   getRelativeTime,
 } from '../../utils/mentora/storage';
-import type { ActionLog, NetworkEvent, Screenshot, StateResponse } from '../../utils/mentora/messages';
+import type {
+  ActionLog,
+  ExportStage,
+  NetworkEvent,
+  Screenshot,
+  StartRecordingResponse,
+  StateResponse,
+} from '../../utils/mentora/messages';
 import { exportToZip } from '../../utils/mentora/zip-export';
 import { loadTranscriptionSettings } from '../../utils/mentora/transcription-settings';
+import { validateOpenRouterKey } from '../../utils/mentora/openrouter-validation';
 import type { NetworkCaptureMessage } from '../../utils/shared/network-capture';
 
 interface MentoraRuntimeMessage {
@@ -44,6 +52,8 @@ interface MentoraRuntimeMessage {
   endTime?: number;
   startedAt?: number;
   target?: string;
+  apiKey?: string;
+  allowWithoutTranscription?: boolean;
 }
 
 export default defineBackground(() => {
@@ -55,7 +65,8 @@ export default defineBackground(() => {
   let lastMicPermissionOpen = 0;
   let pendingStart = false;
   let startInProgress = false;
-  let isExporting = false;
+  let exportStage: ExportStage = 'idle';
+  let currentRecordingTranscriptionEnabled = false;
 
   // Restore state on startup
   getRecordingState().then(async (state) => {
@@ -102,15 +113,19 @@ export default defineBackground(() => {
     switch (message.type) {
       // Popup messages
       case 'START_RECORDING':
-        return await startRecording();
+        return await startRecording(message.allowWithoutTranscription);
       case 'PAUSE_RECORDING':
         return await pauseRecording();
       case 'RESUME_RECORDING':
         return await resumeRecording();
       case 'STOP_RECORDING':
         return await stopRecording();
+      case 'STOP_AND_DOWNLOAD':
+        return await stopAndDownload();
       case 'GET_STATE':
         return await getState();
+      case 'VALIDATE_OPENROUTER_KEY':
+        return await validateOpenRouterKey(message.apiKey ?? '');
       case 'DOWNLOAD_RECORDING':
         return await downloadRecording();
 
@@ -228,7 +243,7 @@ export default defineBackground(() => {
         return { success: true };
       case 'MIC_PERMISSION_GRANTED':
         if (pendingStart && !startInProgress) {
-          await startRecording();
+          await startRecording(false, currentRecordingTranscriptionEnabled);
         }
         return { success: true };
 
@@ -238,13 +253,48 @@ export default defineBackground(() => {
     }
   }
 
-  async function startRecording(): Promise<{ success: boolean; error?: string }> {
+  async function startRecording(
+    allowWithoutTranscription = false,
+    validatedTranscriptionEnabled?: boolean
+  ): Promise<StartRecordingResponse> {
     if (startInProgress) {
       return { success: false, error: 'Start already in progress' };
     }
+
+    let transcriptionEnabled = validatedTranscriptionEnabled ?? false;
+    if (validatedTranscriptionEnabled === undefined && !allowWithoutTranscription) {
+      const settings = await loadTranscriptionSettings();
+      if (settings.openRouterApiKey) {
+        const validation = await validateOpenRouterKey(settings.openRouterApiKey);
+        if (validation.status === 'invalid') {
+          return {
+            success: false,
+            error: 'OpenRouter API key is invalid',
+            errorCode: 'OPENROUTER_INVALID',
+          };
+        }
+        if (validation.status === 'exhausted') {
+          return {
+            success: false,
+            error: 'OpenRouter API key has no remaining limit',
+            errorCode: 'OPENROUTER_EXHAUSTED',
+          };
+        }
+        if (validation.status === 'unavailable') {
+          return {
+            success: false,
+            error: 'OpenRouter key validation is unavailable',
+            errorCode: 'OPENROUTER_UNAVAILABLE',
+          };
+        }
+        transcriptionEnabled = true;
+      }
+    }
+
     try {
       startInProgress = true;
       pendingStart = true;
+      currentRecordingTranscriptionEnabled = transcriptionEnabled;
       console.log('[Background] Starting recording...');
 
       // Clear any leftover data from a previous (already-downloaded) session
@@ -268,6 +318,7 @@ export default defineBackground(() => {
         console.error('[Background] Offscreen not ready after waiting');
         await closeOffscreenDocument();
         currentRecordingId = null;
+        currentRecordingTranscriptionEnabled = false;
         return { success: false, error: 'Offscreen document not ready' };
       }
 
@@ -284,6 +335,7 @@ export default defineBackground(() => {
           await openMicPermissionPage();
           return { success: false, error: 'Microphone permission required' };
         }
+        currentRecordingTranscriptionEnabled = false;
         await closeOffscreenDocument();
         return { success: false, error: response?.error || 'User cancelled screen sharing' };
       }
@@ -306,11 +358,12 @@ export default defineBackground(() => {
       console.log('[Background] Recording started successfully');
       pendingStart = false;
       startInProgress = false;
-      return { success: true };
+      return { success: true, transcriptionEnabled };
     } catch (error) {
       console.error('[Background] Failed to start recording:', error);
       await stopRecordingState();
       currentRecordingId = null;
+      currentRecordingTranscriptionEnabled = false;
       await closeOffscreenDocument();
       startInProgress = false;
       return { success: false, error: String(error) };
@@ -436,7 +489,8 @@ export default defineBackground(() => {
       screenshotCount,
       isPaused: state.state === 'paused',
       hasRecordingData,
-      isExporting,
+      isExporting: exportStage !== 'idle',
+      exportStage,
     };
     console.log('[Background] GET_STATE response:', response);
     return response;
@@ -545,18 +599,39 @@ export default defineBackground(() => {
     return { success: true };
   }
 
-  async function downloadRecording(): Promise<{ success: boolean; error?: string }> {
-    if (isExporting) {
+  async function stopAndDownload(): Promise<{ success: boolean; error?: string }> {
+    if (exportStage !== 'idle') {
+      return { success: false, error: 'Export already in progress' };
+    }
+    exportStage = 'stopping';
+    try {
+      const stopResponse = await stopRecording();
+      if (!stopResponse.success) {
+        exportStage = 'idle';
+        return stopResponse;
+      }
+      return await downloadRecording(true);
+    } catch (error) {
+      exportStage = 'idle';
+      return { success: false, error: String(error) };
+    }
+  }
+
+  async function downloadRecording(
+    continueExport = false
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!continueExport && exportStage !== 'idle') {
       return { success: false, error: 'Export already in progress' };
     }
     const state = await getRecordingState();
     const recordingId = currentRecordingId || state.recordingId;
 
     if (!recordingId) {
+      exportStage = 'idle';
       return { success: false, error: 'No recording available' };
     }
 
-    isExporting = true;
+    exportStage = 'preparing';
     try {
       console.log('[Background] Preparing download for recording:', recordingId);
 
@@ -568,6 +643,9 @@ export default defineBackground(() => {
       const videoChunks = finalVideo ? [] : await getVideoChunks(recordingId);
       const audioChunks = await getAudioChunks(recordingId);
       const transcriptionSettings = await loadTranscriptionSettings();
+      const transcriptionEnabled =
+        metadata?.transcriptionEnabled ??
+        Boolean(transcriptionSettings.openRouterApiKey);
 
       const totalVideoBytes = videoChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
       console.log('[Background] Data collected:', {
@@ -592,7 +670,9 @@ export default defineBackground(() => {
         finalVideo || undefined,
         audioChunks,
         networkEvents,
-        transcriptionSettings.openRouterApiKey ?? undefined
+        transcriptionEnabled
+          ? transcriptionSettings.openRouterApiKey ?? undefined
+          : undefined
       );
 
       // Convert blob to base64 data URL (Service Workers don't have URL.createObjectURL)
@@ -604,6 +684,7 @@ export default defineBackground(() => {
 
       const filename = `mentora-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
 
+      exportStage = 'downloading';
       await chrome.downloads.download({
         url: dataUrl,
         filename,
@@ -618,7 +699,7 @@ export default defineBackground(() => {
       console.error('[Background] Failed to download recording:', error);
       return { success: false, error: String(error) };
     } finally {
-      isExporting = false;
+      exportStage = 'idle';
     }
   }
 
@@ -783,6 +864,7 @@ export default defineBackground(() => {
         totalActions: 0,
         totalScreenshots: 0,
         pages: [],
+        transcriptionEnabled: currentRecordingTranscriptionEnabled,
       });
     }
   }
