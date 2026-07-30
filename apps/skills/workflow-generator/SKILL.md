@@ -1,7 +1,8 @@
 ---
 name: workflow-generator
 description: >
-  Generate SOCIA workflow.json files from MENTORA recording data (network-log.json, activity-log.json, metadata.json).
+  Generate SOCIA workflow.json files from MENTORA recording data (network-log.json, activity-log.json,
+  transcription.json, metadata.json).
   Use this skill whenever you need to create, design, or update a workflow for the SOCIA student evaluation extension.
   Triggers: "workflow", "workflow.json", "generar workflow", "crear workflow", "convertir grabación en workflow",
   "network-log", "activity-log", "mentora recording", "milestones", "hitos", "fases".
@@ -23,10 +24,13 @@ A MENTORA recording ZIP contains these files:
 |---|---|---|
 | `network-log.json` | Array of intercepted HTTP requests/responses (method, url, host, status, requestBody, responseBody, contentType) | **Primary source** — you extract milestone signatures from here |
 | `activity-log.json` | Array of DOM events (clicks, inputs, navigations, form submissions) with timestamps, selectors, element text | Context — helps you understand *what* the teacher did between network events |
+| `transcription.json` (optional) | Full transcript with segment and word timestamps | Context — explains the teacher's intent, reasoning, variables and desired milestones |
+| `transcription-status.json` (optional) | Transcription request counts and failures | Reliability check — tells you whether the transcript is complete |
 | `metadata.json` | Session info: title, duration, page list, timestamps | Context — case title, estimated time |
 | Screenshots (PNG) | Visual snapshots of key actions | Context — if provided, helps confirm tool UIs |
 
 The most critical file is `network-log.json`. Every milestone in the workflow must map to a real HTTP request from this file.
+The transcript can explain why an action matters, but it never proves that the action happened.
 
 ## The workflow.json schema
 
@@ -100,8 +104,21 @@ Read `network-log.json` and identify the **meaningful API calls** — the ones t
 - Browser-internal requests (`chrome-extension://`, `localhost`)
 - Repeated polling/heartbeat requests (same endpoint hit dozens of times)
 - Preflight OPTIONS requests
+- Requests whose `outcome` is `failed` or `unknown`
+- Beacons without a response
 
 Focus on requests that indicate a clear action: logins (POST to session/auth endpoints), data queries (POST with search bodies), record creation (POST/PUT with meaningful payloads), state changes (PATCH/DELETE).
+
+Use `t` and `endT` to align requests with `activity-log.json` and
+`transcription.json`. `url` is the requested URL; `responseUrl` is the final
+URL after a redirect. Treat `requestBodyTruncated` and
+`responseBodyTruncated` as hard limits: never create a signature from text
+that is not present in the captured body.
+
+If `transcription-status.json` reports failures, use the available transcript
+only as partial context. Extract explanations, phase goals and hint wording
+from speech, then verify every claimed action against the action and network
+logs.
 
 ### 2. Group actions into phases
 
@@ -136,7 +153,7 @@ The matcher checks these fields **in order** — all must pass:
 - **Check the request body when the URL alone is ambiguous.** For example, TheHive uses `/api/v1/query` for everything — the body distinguishes "getAlert" from "getCase" from "getObservable".
 - **Use `response_body_contains` sparingly** — only when you need to confirm the *result* of an action, not just that it was attempted. Example: verifying a case was actually created (`"_type":"Case"`).
 - **Discriminate the correct entity on generic endpoints.** When a milestone represents "view details of X" and the endpoint returns data for any entity of that type (any alert, any case, any observable), add `response_body_contains` with an identifier of the correct entity — typically `{{alert_title}}`, the case name, or the observable value. Without this, opening *any* entity of the same type would complete the milestone. This is especially important for TheHive's `/api/v1/query` endpoint, which returns different entities depending on the query body but always has the same URL pattern.
-- **Bodies are truncated to 1000 characters** in the network log. Don't rely on content that would appear deep into a large response.
+- **Bodies are limited to 16 KiB** in both MENTORA and SOCIA. Check the truncation fields before relying on body text.
 
 ### 4. Define dependencies
 

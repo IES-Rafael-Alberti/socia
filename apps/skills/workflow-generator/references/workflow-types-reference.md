@@ -122,10 +122,28 @@ export interface StudentNetworkEvent {
   pathname: string;      // "/api/v1/login"
   status: number;        // 200, 201, 401, etc.
   contentType: string;   // "application/json", etc.
-  requestBody: string | null;   // Truncated to 1000 chars, passwords redacted
-  responseBody: string | null;  // Truncated to 1000 chars
+  requestBody: string | null;   // Limited to 16 KiB, secrets redacted
+  responseBody: string | null;  // Limited to 16 KiB, secrets redacted
+  requestId?: string;
+  completedAt?: number;
+  durationMs?: number;
+  source?: "fetch" | "xhr" | "beacon";
+  responseUrl?: string;
+  redirected?: boolean;
+  statusText?: string;
+  requestBodyLength?: number;
+  responseBodyLength?: number;
+  requestBodyTruncated?: boolean;
+  responseBodyTruncated?: boolean;
+  outcome?: "completed" | "failed" | "unknown";
+  error?: string;
+  documentUrl?: string;
 }
 ```
+
+The matcher still uses only `method`, `url`, `host`, `pathname`, `status`,
+`requestBody` and `responseBody`. The other fields help the generator reject
+failed, redirected or incomplete evidence.
 
 ## Matching algorithm summary
 
