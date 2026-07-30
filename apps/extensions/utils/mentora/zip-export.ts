@@ -133,14 +133,32 @@ export async function exportToZip(
   if (networkEvents && networkEvents.length > 0) {
     const networkLog = networkEvents.map((evt) => ({
       t: Math.round(evt.relativeTime * 1000),
+      endT: evt.relativeEndTime !== undefined
+        ? Math.round(evt.relativeEndTime * 1000)
+        : undefined,
+      requestId: evt.requestId,
+      durationMs: evt.durationMs,
+      source: evt.source,
       method: evt.method,
       url: evt.url,
+      responseUrl: evt.responseUrl,
+      redirected: evt.redirected,
       host: evt.host,
       pathname: evt.pathname,
       status: evt.status,
+      statusText: evt.statusText,
       contentType: evt.contentType,
       requestBody: evt.requestBody,
       responseBody: evt.responseBody,
+      requestBodyLength: evt.requestBodyLength,
+      responseBodyLength: evt.responseBodyLength,
+      requestBodyTruncated: evt.requestBodyTruncated,
+      responseBodyTruncated: evt.responseBodyTruncated,
+      outcome: evt.outcome,
+      error: evt.error,
+      tabId: evt.tabId,
+      frameId: evt.frameId,
+      documentUrl: evt.documentUrl,
     }));
     folder.file('network-log.json', JSON.stringify(networkLog, null, 2));
   }
@@ -260,7 +278,7 @@ function generateLLMInstructions(
   const hasTranscription = transcriptionState === 'complete' || transcriptionState === 'partial';
   const hasTranscriptionStatus = transcriptionState !== 'none';
   const networkFiles = networkEventCount > 0
-    ? `- \`network-log.json\` - Captured API calls (HTTP method, URL, request/response bodies)
+    ? `- \`network-log.json\` - Captured API calls with timing, redirects, errors and request/response bodies
 `
     : '';
 
@@ -325,6 +343,12 @@ ${networkFiles}${transcriptionFiles}${transcriptionDataFile}${transcriptionStatu
 3. **Reference screenshots** by their IDs mentioned in the action log
 4. **Watch the video** for visual context
 ${transcriptionNote}
+
+When reading \`network-log.json\`, use \`t\` and \`endT\` to align requests
+with actions and speech. Ignore failed or unknown outcomes as milestone proof.
+If a body is marked as truncated, only rely on text that is present in the
+captured value. \`url\` is the requested URL and \`responseUrl\` is the final
+URL after redirects.
 
 ### Action Types Captured
 

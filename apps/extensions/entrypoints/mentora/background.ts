@@ -29,6 +29,22 @@ import {
 import type { ActionLog, NetworkEvent, Screenshot, StateResponse } from '../../utils/mentora/messages';
 import { exportToZip } from '../../utils/mentora/zip-export';
 import { loadTranscriptionSettings } from '../../utils/mentora/transcription-settings';
+import type { NetworkCaptureMessage } from '../../utils/shared/network-capture';
+
+interface MentoraRuntimeMessage {
+  type: string;
+  action?: ActionLog;
+  networkEvent?: NetworkCaptureMessage;
+  recordingId?: string;
+  relativeStartTime?: number;
+  chunk?: number[];
+  data?: number[];
+  index?: number;
+  startTime?: number;
+  endTime?: number;
+  startedAt?: number;
+  target?: string;
+}
 
 export default defineBackground(() => {
   console.log('[Background] Service worker started');
@@ -74,7 +90,7 @@ export default defineBackground(() => {
   });
 
   async function handleMessage(
-    message: { type: string; action?: ActionLog; networkEvent?: { method: string; url: string; status: number; contentType: string; requestBody: string | null; responseBody: string | null }; chunk?: number[]; data?: number[]; index?: number; startTime?: number; endTime?: number; target?: string },
+    message: MentoraRuntimeMessage,
     sender: chrome.runtime.MessageSender
   ): Promise<unknown> {
     if (sender.url?.includes('offscreen.html') && message.target !== 'background') {
@@ -104,9 +120,33 @@ export default defineBackground(() => {
           return await logAction(message.action, sender.tab?.id);
         }
         return { success: false };
+      case 'LOG_NETWORK_REQUEST_START':
+        if (state.state === 'recording' && state.recordingId) {
+          return {
+            success: true,
+            recordingId: state.recordingId,
+            relativeTime: await getRelativeTime(),
+          };
+        }
+        return { success: false };
       case 'LOG_NETWORK_EVENT':
-        if (state.state === 'recording' && message.networkEvent) {
-          return await logNetworkEvent(message.networkEvent);
+        if (
+          message.networkEvent &&
+          message.recordingId &&
+          message.relativeStartTime !== undefined &&
+          (message.recordingId === state.recordingId ||
+            message.recordingId === currentRecordingId)
+        ) {
+          return await logNetworkEvent(
+            message.networkEvent,
+            message.recordingId,
+            message.relativeStartTime,
+            sender,
+            state.recordingId === message.recordingId
+              ? await getRelativeTime()
+              : message.relativeStartTime +
+                (message.networkEvent.durationMs ?? 0) / 1000
+          );
         }
         return { success: false };
       case 'GET_RECORDING_STATE':
@@ -451,11 +491,12 @@ export default defineBackground(() => {
   }
 
   async function logNetworkEvent(
-    raw: { method: string; url: string; status: number; contentType: string; requestBody: string | null; responseBody: string | null }
+    raw: NetworkCaptureMessage,
+    recordingId: string,
+    relativeStartTime: number,
+    sender: chrome.runtime.MessageSender,
+    relativeEndTime: number
   ): Promise<{ success: boolean }> {
-    const recordingId = currentRecordingId || (await getRecordingState()).recordingId;
-    if (!recordingId) return { success: false };
-
     let parsedUrl: URL;
     try {
       parsedUrl = new URL(raw.url);
@@ -468,20 +509,35 @@ export default defineBackground(() => {
       }
     }
 
-    const relTime = await getRelativeTime();
-
     const event: NetworkEvent = {
-      id: `net_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-      relativeTime: relTime,
-      timestamp: Date.now(),
+      id: raw.requestId,
+      requestId: raw.requestId,
+      relativeTime: relativeStartTime,
+      relativeEndTime,
+      timestamp: raw.startedAt,
+      completedAt: raw.finishedAt,
+      durationMs: raw.durationMs,
+      source: raw.source,
       method: raw.method,
       url: raw.url,
-      status: raw.status,
-      contentType: raw.contentType,
-      requestBody: raw.requestBody,
-      responseBody: raw.responseBody,
+      responseUrl: raw.responseUrl,
+      redirected: raw.redirected,
+      status: raw.status ?? 0,
+      statusText: raw.statusText,
+      contentType: raw.contentType ?? '',
+      requestBody: raw.requestBody?.value ?? null,
+      responseBody: raw.responseBody?.value ?? null,
+      requestBodyLength: raw.requestBody?.originalLength ?? 0,
+      responseBodyLength: raw.responseBody?.originalLength ?? 0,
+      requestBodyTruncated: raw.requestBody?.truncated ?? false,
+      responseBodyTruncated: raw.responseBody?.truncated ?? false,
+      outcome: raw.outcome,
+      error: raw.error,
       host: parsedUrl.host,
       pathname: parsedUrl.pathname,
+      tabId: sender.tab?.id,
+      frameId: sender.frameId,
+      documentUrl: raw.documentUrl,
     };
 
     await saveNetworkEvent(recordingId, event);

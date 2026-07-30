@@ -1,6 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getUniqueSelector, getElementText, getElementDescription } from '../../utils/mentora/selector';
 import type { ActionLog, ActionType, RecordingState } from '../../utils/mentora/messages';
+import {
+  shouldRelayNetworkCapture,
+  type NetworkCaptureMessage,
+} from '../../utils/shared/network-capture';
 import { injectScript } from 'wxt/client';
 
 function sendMessage<T>(message: Record<string, unknown>): Promise<T> {
@@ -30,6 +34,10 @@ export default defineContentScript({
     let scrollTimeout: number | null = null;
     let hoverTimeout: number | null = null;
     let hoveredElement: Element | null = null;
+    const networkStarts = new Map<
+      string,
+      Promise<{ recordingId: string; relativeTime: number } | null>
+    >();
 
     // Get initial recording state
     sendMessage<{ state: RecordingState; startTime?: number }>({
@@ -396,25 +404,6 @@ export default defineContentScript({
 
     // ─── Network event relay (from MAIN world interceptor) ───
 
-    // Content-types that indicate static resources (not API calls)
-    const STATIC_CT = [
-      'text/css',
-      'text/javascript',
-      'application/javascript',
-      'text/html',
-      'image/',
-      'font/',
-      'application/wasm',
-      'application/octet-stream',
-      'audio/',
-      'video/',
-    ];
-
-    function isStaticResource(ct: string): boolean {
-      const lower = ct.toLowerCase();
-      return STATIC_CT.some((prefix) => lower.includes(prefix));
-    }
-
     function resolveUrl(raw: string): string {
       // Resolve relative URLs against the page origin
       if (raw.startsWith('/') || (!raw.startsWith('http') && !raw.startsWith('//'))) {
@@ -430,32 +419,59 @@ export default defineContentScript({
     window.addEventListener('message', (event) => {
       if (event.source !== window) return;
       if (!event.data || event.data.type !== 'MENTORA_NETWORK_EVENT') return;
-      if (!isRecording) return;
+      const message = event.data as NetworkCaptureMessage;
 
-      const { method, status, contentType, requestBody, responseBody } = event.data;
-      const url = resolveUrl(event.data.url);
+      if (message.phase === 'start') {
+        if (!isRecording) return;
+        const startPromise = sendMessage<{
+          success: boolean;
+          recordingId?: string;
+          relativeTime?: number;
+        }>({
+          type: 'LOG_NETWORK_REQUEST_START',
+          startedAt: message.startedAt,
+        })
+          .then((response) =>
+            response.success && response.recordingId && response.relativeTime !== undefined
+              ? {
+                  recordingId: response.recordingId,
+                  relativeTime: response.relativeTime,
+                }
+              : null
+          )
+          .catch(() => null);
+        networkStarts.set(message.requestId, startPromise);
+        window.setTimeout(() => {
+          if (networkStarts.get(message.requestId) === startPromise) {
+            networkStarts.delete(message.requestId);
+          }
+        }, 10 * 60 * 1000);
+        return;
+      }
 
-      // Skip extension-internal requests
-      if (url.startsWith('chrome-extension://')) return;
+      const startPromise = networkStarts.get(message.requestId);
+      networkStarts.delete(message.requestId);
+      if (!startPromise) return;
 
-      // Skip static resources (CSS, JS, images, fonts, etc.)
-      if (contentType && isStaticResource(contentType)) return;
+      const url = resolveUrl(message.url);
+      if (!shouldRelayNetworkCapture(message, url)) return;
 
-      // For GETs without a content type or with binary content, skip (likely asset loads)
-      if (method === 'GET' && (!contentType || contentType === 'application/binary')) return;
-
-      sendMessage({
-        type: 'LOG_NETWORK_EVENT',
-        networkEvent: {
-          method,
-          url,
-          status,
-          contentType: contentType || '',
-          requestBody: requestBody || null,
-          responseBody: responseBody || null,
-        },
-      }).catch(() => {
-        // Ignore send failures
+      void startPromise.then((start) => {
+        if (!start) return;
+        sendMessage({
+          type: 'LOG_NETWORK_EVENT',
+          recordingId: start.recordingId,
+          relativeStartTime: start.relativeTime,
+          networkEvent: {
+            ...message,
+            url,
+            responseUrl: message.responseUrl
+              ? resolveUrl(message.responseUrl)
+              : url,
+          },
+        }).catch(() => {
+          // Ignore send failures.
+        });
       });
     });
 

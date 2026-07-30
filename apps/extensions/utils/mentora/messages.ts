@@ -25,6 +25,29 @@ export interface NetworkEvent {
   host: string;
   /** URL pathname (e.g. "/api/v1/case") */
   pathname: string;
+  /** Stable identifier assigned when the page starts the request. */
+  requestId?: string;
+  /** Recording time when the response completed. */
+  relativeEndTime?: number;
+  /** Absolute time when the request completed. */
+  completedAt?: number;
+  /** Wall-clock request duration. */
+  durationMs?: number;
+  /** Browser API that initiated the request. */
+  source?: 'fetch' | 'xhr' | 'beacon';
+  /** Final response URL after redirects. */
+  responseUrl?: string;
+  redirected?: boolean;
+  statusText?: string;
+  requestBodyLength?: number;
+  responseBodyLength?: number;
+  requestBodyTruncated?: boolean;
+  responseBodyTruncated?: boolean;
+  outcome?: 'completed' | 'failed' | 'unknown';
+  error?: string;
+  tabId?: number;
+  frameId?: number;
+  documentUrl?: string;
 }
 
 // Action types captured by content script

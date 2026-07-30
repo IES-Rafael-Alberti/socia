@@ -8,6 +8,10 @@
 import type { StudentAction } from '@socia/eval';
 import { injectScript } from 'wxt/client';
 import { createHintOverlay } from '@socia/runtime';
+import {
+  shouldRelayNetworkCapture,
+  type NetworkCaptureMessage,
+} from '../../utils/shared/network-capture';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -120,25 +124,6 @@ export default defineContentScript({
     // ──────────────── Network Event Relay ────────────────
     // Listen for events from the MAIN world network interceptor
 
-    // Content-types that indicate static resources (not API calls)
-    const STATIC_CT = [
-      'text/css',
-      'text/javascript',
-      'application/javascript',
-      'text/html',
-      'image/',
-      'font/',
-      'application/wasm',
-      'application/octet-stream',
-      'audio/',
-      'video/',
-    ];
-
-    function isStaticResource(ct: string): boolean {
-      const lower = ct.toLowerCase();
-      return STATIC_CT.some((prefix) => lower.includes(prefix));
-    }
-
     function resolveUrl(raw: string): string {
       if (raw.startsWith('/') || (!raw.startsWith('http') && !raw.startsWith('//'))) {
         try {
@@ -153,18 +138,10 @@ export default defineContentScript({
     window.addEventListener('message', (event) => {
       if (event.source !== window) return;
       if (!event.data || event.data.type !== 'SOCIA_NETWORK_EVENT') return;
-
-      const { method, status, contentType, requestBody, responseBody } = event.data;
-      const url = resolveUrl(event.data.url);
-
-      // Skip extension-internal requests
-      if (url.startsWith('chrome-extension://')) return;
-
-      // Skip static resources (CSS, JS, images, fonts, etc.)
-      if (contentType && isStaticResource(contentType)) return;
-
-      // For GETs without a content type or with binary content, skip (likely asset loads)
-      if (method === 'GET' && (!contentType || contentType === 'application/binary')) return;
+      const message = event.data as NetworkCaptureMessage;
+      if (message.phase !== 'finish') return;
+      const url = resolveUrl(message.url);
+      if (!shouldRelayNetworkCapture(message, url)) return;
 
       // Parse URL for host and pathname
       let host = '';
@@ -181,15 +158,31 @@ export default defineContentScript({
         .sendMessage({
           type: 'SOCIA_STUDENT_NETWORK_EVENT',
           networkEvent: {
-            timestamp: Date.now(),
-            method,
+            requestId: message.requestId,
+            timestamp: message.startedAt,
+            completedAt: message.finishedAt,
+            durationMs: message.durationMs,
+            source: message.source,
+            method: message.method,
             url,
+            responseUrl: message.responseUrl
+              ? resolveUrl(message.responseUrl)
+              : url,
+            redirected: message.redirected ?? false,
             host,
             pathname,
-            status,
-            contentType: contentType || '',
-            requestBody: requestBody || null,
-            responseBody: responseBody || null,
+            status: message.status ?? 0,
+            statusText: message.statusText ?? '',
+            contentType: message.contentType ?? '',
+            requestBody: message.requestBody?.value ?? null,
+            responseBody: message.responseBody?.value ?? null,
+            requestBodyLength: message.requestBody?.originalLength ?? 0,
+            responseBodyLength: message.responseBody?.originalLength ?? 0,
+            requestBodyTruncated: message.requestBody?.truncated ?? false,
+            responseBodyTruncated: message.responseBody?.truncated ?? false,
+            outcome: message.outcome,
+            error: message.error,
+            documentUrl: message.documentUrl,
           },
         })
         .catch(() => {});

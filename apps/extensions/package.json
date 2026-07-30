@@ -13,7 +13,7 @@
     "build:socia": "EXT=socia wxt build",
     "zip:mentora": "EXT=mentora wxt zip",
     "zip:socia": "EXT=socia wxt zip",
-    "test": "tsx --test utils/mentora/transcription.test.ts",
+    "test": "tsx --test utils/**/*.test.ts",
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare",
     "clean": "rimraf node_modules .wxt .output"

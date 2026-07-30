@@ -129,6 +129,20 @@ export interface StudentNetworkEvent {
   contentType: string;
   requestBody: string | null;
   responseBody: string | null;
+  requestId?: string;
+  completedAt?: number;
+  durationMs?: number;
+  source?: 'fetch' | 'xhr' | 'beacon';
+  responseUrl?: string;
+  redirected?: boolean;
+  statusText?: string;
+  requestBodyLength?: number;
+  responseBodyLength?: number;
+  requestBodyTruncated?: boolean;
+  responseBodyTruncated?: boolean;
+  outcome?: 'completed' | 'failed' | 'unknown';
+  error?: string;
+  documentUrl?: string;
 }
 
 // ──────────────── SOCIA Internal State ────────────────
