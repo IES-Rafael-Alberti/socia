@@ -84,7 +84,7 @@ Un "caso" en SOCIA es un `workflow.json`: la definición del ejercicio (fases, h
 
 Flujo recomendado para contribuir un caso nuevo:
 
-1. **Créalo con MENTORA.** Instala la extensión MENTORA, ejecuta tú mismo el ejercicio de principio a fin sobre las herramientas reales (TheHive, Graylog, etc.), explicándolo usando tu micrófono y exporta el ZIP. Dentro encontrarás `network-log.json`, `activity-log.json`, `metadata.json` y capturas, así como el vídeo y la transcripción (si pusiste la API KEY).
+1. **Créalo con MENTORA.** Instala la extensión MENTORA, ejecuta tú mismo el ejercicio de principio a fin sobre las herramientas reales (TheHive, Graylog, etc.), explícalo con el micrófono y exporta el ZIP. Dentro encontrarás `network-log.json`, `activity-log.json`, `metadata.json`, capturas y vídeo. Si configuraste OpenRouter, también incluye `transcription.json`, `transcription.srt` y el estado de la transcripción.
 2. **Genera el `workflow.json`.** Instala el skill [`apps/skills/workflow-generator`](apps/skills/workflow-generator) en el agente que quieras utilizar. Pásale el ZIP de MENTORA como entrada.
 3. **Pruébalo con SOCIA.**
    - `pnpm dev:extensions:socia` para arrancar la extensión.
