@@ -55,6 +55,7 @@ export default defineBackground(() => {
   let startInProgress = false;
   let exportStage: ExportStage = 'idle';
   let currentRecordingTranscriptionEnabled = false;
+  const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 
   const initializationPromise = restoreBackgroundState();
 
@@ -148,10 +149,6 @@ export default defineBackground(() => {
         return { success: true };
       case 'EXPORT_STAGE_CHANGED':
         if (message.stage) await updateExportStage(message.stage);
-        return { success: true };
-      case 'EXPORT_FINISHED':
-        await updateExportStage('idle');
-        globalThis.setTimeout(() => void closeOffscreenDocument(), 0);
         return { success: true };
       case 'CAPTURE_STARTED':
         console.log('[Background] Capture started confirmed');
@@ -661,19 +658,50 @@ export default defineBackground(() => {
     }
 
     await updateExportStage('preparing');
+    let hasDownloadUrl = false;
     try {
       await ensureOffscreenDocument();
       if (!(await waitForOffscreenReady(7000))) {
         return { success: false, error: 'Export context is not ready' };
       }
-      return await sendToOffscreen(
-        { type: 'EXPORT_RECORDING', recordingId },
+      const metadata = await getMetadata(recordingId);
+      if (!metadata) return { success: false, error: 'Recording metadata not found' };
+      const settings = await loadTranscriptionSettings();
+      const transcriptionEnabled =
+        metadata.transcriptionEnabled ?? Boolean(settings.openRouterApiKey);
+      const response = await sendToOffscreen(
+        {
+          type: 'EXPORT_RECORDING',
+          recordingId,
+          openRouterApiKey: transcriptionEnabled
+            ? settings.openRouterApiKey ?? undefined
+            : undefined,
+        },
         60 * 60 * 1000
       );
+      if (!response.success || !response.downloadUrl || !response.filename) {
+        return {
+          success: false,
+          error: response.error ?? 'Export did not create a download',
+        };
+      }
+
+      hasDownloadUrl = true;
+      await updateExportStage('downloading');
+      const downloadId = await chrome.downloads.download({
+        url: response.downloadUrl,
+        filename: response.filename,
+        saveAs: true,
+      });
+      await waitForDownload(downloadId);
+      return { success: true };
     } catch (error) {
       console.error('[Background] Failed to download recording:', error);
       return { success: false, error: String(error) };
     } finally {
+      if (hasDownloadUrl) {
+        await sendToOffscreen({ type: 'RELEASE_DOWNLOAD_URL' }).catch(() => undefined);
+      }
       await updateExportStage('idle');
       await closeOffscreenDocument();
     }
@@ -744,7 +772,14 @@ export default defineBackground(() => {
   async function sendToOffscreen(message: {
     type: string;
     recordingId?: string;
-  }, timeoutMs = 30_000): Promise<{ success: boolean; error?: string; warnings?: string[] }> {
+    openRouterApiKey?: string;
+  }, timeoutMs = 30_000): Promise<{
+    success: boolean;
+    error?: string;
+    warnings?: string[];
+    downloadUrl?: string;
+    filename?: string;
+  }> {
     // Send message and wait for response
     return new Promise((resolve) => {
       let settled = false;
@@ -763,6 +798,41 @@ export default defineBackground(() => {
         } else {
           resolve(response || { success: false, error: 'No response' });
         }
+      });
+    });
+  }
+
+  function waitForDownload(downloadId: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = globalThis.setTimeout(() => {
+        cleanupListener();
+        reject(new Error('Download did not finish in time'));
+      }, DOWNLOAD_TIMEOUT_MS);
+
+      const handleChanged = (delta: chrome.downloads.DownloadDelta) => {
+        if (delta.id !== downloadId) return;
+        if (delta.error?.current) {
+          cleanupListener();
+          reject(new Error(delta.error.current));
+        } else if (delta.state?.current === 'complete') {
+          cleanupListener();
+          resolve();
+        }
+      };
+
+      const cleanupListener = () => {
+        globalThis.clearTimeout(timeout);
+        chrome.downloads.onChanged.removeListener(handleChanged);
+      };
+
+      chrome.downloads.onChanged.addListener(handleChanged);
+      chrome.downloads.search({ id: downloadId }).then(([item]) => {
+        if (item?.state === 'complete') {
+          cleanupListener();
+          resolve();
+        }
+      }).catch(() => {
+        // The change listener remains authoritative.
       });
     });
   }

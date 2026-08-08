@@ -151,7 +151,8 @@ export type BackgroundToOffscreenMessage =
   | { type: 'PAUSE_CAPTURE' }
   | { type: 'RESUME_CAPTURE' }
   | { type: 'STOP_CAPTURE' }
-  | { type: 'EXPORT_RECORDING'; recordingId: string };
+  | { type: 'EXPORT_RECORDING'; recordingId: string; openRouterApiKey?: string }
+  | { type: 'RELEASE_DOWNLOAD_URL' };
 
 // Messages from offscreen to background
 export type OffscreenToBackgroundMessage =
@@ -160,8 +161,7 @@ export type OffscreenToBackgroundMessage =
   | { type: 'CAPTURE_RESUMED' }
   | { type: 'CAPTURE_STOPPED'; totalChunks: number }
   | { type: 'CAPTURE_ERROR'; error: string }
-  | { type: 'EXPORT_STAGE_CHANGED'; stage: ExportStage }
-  | { type: 'EXPORT_FINISHED' };
+  | { type: 'EXPORT_STAGE_CHANGED'; stage: ExportStage };
 
 // Messages from content script to background
 export type ContentToBackgroundMessage =

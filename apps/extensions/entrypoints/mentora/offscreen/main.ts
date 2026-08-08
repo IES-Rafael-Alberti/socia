@@ -15,7 +15,6 @@ import {
   saveVideoChunk,
 } from '../../../utils/mentora/db';
 import { exportToZip } from '../../../utils/mentora/zip-export';
-import { loadTranscriptionSettings } from '../../../utils/mentora/transcription-settings';
 
 let incrementalRecorder: MediaRecorder | null = null;
 let audioChunkRecorder: MediaRecorder | null = null;
@@ -40,13 +39,13 @@ interface CaptureStopResponse {
 let stopCapturePromise: Promise<CaptureStopResponse> | null = null;
 let currentRecordingId: string | null = null;
 let captureWarnings: string[] = [];
+let activeDownloadUrl: string | null = null;
 let captureStartedAt: number | null = null;
 let capturePausedAt: number | null = null;
 let totalPausedDuration = 0;
 
 const AUDIO_CHUNK_DURATION_MS = 5 * 60 * 1000;
 const STOP_TIMEOUT_MS = 30_000;
-const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 
 function getCaptureTime(): number {
   if (captureStartedAt === null) return 0;
@@ -273,7 +272,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true; // Keep channel open for async response
 });
 
-async function handleMessage(message: { type: string; recordingId?: string }) {
+async function handleMessage(message: {
+  type: string;
+  recordingId?: string;
+  openRouterApiKey?: string;
+}) {
   switch (message.type) {
     case 'START_CAPTURE':
       return await startCapture(message.recordingId);
@@ -284,7 +287,10 @@ async function handleMessage(message: { type: string; recordingId?: string }) {
     case 'STOP_CAPTURE':
       return await stopCapture();
     case 'EXPORT_RECORDING':
-      return await exportRecording(message.recordingId);
+      return await exportRecording(message.recordingId, message.openRouterApiKey);
+    case 'RELEASE_DOWNLOAD_URL':
+      releaseDownloadUrl();
+      return { success: true };
     default:
       return { error: 'Unknown message type' };
   }
@@ -523,10 +529,17 @@ async function settleWithin(
   }
 }
 
-async function exportRecording(recordingId?: string): Promise<{ success: boolean; error?: string }> {
+async function exportRecording(
+  recordingId?: string,
+  openRouterApiKey?: string
+): Promise<{
+  success: boolean;
+  error?: string;
+  downloadUrl?: string;
+  filename?: string;
+}> {
   if (!recordingId) return { success: false, error: 'Recording ID is required' };
 
-  let downloadUrl: string | null = null;
   try {
     const metadata = await getMetadata(recordingId);
     if (!metadata) return { success: false, error: 'Recording metadata not found' };
@@ -539,10 +552,6 @@ async function exportRecording(recordingId?: string): Promise<{ success: boolean
       getAudioChunks(recordingId),
     ]);
     const videoChunks = finalVideo ? [] : await getVideoChunks(recordingId);
-    const settings = await loadTranscriptionSettings();
-    const transcriptionEnabled =
-      metadata.transcriptionEnabled ?? Boolean(settings.openRouterApiKey);
-
     const zipBlob = await exportToZip(
       metadata,
       actions,
@@ -551,26 +560,17 @@ async function exportRecording(recordingId?: string): Promise<{ success: boolean
       finalVideo ?? undefined,
       audioChunks,
       networkEvents,
-      transcriptionEnabled ? settings.openRouterApiKey ?? undefined : undefined,
+      openRouterApiKey,
       notifyExportStage
     );
 
-    downloadUrl = URL.createObjectURL(zipBlob);
-    await notifyExportStage('downloading');
+    releaseDownloadUrl();
+    activeDownloadUrl = URL.createObjectURL(zipBlob);
     const filename = `mentora-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
-    const downloadId = await chrome.downloads.download({
-      url: downloadUrl,
-      filename,
-      saveAs: true,
-    });
-    await waitForDownload(downloadId);
-    return { success: true };
+    return { success: true, downloadUrl: activeDownloadUrl, filename };
   } catch (error) {
     console.error('[Offscreen] Export failed:', error);
     return { success: false, error: String(error) };
-  } finally {
-    if (downloadUrl) URL.revokeObjectURL(downloadUrl);
-    await notifyExportFinished();
   }
 }
 
@@ -583,48 +583,10 @@ function notifyExportStage(stage: 'transcribing' | 'packaging' | 'downloading'):
   });
 }
 
-function notifyExportFinished(): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      { type: 'EXPORT_FINISHED', target: 'background' },
-      () => resolve()
-    );
-  });
-}
-
-function waitForDownload(downloadId: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      cleanupListener();
-      reject(new Error('Download did not finish in time'));
-    }, DOWNLOAD_TIMEOUT_MS);
-
-    const handleChanged = (delta: chrome.downloads.DownloadDelta) => {
-      if (delta.id !== downloadId) return;
-      if (delta.error?.current) {
-        cleanupListener();
-        reject(new Error(delta.error.current));
-      } else if (delta.state?.current === 'complete') {
-        cleanupListener();
-        resolve();
-      }
-    };
-
-    const cleanupListener = () => {
-      window.clearTimeout(timeout);
-      chrome.downloads.onChanged.removeListener(handleChanged);
-    };
-
-    chrome.downloads.onChanged.addListener(handleChanged);
-    chrome.downloads.search({ id: downloadId }).then(([item]) => {
-      if (item?.state === 'complete') {
-        cleanupListener();
-        resolve();
-      }
-    }).catch(() => {
-      // The change listener remains authoritative.
-    });
-  });
+function releaseDownloadUrl(): void {
+  if (!activeDownloadUrl) return;
+  URL.revokeObjectURL(activeDownloadUrl);
+  activeDownloadUrl = null;
 }
 
 function cleanup() {
