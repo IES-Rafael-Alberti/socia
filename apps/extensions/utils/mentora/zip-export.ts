@@ -8,6 +8,8 @@ import {
   type TranscriptionResult,
 } from './transcription';
 
+const MAX_DIRECT_TRANSCRIPTION_SIZE = 25 * 1024 * 1024;
+
 /**
  * Exports recording data to a ZIP file
  */
@@ -19,7 +21,8 @@ export async function exportToZip(
   finalVideo?: ArrayBuffer,
   audioChunks?: RecordedAudioChunk[],
   networkEvents?: NetworkEvent[],
-  openRouterApiKey?: string
+  openRouterApiKey?: string,
+  onStage?: (stage: 'transcribing' | 'packaging') => void | Promise<void>
 ): Promise<Blob> {
   const zip = new JSZip();
 
@@ -29,23 +32,24 @@ export async function exportToZip(
   const folder = zip.folder(folderName)!;
 
   // Prepare video data for both saving and transcription
-  let videoData: ArrayBuffer | null = null;
+  let videoBlob: Blob | null = null;
 
   // 1. Add video file
   if (finalVideo) {
-    folder.file('video.webm', new Uint8Array(finalVideo), { binary: true });
+    videoBlob = new Blob([finalVideo], { type: 'video/webm' });
+    folder.file(
+      'video.webm',
+      canUseBlobInput() ? videoBlob : await videoBlob.arrayBuffer(),
+      { binary: true, compression: 'STORE' }
+    );
     metadata.videoDuration = formatDuration(metadata.duration || 0);
-    videoData = finalVideo;
   } else if (videoChunks.length > 0) {
-    const totalBytes = videoChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-    const combined = new Uint8Array(totalBytes);
-    let offset = 0;
-    for (const chunk of videoChunks) {
-      combined.set(new Uint8Array(chunk), offset);
-      offset += chunk.byteLength;
-    }
-    folder.file('video.webm', combined, { binary: true });
-    videoData = combined.buffer;
+    videoBlob = new Blob(videoChunks, { type: 'video/webm' });
+    folder.file(
+      'video.webm',
+      canUseBlobInput() ? videoBlob : await videoBlob.arrayBuffer(),
+      { binary: true, compression: 'STORE' }
+    );
 
     // Calculate video duration for metadata
     metadata.videoDuration = formatDuration(metadata.duration || 0);
@@ -54,15 +58,20 @@ export async function exportToZip(
   // 2. Transcribe audio if API key is available
   let transcription: TranscriptionResult | null = null;
   if (openRouterApiKey) {
+    await onStage?.('transcribing');
     console.log('[Export] Transcribing audio...');
     if (audioChunks && audioChunks.length > 0) {
       // Use pre-recorded audio chunks (supports any recording length)
       console.log(`[Export] Using ${audioChunks.length} pre-recorded audio chunks`);
       transcription = await transcribeAudioChunks(audioChunks, openRouterApiKey);
-    } else if (videoData) {
+    } else if (videoBlob) {
       // Fallback: send video directly (only works for small files < 25MB)
-      console.log('[Export] No audio chunks, falling back to video transcription');
-      transcription = await transcribeVideo(videoData, openRouterApiKey);
+      if (videoBlob.size <= MAX_DIRECT_TRANSCRIPTION_SIZE) {
+        console.log('[Export] No audio chunks, falling back to video transcription');
+        transcription = await transcribeVideo(await videoBlob.arrayBuffer(), openRouterApiKey);
+      } else {
+        console.warn('[Export] Video is too large to use as a transcription fallback');
+      }
     }
 
     if (transcription && transcription.segments.length > 0) {
@@ -112,7 +121,7 @@ export async function exportToZip(
 
       // Convert data URL to binary
       const base64Data = screenshot.dataUrl.split(',')[1];
-      screenshotsFolder.file(filename, base64Data, { base64: true });
+      screenshotsFolder.file(filename, base64Data, { base64: true, compression: 'STORE' });
     }
   }
 
@@ -187,11 +196,17 @@ export async function exportToZip(
   folder.file('README-FOR-LLM.md', llmInstructions);
 
   // Generate ZIP with compression
+  await onStage?.('packaging');
   return await zip.generateAsync({
     type: 'blob',
     compression: 'DEFLATE',
     compressionOptions: { level: 6 },
+    streamFiles: true,
   });
+}
+
+function canUseBlobInput(): boolean {
+  return typeof document !== 'undefined' && JSZip.support.blob;
 }
 
 type TranscriptionState = 'none' | 'complete' | 'partial' | 'empty' | 'failed';

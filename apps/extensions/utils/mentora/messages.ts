@@ -130,6 +130,8 @@ export interface RecordingMetadata {
   pages: string[];
   /** Whether this recording may send audio to OpenRouter during export. */
   transcriptionEnabled?: boolean;
+  /** Non-fatal capture problems that may leave the final seconds incomplete. */
+  captureWarnings?: string[];
 }
 
 // Messages from popup to background
@@ -145,19 +147,21 @@ export type PopupToBackgroundMessage =
 
 // Messages from background to offscreen
 export type BackgroundToOffscreenMessage =
-  | { type: 'START_CAPTURE'; streamId: string }
+  | { type: 'START_CAPTURE'; recordingId: string }
   | { type: 'PAUSE_CAPTURE' }
   | { type: 'RESUME_CAPTURE' }
-  | { type: 'STOP_CAPTURE' };
+  | { type: 'STOP_CAPTURE' }
+  | { type: 'EXPORT_RECORDING'; recordingId: string };
 
 // Messages from offscreen to background
 export type OffscreenToBackgroundMessage =
   | { type: 'CAPTURE_STARTED' }
   | { type: 'CAPTURE_PAUSED' }
   | { type: 'CAPTURE_RESUMED' }
-  | { type: 'CAPTURE_STOPPED'; chunks: Blob[] }
+  | { type: 'CAPTURE_STOPPED'; totalChunks: number }
   | { type: 'CAPTURE_ERROR'; error: string }
-  | { type: 'VIDEO_CHUNK'; chunk: ArrayBuffer };
+  | { type: 'EXPORT_STAGE_CHANGED'; stage: ExportStage }
+  | { type: 'EXPORT_FINISHED' };
 
 // Messages from content script to background
 export type ContentToBackgroundMessage =
@@ -178,12 +182,18 @@ export interface StateResponse {
   screenshotCount?: number;
   isPaused?: boolean;
   hasRecordingData?: boolean;
-  /** True while `DOWNLOAD_RECORDING` is in flight in the background. */
+  /** True while a recording is being stopped or exported. */
   isExporting?: boolean;
   exportStage?: ExportStage;
 }
 
-export type ExportStage = 'idle' | 'stopping' | 'preparing' | 'downloading';
+export type ExportStage =
+  | 'idle'
+  | 'stopping'
+  | 'preparing'
+  | 'transcribing'
+  | 'packaging'
+  | 'downloading';
 
 export type StartRecordingErrorCode =
   | 'OPENROUTER_INVALID'

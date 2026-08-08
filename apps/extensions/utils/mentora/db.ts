@@ -65,6 +65,13 @@ const DB_NAME = 'teach-socia-db';
 const DB_VERSION = 3;
 
 let dbInstance: IDBPDatabase<TeachSociaDB> | null = null;
+let binaryChunkSequence = 0;
+
+function nextBinaryChunkId(): number {
+  const sequence = binaryChunkSequence % 1000;
+  binaryChunkSequence += 1;
+  return Date.now() * 1000 + sequence;
+}
 
 export async function getDB(): Promise<IDBPDatabase<TeachSociaDB>> {
   if (dbInstance) return dbInstance;
@@ -130,7 +137,7 @@ export async function saveVideoChunk(
 ): Promise<void> {
   const db = await getDB();
   await db.add('videoChunks', {
-    id: Date.now(),
+    id: nextBinaryChunkId(),
     recordingId,
     chunk,
     timestamp: Date.now(),
@@ -168,7 +175,7 @@ export async function saveAudioChunk(
 ): Promise<void> {
   const db = await getDB();
   await db.add('audioChunks', {
-    id: Date.now() + index,
+    id: nextBinaryChunkId(),
     recordingId,
     index,
     data,
@@ -271,6 +278,12 @@ export async function getMetadata(recordingId: string): Promise<RecordingMetadat
   return db.get('metadata', recordingId);
 }
 
+export async function getLatestMetadata(): Promise<RecordingMetadata | undefined> {
+  const db = await getDB();
+  const entries = await db.getAll('metadata');
+  return entries.sort((a, b) => b.startTime - a.startTime)[0];
+}
+
 // Cleanup operations
 export async function clearRecording(recordingId: string): Promise<void> {
   const db = await getDB();
@@ -320,4 +333,5 @@ export async function clearAllRecordings(): Promise<void> {
   await db.clear('actions');
   await db.clear('networkEvents');
   await db.clear('metadata');
+  await db.clear('finalVideo');
 }

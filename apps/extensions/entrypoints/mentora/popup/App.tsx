@@ -425,10 +425,14 @@ export default function App() {
   if (isPreparingDownload) {
     const processingText =
       exportStage === 'downloading'
-        ? 'Abriendo la descarga…'
-        : exportStage === 'stopping' || exportRequest === 'stop'
-          ? 'Finalizando la grabación y preparando el ZIP…'
-          : 'Preparando el ZIP y la transcripción…';
+        ? 'Guardando la descarga…'
+        : exportStage === 'transcribing'
+          ? 'Transcribiendo el audio…'
+          : exportStage === 'packaging'
+            ? 'Creando el ZIP…'
+            : exportStage === 'stopping' || exportRequest === 'stop'
+              ? 'Finalizando la grabación y preparando el ZIP…'
+              : 'Preparando el ZIP y la transcripción…';
 
     return (
       <div className="popup">

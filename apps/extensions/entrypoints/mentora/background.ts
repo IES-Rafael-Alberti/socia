@@ -1,22 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
-  saveVideoChunk,
-  saveAudioChunk,
   saveScreenshot,
   saveAction,
   saveMetadata,
   getMetadata,
-  getActions,
-  getScreenshots,
-  getVideoChunks,
-  getFinalVideo,
-  getAudioChunks,
+  getLatestMetadata,
   getActionCount,
   getScreenshotCount,
   clearRecording,
-  saveFinalVideo,
   saveNetworkEvent,
-  getNetworkEvents,
 } from '../../utils/mentora/db';
 import {
   getRecordingState,
@@ -34,7 +26,6 @@ import type {
   StartRecordingResponse,
   StateResponse,
 } from '../../utils/mentora/messages';
-import { exportToZip } from '../../utils/mentora/zip-export';
 import { loadTranscriptionSettings } from '../../utils/mentora/transcription-settings';
 import { validateOpenRouterKey } from '../../utils/mentora/openrouter-validation';
 import type { NetworkCaptureMessage } from '../../utils/shared/network-capture';
@@ -45,15 +36,12 @@ interface MentoraRuntimeMessage {
   networkEvent?: NetworkCaptureMessage;
   recordingId?: string;
   relativeStartTime?: number;
-  chunk?: number[];
-  data?: number[];
-  index?: number;
-  startTime?: number;
-  endTime?: number;
   startedAt?: number;
   target?: string;
   apiKey?: string;
   allowWithoutTranscription?: boolean;
+  warnings?: string[];
+  stage?: ExportStage;
 }
 
 export default defineBackground(() => {
@@ -68,25 +56,7 @@ export default defineBackground(() => {
   let exportStage: ExportStage = 'idle';
   let currentRecordingTranscriptionEnabled = false;
 
-  // Restore state on startup
-  getRecordingState().then(async (state) => {
-    if (state.recordingId && state.state !== 'idle') {
-      currentRecordingId = state.recordingId;
-      console.log('[Background] Restored recording state:', state.state);
-
-      // Check if offscreen exists
-      const hasOffscreen = await checkOffscreenExists();
-      if (!hasOffscreen && state.state === 'recording') {
-        // Recording was in progress but offscreen is gone - stop the recording
-        console.log('[Background] Offscreen lost, stopping recording...');
-        await stopRecordingState();
-        currentRecordingId = null;
-        await updateBadge('idle');
-      } else {
-        await updateBadge(state.state === 'paused' ? 'paused' : 'recording');
-      }
-    }
-  });
+  const initializationPromise = restoreBackgroundState();
 
   // Handle messages from popup, content scripts, and offscreen
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -104,6 +74,7 @@ export default defineBackground(() => {
     message: MentoraRuntimeMessage,
     sender: chrome.runtime.MessageSender
   ): Promise<unknown> {
+    await initializationPromise;
     if (sender.url?.includes('offscreen.html') && message.target !== 'background') {
       return { success: false, error: 'Ignored non-background message' };
     }
@@ -175,40 +146,13 @@ export default defineBackground(() => {
         console.log('[Background] Offscreen document ready');
         offscreenReady = true;
         return { success: true };
-      case 'VIDEO_CHUNK':
-        if (currentRecordingId && message.chunk) {
-          const buffer = new Uint8Array(message.chunk).buffer;
-          await saveVideoChunk(currentRecordingId, buffer);
-          console.log('[Background] Video chunk saved, size:', message.chunk.length);
-        }
+      case 'EXPORT_STAGE_CHANGED':
+        if (message.stage) await updateExportStage(message.stage);
         return { success: true };
-      case 'FINAL_VIDEO':
-        if (currentRecordingId && message.data) {
-          const buffer = new Uint8Array(message.data).buffer;
-          await saveFinalVideo(currentRecordingId, buffer);
-          console.log('[Background] Final video saved, size:', message.data.length);
-        }
+      case 'EXPORT_FINISHED':
+        await updateExportStage('idle');
+        globalThis.setTimeout(() => void closeOffscreenDocument(), 0);
         return { success: true };
-      case 'AUDIO_CHUNK':
-        if (
-          currentRecordingId &&
-          message.data &&
-          message.index !== undefined &&
-          message.startTime !== undefined &&
-          message.endTime !== undefined
-        ) {
-          const buffer = new Uint8Array(message.data).buffer;
-          await saveAudioChunk(
-            currentRecordingId,
-            message.index,
-            buffer,
-            message.startTime,
-            message.endTime
-          );
-          console.log(`[Background] Audio chunk ${message.index} saved, size: ${message.data.length}`);
-          return { success: true };
-        }
-        return { success: false, error: 'Audio chunk is missing recording data' };
       case 'CAPTURE_STARTED':
         console.log('[Background] Capture started confirmed');
         await ensureRecordingState();
@@ -225,7 +169,6 @@ export default defineBackground(() => {
       case 'CAPTURE_STOPPED':
         console.log('[Background] Capture stopped confirmed');
         await updateBadge('idle');
-        offscreenReady = false;
         return { success: true };
       case 'CAPTURE_STOPPED_BY_USER':
         console.log('[Background] User stopped sharing');
@@ -233,9 +176,9 @@ export default defineBackground(() => {
         return { success: true };
       case 'CAPTURE_ERROR':
         console.error('[Background] Capture error:', message);
-        await stopRecordingState();
+        if (currentRecordingId) await finalizeInterruptedRecording(currentRecordingId);
+        await stopRecordingState(currentRecordingId);
         await updateBadge('idle');
-        currentRecordingId = null;
         offscreenReady = false;
         return { success: false };
       case 'MIC_PERMISSION_NEEDED':
@@ -251,6 +194,64 @@ export default defineBackground(() => {
         console.log('[Background] Unknown message type:', message.type);
         return { error: 'Unknown message type' };
     }
+  }
+
+  async function restoreBackgroundState(): Promise<void> {
+    const storedStage = await chrome.storage.session
+      .get('mentoraExportStage')
+      .then((value) => value.mentoraExportStage as ExportStage | undefined)
+      .catch(() => undefined);
+    const state = await getRecordingState();
+    const hasOffscreen = await checkOffscreenExists();
+
+    exportStage = storedStage && hasOffscreen ? storedStage : 'idle';
+    if (exportStage === 'idle' && storedStage && storedStage !== 'idle') {
+      await chrome.storage.session.set({ mentoraExportStage: 'idle' }).catch(() => undefined);
+    }
+
+    if (state.recordingId) {
+      currentRecordingId = state.recordingId;
+    } else {
+      const latest = await getLatestMetadata();
+      if (latest) {
+        currentRecordingId = latest.recordingId;
+        await stopRecordingState(latest.recordingId);
+      }
+    }
+
+    if (state.recordingId && state.state !== 'idle') {
+      console.log('[Background] Restored recording state:', state.state);
+      if (!hasOffscreen) {
+        console.log('[Background] Capture context lost; preserving recorded chunks');
+        await finalizeInterruptedRecording(state.recordingId);
+        await stopRecordingState(state.recordingId);
+        await updateBadge('idle');
+      } else {
+        await updateBadge(state.state === 'paused' ? 'paused' : 'recording');
+      }
+    }
+  }
+
+  async function finalizeInterruptedRecording(recordingId: string): Promise<void> {
+    const metadata = await getMetadata(recordingId);
+    if (!metadata) return;
+    const endedAt = Date.now();
+    await saveMetadata({
+      ...metadata,
+      endTime: metadata.endTime ?? endedAt,
+      duration: metadata.duration ?? Math.max(0, endedAt - metadata.startTime),
+      totalActions: await getActionCount(recordingId),
+      totalScreenshots: await getScreenshotCount(recordingId),
+      captureWarnings: [
+        ...(metadata.captureWarnings ?? []),
+        'The capture context restarted before the recording closed.',
+      ],
+    });
+  }
+
+  async function updateExportStage(stage: ExportStage): Promise<void> {
+    exportStage = stage;
+    await chrome.storage.session.set({ mentoraExportStage: stage }).catch(() => undefined);
   }
 
   async function startRecording(
@@ -317,14 +318,20 @@ export default defineBackground(() => {
       if (!isReady) {
         console.error('[Background] Offscreen not ready after waiting');
         await closeOffscreenDocument();
+        await stopRecordingState(null);
         currentRecordingId = null;
         currentRecordingTranscriptionEnabled = false;
+        pendingStart = false;
+        startInProgress = false;
         return { success: false, error: 'Offscreen document not ready' };
       }
 
       // Start capture in offscreen document
       console.log('[Background] Sending START_CAPTURE to offscreen...');
-      const response = await sendToOffscreen({ type: 'START_CAPTURE' });
+      const response = await sendToOffscreen({
+        type: 'START_CAPTURE',
+        recordingId: currentRecordingId,
+      });
       console.log('[Background] Start capture response:', response);
 
       if (!response?.success) {
@@ -336,6 +343,8 @@ export default defineBackground(() => {
           return { success: false, error: 'Microphone permission required' };
         }
         currentRecordingTranscriptionEnabled = false;
+        pendingStart = false;
+        await stopRecordingState(null);
         await closeOffscreenDocument();
         return { success: false, error: response?.error || 'User cancelled screen sharing' };
       }
@@ -361,9 +370,10 @@ export default defineBackground(() => {
       return { success: true, transcriptionEnabled };
     } catch (error) {
       console.error('[Background] Failed to start recording:', error);
-      await stopRecordingState();
+      await stopRecordingState(null);
       currentRecordingId = null;
       currentRecordingTranscriptionEnabled = false;
+      pendingStart = false;
       await closeOffscreenDocument();
       startInProgress = false;
       return { success: false, error: String(error) };
@@ -406,7 +416,9 @@ export default defineBackground(() => {
     }
   }
 
-  async function stopRecording(): Promise<{ success: boolean }> {
+  async function stopRecording(
+    keepOffscreenOpen = false
+  ): Promise<{ success: boolean; error?: string }> {
     console.log('[Background] Stopping recording...');
 
     const recordingIdToStop = currentRecordingId;
@@ -419,15 +431,28 @@ export default defineBackground(() => {
       }
     }
 
+    let captureWarnings: string[] = [];
+    let captureContextUsable = true;
     try {
       // Stop capture
       const hasOffscreen = await checkOffscreenExists();
       if (hasOffscreen) {
-        const response = await sendToOffscreen({ type: 'STOP_CAPTURE' });
+        const response = await sendToOffscreen({ type: 'STOP_CAPTURE' }, 35_000);
         console.log('[Background] Stop response from offscreen:', response);
+        if (!response.success) {
+          captureContextUsable = false;
+          captureWarnings.push(
+            response.error ?? 'The capture context did not finish cleanly.'
+          );
+          await closeOffscreenDocument();
+        } else {
+          captureWarnings = response.warnings ?? [];
+        }
       }
     } catch (error) {
       console.log('[Background] Error stopping capture (may already be stopped):', error);
+      captureContextUsable = false;
+      captureWarnings.push('The capture context failed while stopping.');
     }
 
     // Update metadata
@@ -446,16 +471,20 @@ export default defineBackground(() => {
           totalActions: actionCount,
           totalScreenshots: screenshotCount,
           pages: Array.from(visitedPages),
+          captureWarnings: [
+            ...(metadata.captureWarnings ?? []),
+            ...captureWarnings,
+          ],
         });
       }
     }
 
-    await stopRecordingState();
+    await stopRecordingState(recordingId);
     await notifyAllTabs('RECORDING_STATE_CHANGED', { state: 'idle' });
-    await closeOffscreenDocument();
+    if (!keepOffscreenOpen || !captureContextUsable) await closeOffscreenDocument();
     await closeMicPermissionTab();
     await updateBadge('idle');
-    offscreenReady = false;
+    if (!keepOffscreenOpen || !captureContextUsable) offscreenReady = false;
 
     // Don't clear currentRecordingId so we can still download
     console.log('[Background] Recording stopped');
@@ -603,16 +632,16 @@ export default defineBackground(() => {
     if (exportStage !== 'idle') {
       return { success: false, error: 'Export already in progress' };
     }
-    exportStage = 'stopping';
+    await updateExportStage('stopping');
     try {
-      const stopResponse = await stopRecording();
+      const stopResponse = await stopRecording(true);
       if (!stopResponse.success) {
-        exportStage = 'idle';
+        await updateExportStage('idle');
         return stopResponse;
       }
       return await downloadRecording(true);
     } catch (error) {
-      exportStage = 'idle';
+      await updateExportStage('idle');
       return { success: false, error: String(error) };
     }
   }
@@ -627,79 +656,26 @@ export default defineBackground(() => {
     const recordingId = currentRecordingId || state.recordingId;
 
     if (!recordingId) {
-      exportStage = 'idle';
+      await updateExportStage('idle');
       return { success: false, error: 'No recording available' };
     }
 
-    exportStage = 'preparing';
+    await updateExportStage('preparing');
     try {
-      console.log('[Background] Preparing download for recording:', recordingId);
-
-      const metadata = await getMetadata(recordingId);
-      const actions = await getActions(recordingId);
-      const screenshots = await getScreenshots(recordingId);
-      const networkEvents = await getNetworkEvents(recordingId);
-      const finalVideo = await getFinalVideo(recordingId);
-      const videoChunks = finalVideo ? [] : await getVideoChunks(recordingId);
-      const audioChunks = await getAudioChunks(recordingId);
-      const transcriptionSettings = await loadTranscriptionSettings();
-      const transcriptionEnabled =
-        metadata?.transcriptionEnabled ??
-        Boolean(transcriptionSettings.openRouterApiKey);
-
-      const totalVideoBytes = videoChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-      console.log('[Background] Data collected:', {
-        hasMetadata: !!metadata,
-        actions: actions.length,
-        screenshots: screenshots.length,
-        networkEvents: networkEvents.length,
-        videoChunks: videoChunks.length,
-        videoBytes: totalVideoBytes,
-        audioChunks: audioChunks.length,
-      });
-
-      if (!metadata) {
-        return { success: false, error: 'Recording metadata not found' };
+      await ensureOffscreenDocument();
+      if (!(await waitForOffscreenReady(7000))) {
+        return { success: false, error: 'Export context is not ready' };
       }
-
-      const zipBlob = await exportToZip(
-        metadata,
-        actions,
-        screenshots,
-        videoChunks,
-        finalVideo || undefined,
-        audioChunks,
-        networkEvents,
-        transcriptionEnabled
-          ? transcriptionSettings.openRouterApiKey ?? undefined
-          : undefined
+      return await sendToOffscreen(
+        { type: 'EXPORT_RECORDING', recordingId },
+        60 * 60 * 1000
       );
-
-      // Convert blob to base64 data URL (Service Workers don't have URL.createObjectURL)
-      const arrayBuffer = await zipBlob.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      const dataUrl = `data:application/zip;base64,${base64}`;
-
-      const filename = `mentora-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
-
-      exportStage = 'downloading';
-      await chrome.downloads.download({
-        url: dataUrl,
-        filename,
-        saveAs: true,
-      });
-
-      // Recording data is intentionally preserved so the user can re-download
-      // the ZIP if needed; it's wiped at the start of the next recording.
-      console.log('[Background] Download initiated');
-      return { success: true };
     } catch (error) {
       console.error('[Background] Failed to download recording:', error);
       return { success: false, error: String(error) };
     } finally {
-      exportStage = 'idle';
+      await updateExportStage('idle');
+      await closeOffscreenDocument();
     }
   }
 
@@ -723,10 +699,15 @@ export default defineBackground(() => {
 
       if (!exists) {
         console.log('[Background] Creating offscreen document...');
+        offscreenReady = false;
         await chrome.offscreen.createDocument({
           url: 'offscreen.html',
-          reasons: [chrome.offscreen.Reason.USER_MEDIA],
-          justification: 'Recording screen and microphone for tutorial capture',
+          reasons: [
+            chrome.offscreen.Reason.USER_MEDIA,
+            chrome.offscreen.Reason.DISPLAY_MEDIA,
+            chrome.offscreen.Reason.BLOBS,
+          ],
+          justification: 'Capture media and prepare recording downloads',
         });
         console.log('[Background] Offscreen document created');
       } else {
@@ -760,10 +741,22 @@ export default defineBackground(() => {
     return offscreenReady;
   }
 
-  async function sendToOffscreen(message: { type: string }): Promise<{ success: boolean; error?: string }> {
+  async function sendToOffscreen(message: {
+    type: string;
+    recordingId?: string;
+  }, timeoutMs = 30_000): Promise<{ success: boolean; error?: string; warnings?: string[] }> {
     // Send message and wait for response
     return new Promise((resolve) => {
+      let settled = false;
+      const timeout = globalThis.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve({ success: false, error: `${message.type} timed out` });
+      }, timeoutMs);
       chrome.runtime.sendMessage({ ...message, target: 'offscreen' }, (response) => {
+        if (settled) return;
+        settled = true;
+        globalThis.clearTimeout(timeout);
         if (chrome.runtime.lastError) {
           console.error('[Background] Error sending to offscreen:', chrome.runtime.lastError);
           resolve({ success: false, error: chrome.runtime.lastError.message });
