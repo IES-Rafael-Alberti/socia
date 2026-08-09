@@ -1,6 +1,13 @@
 import JSZip from 'jszip';
-import type { ActionLog, Screenshot, RecordingMetadata, NetworkEvent } from './messages';
-import type { RecordedAudioChunk } from './db';
+import type {
+  ActionLog,
+  Screenshot,
+  RecordingMetadata,
+  NetworkEvent,
+  ExportArtifactKind,
+  VideoManifest,
+} from './messages';
+import type { RecordedAudioChunk, RecordedFinalVideo, RecordedVideoChunk } from './db';
 import { captureText, sanitizeNetworkUrl } from '../shared/network-capture';
 import { sanitizeActionLog } from './action-sanitization';
 import {
@@ -19,15 +26,34 @@ export async function exportToZip(
   metadata: RecordingMetadata,
   actions: ActionLog[],
   screenshots: Screenshot[],
-  videoChunks: ArrayBuffer[],
-  finalVideo?: ArrayBuffer,
+  videoChunks: ArrayBuffer[] | RecordedVideoChunk[],
+  finalVideo?: RecordedFinalVideo,
   audioChunks?: RecordedAudioChunk[],
   networkEvents?: NetworkEvent[],
   openRouterApiKey?: string,
-  onStage?: (stage: 'transcribing' | 'packaging') => void | Promise<void>
-): Promise<Blob> {
+  onStage?: (stage: 'transcribing' | 'packaging') => void | Promise<void>,
+  videoManifest?: VideoManifest | null
+): Promise<{
+  blob: Blob;
+  artifactKind: ExportArtifactKind;
+  warning?: string;
+}> {
   const zip = new JSZip();
-  const safeActions = actions.map(sanitizeActionLog);
+  const screenshotFilenames = new Map<string, string>();
+  screenshots.forEach((screenshot, index) => {
+    const paddedIndex = String(index + 1).padStart(3, '0');
+    screenshotFilenames.set(screenshot.id, `click_${paddedIndex}_${screenshot.timestamp}.png`);
+  });
+  const safeActions = actions.map((action) => {
+    const safeAction = sanitizeActionLog(action);
+    const screenshotId = safeAction.details.screenshotId;
+    return screenshotId && screenshotFilenames.has(screenshotId)
+      ? {
+          ...safeAction,
+          details: { ...safeAction.details, screenshotId: screenshotFilenames.get(screenshotId) },
+        }
+      : safeAction;
+  });
 
   // Create folder with timestamp
   const timestamp = new Date(metadata.startTime).toISOString().replace(/[:.]/g, '-');
@@ -36,18 +62,88 @@ export async function exportToZip(
 
   // Prepare video data for both saving and transcription
   let videoBlob: Blob | null = null;
+  const orderedChunks = videoChunks.length > 0 && 'blob' in videoChunks[0]
+    ? [...(videoChunks as RecordedVideoChunk[])].sort((a, b) => a.sequence - b.sequence)
+    : null;
+  const artifactKind: ExportArtifactKind = metadata.videoCapture?.status === 'recovery'
+    || videoManifest?.status === 'recovery'
+    || orderedChunks !== null
+    ? 'recovery'
+    : 'recording';
+  const warning = artifactKind === 'recovery'
+    ? 'El MP4 no superó la validación. Se descargó un paquete de recuperación.'
+    : undefined;
+  const inferredEmittedChunks = Math.max(
+    metadata.videoCapture?.emittedChunks ?? 0,
+    ...(orderedChunks?.map((chunk) => chunk.sequence + 1) ?? [0])
+  );
+  const inferredSequences = new Set(orderedChunks?.map((chunk) => chunk.sequence) ?? []);
+  const inferredMissingSequences = Array.from(
+    { length: inferredEmittedChunks },
+    (_, sequence) => sequence
+  ).filter((sequence) => !inferredSequences.has(sequence));
+  const effectiveVideoManifest: VideoManifest | null = videoManifest ?? (
+    artifactKind === 'recovery'
+      ? {
+          version: 1,
+          recordingId: metadata.recordingId,
+          mimeType: metadata.videoCapture?.mimeType ?? 'video/mp4',
+          activeDurationMs: metadata.videoCapture?.activeDurationMs ?? metadata.duration ?? 0,
+          pausedDurationMs: metadata.videoCapture?.pausedDurationMs ?? 0,
+          emittedChunks: inferredEmittedChunks,
+          storedChunks: orderedChunks?.length ?? metadata.videoCapture?.storedChunks ?? 0,
+          totalBytes: orderedChunks?.reduce((total, chunk) => total + chunk.blob.size, 0)
+            ?? metadata.videoCapture?.totalBytes
+            ?? 0,
+          stopReason: metadata.videoCapture?.stopReason ?? 'context-restarted',
+          status: 'recovery',
+          missingSequences: inferredMissingSequences,
+          validationError: 'No se encontró un MP4 final validado.',
+          chunks: orderedChunks?.map((chunk) => ({
+            sequence: chunk.sequence,
+            timecodeMs: chunk.timecodeMs,
+            size: chunk.size,
+            mimeType: chunk.mimeType,
+            sha256: chunk.sha256,
+            attempts: chunk.attempts,
+            stored: true,
+          })) ?? [],
+        }
+      : null
+  );
 
   // 1. Add video file
   if (finalVideo) {
-    videoBlob = new Blob([finalVideo], { type: 'video/webm' });
+    videoBlob = finalVideo.blob;
     folder.file(
-      'video.webm',
+      finalVideo.filename,
       canUseBlobInput() ? videoBlob : await videoBlob.arrayBuffer(),
       { binary: true, compression: 'STORE' }
     );
-    metadata.videoDuration = formatDuration(metadata.duration || 0);
+    metadata.videoDuration = formatDuration(
+      metadata.videoCapture?.activeDurationMs ?? metadata.duration ?? 0
+    );
+  } else if (orderedChunks) {
+    videoBlob = new Blob(orderedChunks.map((chunk) => chunk.blob), {
+      type: metadata.videoCapture?.mimeType || 'video/mp4',
+    });
+    folder.file(
+      'recovery/video-unverified.mp4',
+      canUseBlobInput() ? videoBlob : await videoBlob.arrayBuffer(),
+      { binary: true, compression: 'STORE' }
+    );
+    for (const chunk of orderedChunks) {
+      const filename = `${String(chunk.sequence).padStart(6, '0')}.mp4part`;
+      folder.file(
+        `recovery/chunks/${filename}`,
+        canUseBlobInput() ? chunk.blob : await chunk.blob.arrayBuffer(),
+        { binary: true, compression: 'STORE' }
+      );
+    }
+    folder.file('RECOVERY.md', buildRecoveryReadme(effectiveVideoManifest));
+    metadata.videoDuration = formatDuration(metadata.videoCapture?.activeDurationMs ?? 0);
   } else if (videoChunks.length > 0) {
-    videoBlob = new Blob(videoChunks, { type: 'video/webm' });
+    videoBlob = new Blob(videoChunks as ArrayBuffer[], { type: 'video/webm' });
     folder.file(
       'video.webm',
       canUseBlobInput() ? videoBlob : await videoBlob.arrayBuffer(),
@@ -56,6 +152,9 @@ export async function exportToZip(
 
     // Calculate video duration for metadata
     metadata.videoDuration = formatDuration(metadata.duration || 0);
+  }
+  if (artifactKind === 'recovery' && !zip.file(`${folderName}/RECOVERY.md`)) {
+    folder.file('RECOVERY.md', buildRecoveryReadme(effectiveVideoManifest));
   }
 
   // 2. Transcribe audio if API key is available
@@ -71,7 +170,13 @@ export async function exportToZip(
       // Fallback: send video directly (only works for small files < 25MB)
       if (videoBlob.size <= MAX_DIRECT_TRANSCRIPTION_SIZE) {
         console.log('[Export] No audio chunks, falling back to video transcription');
-        transcription = await transcribeVideo(await videoBlob.arrayBuffer(), openRouterApiKey);
+        const fallbackName = finalVideo?.filename ?? (artifactKind === 'recovery' ? 'video.mp4' : 'video.webm');
+        transcription = await transcribeVideo(
+          await videoBlob.arrayBuffer(),
+          videoBlob.type || 'video/webm',
+          fallbackName.split('.').pop() || 'webm',
+          openRouterApiKey
+        );
       } else {
         console.warn('[Export] Video is too large to use as a transcription fallback');
       }
@@ -119,8 +224,7 @@ export async function exportToZip(
 
     for (let i = 0; i < screenshots.length; i++) {
       const screenshot = screenshots[i];
-      const paddedIndex = String(i + 1).padStart(3, '0');
-      const filename = `click_${paddedIndex}_${screenshot.timestamp}.png`;
+      const filename = screenshotFilenames.get(screenshot.id)!;
 
       // Convert data URL to binary
       const base64Data = screenshot.dataUrl.split(',')[1];
@@ -222,13 +326,17 @@ export async function exportToZip(
   }
 
   // 5. Prepare safe metadata for every text file in the ZIP
+  const pages = [
+    ...metadata.pages,
+    ...safeActions.map((action) => action.url),
+  ]
+    .map((page) => sanitizeNetworkUrl(page)?.value)
+    .filter((page): page is string => Boolean(page));
   const finalMetadata: RecordingMetadata = {
     ...metadata,
     totalActions: safeActions.length,
     totalScreenshots: screenshots.length,
-    pages: metadata.pages
-      .map((page) => sanitizeNetworkUrl(page)?.value)
-      .filter((page): page is string => Boolean(page)),
+    pages: [...new Set(pages)],
   };
 
   // 6. Add human-readable activity log for LLM
@@ -237,6 +345,9 @@ export async function exportToZip(
 
   // 7. Add metadata
   folder.file('metadata.json', JSON.stringify(finalMetadata, null, 2));
+  if (effectiveVideoManifest) {
+    folder.file('video-manifest.json', JSON.stringify(effectiveVideoManifest, null, 2));
+  }
 
   // 8. Add LLM instructions file
   const transcriptionState = getTranscriptionState(transcription);
@@ -251,12 +362,33 @@ export async function exportToZip(
 
   // Generate ZIP with compression
   await onStage?.('packaging');
-  return await zip.generateAsync({
+  const blob = await zip.generateAsync({
     type: 'blob',
     compression: 'DEFLATE',
     compressionOptions: { level: 6 },
     streamFiles: true,
   });
+  return { blob, artifactKind, warning };
+}
+
+function buildRecoveryReadme(manifest?: VideoManifest | null): string {
+  const reason = manifest?.validationError ?? 'No se pudo validar el MP4 final.';
+  const missing = manifest?.missingSequences.length
+    ? manifest.missingSequences.join(', ')
+    : 'ninguno detectado';
+  return `# Paquete de recuperación de MENTORA
+
+MENTORA no presenta el vídeo como válido porque falló su comprobación final.
+
+- Motivo: ${reason}
+- Fragmentos ausentes: ${missing}
+- Fragmentos guardados: ${manifest?.storedChunks ?? 0} de ${manifest?.emittedChunks ?? 0}
+
+El resto del caso sigue disponible. Usa primero la transcripción, el registro de
+actividad y las capturas. \`recovery/video-unverified.mp4\` contiene los bytes
+recuperados en orden. \`recovery/chunks/\` conserva cada fragmento por separado.
+\`video-manifest.json\` incluye tamaños, sumas y errores.
+`;
 }
 
 function canUseBlobInput(): boolean {
@@ -378,6 +510,14 @@ function generateLLMInstructions(
   const captureWarnings = metadata.captureWarnings?.length
     ? `\n## Capture Warnings\n\n${metadata.captureWarnings.map((warning) => `- ${warning}`).join('\n')}\n`
     : '';
+  const videoLabel = metadata.videoCapture?.status === 'recovery'
+    ? '- `recovery/` - Unverified MP4 bytes and ordered fragments for recovery\n- `video-manifest.json` - Video fragment integrity and validation report'
+    : metadata.videoCapture?.format === 'mp4'
+      ? '- `video.mp4` - Validated screen recording with audio'
+      : '- `video.webm` - Legacy screen recording with audio';
+  const videoInstruction = metadata.videoCapture?.status === 'recovery'
+    ? '4. **Do not treat the recovery video as complete evidence.** Prefer transcription, actions and screenshots.'
+    : '4. **Watch the video** for visual context';
 
   return `# MENTORA Recording Package
 
@@ -385,7 +525,7 @@ This package contains a tutorial recording captured by the MENTORA browser exten
 
 ## Contents
 
-- \`video.webm\` - Screen recording with audio (VP9 codec, optimized for size)
+${videoLabel}
 - \`screenshots/\` - PNG screenshots captured on each click action
 - \`activity-log.json\` - Structured JSON log of all user actions
 - \`activity-log-readable.txt\` - Human-readable timeline of actions
@@ -414,7 +554,7 @@ ${captureWarnings}
    - Input values (non-sensitive)
    - Navigation events
 3. **Reference screenshots** by their IDs mentioned in the action log
-4. **Watch the video** for visual context
+${videoInstruction}
 ${transcriptionNote}
 
 When reading \`network-log.json\`, use \`t\` and \`endT\` to align requests

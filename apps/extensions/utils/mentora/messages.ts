@@ -123,6 +123,49 @@ export interface Screenshot {
   actionId?: string;
 }
 
+export type VideoCaptureStatus = 'valid' | 'recovery' | 'legacy';
+export type VideoStopReason = 'user' | 'share-ended' | 'recorder-error' | 'context-restarted';
+
+export interface VideoCaptureSummary {
+  format: 'mp4' | 'webm';
+  mimeType: string;
+  activeDurationMs: number;
+  pausedDurationMs: number;
+  emittedChunks: number;
+  storedChunks: number;
+  totalBytes: number;
+  stopReason: VideoStopReason;
+  status: VideoCaptureStatus;
+  manifestFile?: 'video-manifest.json';
+}
+
+export interface VideoChunkManifestEntry {
+  sequence: number;
+  timecodeMs: number;
+  size: number;
+  mimeType: string;
+  sha256?: string;
+  attempts: number;
+  stored: boolean;
+  error?: string;
+}
+
+export interface VideoManifest {
+  version: 1;
+  recordingId: string;
+  mimeType: string;
+  activeDurationMs: number;
+  pausedDurationMs: number;
+  emittedChunks: number;
+  storedChunks: number;
+  totalBytes: number;
+  stopReason: VideoStopReason;
+  status: VideoCaptureStatus;
+  missingSequences: number[];
+  validationError?: string;
+  chunks: VideoChunkManifestEntry[];
+}
+
 // Recording session metadata
 export interface RecordingMetadata {
   extensionName: string;
@@ -144,6 +187,8 @@ export interface RecordingMetadata {
     actions: CaptureQuotaSummary;
     network: CaptureQuotaSummary;
   };
+  /** Summary of the recorded media and its final validation. */
+  videoCapture?: VideoCaptureSummary;
 }
 
 // Messages from popup to background
@@ -198,6 +243,8 @@ export interface StateResponse {
   /** True while a recording is being stopped or exported. */
   isExporting?: boolean;
   exportStage?: ExportStage;
+  lastArtifactKind?: ExportArtifactKind;
+  lastExportWarning?: string;
 }
 
 export type ExportStage =
@@ -211,7 +258,8 @@ export type ExportStage =
 export type StartRecordingErrorCode =
   | 'OPENROUTER_INVALID'
   | 'OPENROUTER_EXHAUSTED'
-  | 'OPENROUTER_UNAVAILABLE';
+  | 'OPENROUTER_UNAVAILABLE'
+  | 'VIDEO_CODEC_UNAVAILABLE';
 
 export interface StartRecordingResponse {
   success: boolean;
@@ -223,4 +271,9 @@ export interface StartRecordingResponse {
 export interface DownloadResponse {
   success: boolean;
   error?: string;
+  artifactKind?: ExportArtifactKind;
+  warning?: string;
+  filename?: string;
 }
+
+export type ExportArtifactKind = 'recording' | 'recovery';

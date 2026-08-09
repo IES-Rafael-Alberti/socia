@@ -16,12 +16,15 @@ Examples:
 
 ## How to find the right screenshot from the recording
 
-MENTORA names screenshots with timestamps and associates them with the action that triggered them in `activity-log.json`. To locate the best one for a step:
+MENTORA names screenshots with timestamps and associates them with the action that triggered them in `activity-log.json`. New packages rewrite `screenshotId` to the exported filename. Older packages may keep the original `screenshot_<timestamp>.png` ID while exporting `click_<index>_<timestamp>.png`. To locate the best one for a step:
 
-1. Identify the approximate **time range** of the step from the activity log (the clicks that correspond to performing the action).
-2. Look for the screenshot taken **right after the last action of the step** — this captures the completed state.
-3. If the state is only visible after an async response (e.g. waiting for analyzer results), use the screenshot taken after the response arrived.
-4. When in doubt, open the screenshot and check: does it clearly show *what the student should see if they did this step correctly*?
+1. Try the exact `screenshotId` as an exported filename.
+2. For an old package, extract the millisecond timestamp from the ID and match the same suffix in `screenshots/`.
+3. If that fails, use the screenshot whose `actionId` matches the action.
+4. Identify the approximate **time range** of the step from the activity log.
+5. Look for the screenshot taken **right after the last action of the step**.
+6. If the state appears after an async response, use the first screenshot that shows the completed result.
+7. If two candidates remain, open both. Report the ambiguity if neither proves the caption.
 
 ## Screenshots to skip
 

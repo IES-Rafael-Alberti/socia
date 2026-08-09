@@ -381,6 +381,8 @@ export async function transcribeAudioChunks(
  */
 export async function transcribeVideo(
   videoData: ArrayBuffer,
+  mimeType: string,
+  extension: string,
   apiKey: string
 ): Promise<TranscriptionResult | null> {
   if (!apiKey) {
@@ -388,7 +390,14 @@ export async function transcribeVideo(
     return null;
   }
 
-  const videoBlob = new Blob([videoData], { type: 'video/webm' });
+  const supportedFormats = ['webm', 'wav', 'mp3', 'ogg'] as const;
+  if (!supportedFormats.includes(extension as (typeof supportedFormats)[number])) {
+    console.warn(`[Transcription] Direct ${extension} transcription is not supported; audio chunks are required.`);
+    return null;
+  }
+  const audioFormat = extension as (typeof supportedFormats)[number];
+
+  const videoBlob = new Blob([videoData], { type: mimeType });
   if (videoBlob.size > MAX_FILE_SIZE) {
     console.warn(
       `[Transcription] Video too large (${(videoBlob.size / 1024 / 1024).toFixed(0)} MB) and no audio chunks available. Transcription skipped.`
@@ -398,7 +407,7 @@ export async function transcribeVideo(
 
   try {
     console.log('[Transcription] Transcribing video directly (small file)...');
-    const result = await transcribeChunk(videoBlob, 'webm', 0, apiKey);
+    const result = await transcribeChunk(videoBlob, audioFormat, 0, apiKey);
     const trimmed = result.text.trim();
     const duration = getResultDuration(result);
     return {

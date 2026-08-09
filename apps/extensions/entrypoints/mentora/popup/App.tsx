@@ -4,6 +4,7 @@ import type {
   RecordingState,
   StartRecordingResponse,
   StateResponse,
+  DownloadResponse,
 } from '../../../utils/mentora/messages';
 import { useSessionState } from '../../../utils/shared/popup-session';
 import {
@@ -34,6 +35,7 @@ export default function App() {
   const [screenshotCount, setScreenshotCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [hasRecording, setHasRecording] = useState(false);
   const [exportStage, setExportStage] = useState<ExportStage>('idle');
   const [exportRequest, setExportRequest] = useState<'stop' | 'download' | null>(null);
@@ -89,6 +91,7 @@ export default function App() {
       setScreenshotCount(response.screenshotCount || 0);
       setExportStage(response.exportStage ?? (response.isExporting ? 'preparing' : 'idle'));
       setHasDownloaded(response.hasDownloaded ?? false);
+      setWarning(response.lastExportWarning || null);
 
       // Set elapsed time from background
       if (response.elapsedTime !== undefined) {
@@ -226,6 +229,7 @@ export default function App() {
   const handleStart = async (allowWithoutTranscription = false) => {
     setIsLoading(true);
     setError(null);
+    setWarning(null);
     setCanStartWithoutTranscription(false);
     try {
       console.log('[Popup] Starting recording...');
@@ -356,7 +360,7 @@ export default function App() {
     setError(null);
     try {
       console.log('[Popup] Downloading...');
-      const response = await sendMessage<{ success: boolean; error?: string }>({
+      const response = await sendMessage<DownloadResponse>({
         type: 'DOWNLOAD_RECORDING',
       });
       console.log('[Popup] Download response:', response);
@@ -367,6 +371,7 @@ export default function App() {
         // Recording data is kept in IndexedDB so the user can re-download
         // until they start a new recording.
         setHasDownloaded(true);
+        setWarning(response.warning || null);
       }
     } catch (err) {
       console.error('[Popup] Download error:', err);
@@ -382,7 +387,7 @@ export default function App() {
     setError(null);
     try {
       console.log('[Popup] Stopping...');
-      const response = await sendMessage<{ success: boolean; error?: string }>({
+      const response = await sendMessage<DownloadResponse>({
         type: 'STOP_AND_DOWNLOAD',
       });
       console.log('[Popup] Stop response:', response);
@@ -391,6 +396,7 @@ export default function App() {
         setState('idle');
         setHasRecording(true);
         setHasDownloaded(true);
+        setWarning(response.warning || null);
       } else {
         setError(response?.error || 'No se pudo preparar la descarga.');
         await fetchState();
@@ -459,6 +465,7 @@ export default function App() {
 
       <div className="body">
         {error && <div className="error">{error}</div>}
+        {warning && <div className="warning" role="status">{warning}</div>}
 
         {/* Active state: dark live card with timer + stats */}
         {(isRecording || isPaused) && (

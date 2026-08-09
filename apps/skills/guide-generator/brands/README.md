@@ -44,7 +44,10 @@ brands/
 1. La skill (`SKILL.md`) lee el brand id del contexto del docente que la invoca.
 2. Resuelve la carpeta del brand en `brands/<id>/`.
 3. Pasa `imago.png`, `sello.png`, `brand.json` al template HTML al construir el output.
-4. `render.py` recibe `--brand-dir <path>` (o equivalente) y aplica los tokens al CSS y al HTML.
+4. El agente sustituye los tokens de marca y copia los PNG antes de llamar a `render.py`.
+
+`render.py` solo convierte un HTML ya preparado en PDF. Recibe el HTML de
+entrada y la ruta del PDF; no sustituye tokens ni acepta `--brand-dir`.
 
 ## Brands incluidos
 

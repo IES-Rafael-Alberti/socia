@@ -2,8 +2,8 @@
  *
  * Brand-aware: every brand-tied colour reads from CSS custom properties
  * declared on :root. The skill (or the calling agent) overrides these values
- * for each brand by injecting a `:root { --brand-primary: …; … }` block at
- * the top of the inlined CSS — see SKILL.md and the matching brand.json
+ * for each brand by injecting a `:root { --brand-primary: …; … }` block after
+ * the inlined CSS — see SKILL.md and the matching brand.json
  * under `brands/<id>/`.
  *
  * Defaults below correspond to IES Rafael Alberti so the stylesheet is also
@@ -80,20 +80,20 @@ body {
   opacity: 0.85;
   margin-bottom: 10px;
 }
-.cover h1 {
+.cover-page h1 {
   font-size: 42pt;
   margin: 0 0 10px 0;
   font-weight: 800;
   letter-spacing: -1px;
   line-height: 1.05;
 }
-.cover .subtitle {
+.cover-page .subtitle {
   font-size: 16pt;
   margin: 6px 0;
   opacity: 0.95;
   font-weight: 400;
 }
-.cover .case-subtitle {
+.cover-page .case-subtitle {
   font-size: 14pt;
   margin: 2px 0 28px 0;
   opacity: 0.9;
@@ -143,22 +143,26 @@ body {
 .note-box b { color: var(--brand-primary-dark); }
 
 /* ─── TOC ─── */
-.toc { page-break-before: always; }
+.toc {
+  margin-top: 24px;
+  page-break-inside: avoid;
+}
 .toc h2 {
   font-size: 22pt;
   color: var(--brand-dark);
   border-bottom: 3px solid var(--brand-primary);
   padding-bottom: 8px;
-  margin-bottom: 22px;
+  margin-bottom: 14px;
   font-weight: 800;
 }
 .toc .phase-title {
   color: var(--brand-primary);
   font-weight: 700;
   font-size: 12pt;
-  margin-top: 16px;
+  margin-top: 12px;
   margin-bottom: 4px;
 }
+.toc-phase { page-break-inside: avoid; }
 .toc .phase-title:first-child { margin-top: 0; }
 .toc .step {
   font-size: 10.5pt;
@@ -212,6 +216,7 @@ body {
 }
 
 /* ─── Steps ─── */
+.guide-step { page-break-inside: avoid; }
 h3 {
   font-size: 13pt;
   color: var(--brand-dark);

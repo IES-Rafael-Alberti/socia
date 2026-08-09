@@ -11,12 +11,30 @@ import {
   getNetworkEvents,
   getRecordingExport,
   getScreenshots,
+  getOrderedVideoChunks,
+  getVideoManifest,
   getVideoChunks,
+  deleteOrderedVideoChunks,
   saveAudioChunk,
+  saveFinalVideo,
+  saveMetadata,
   saveRecordingExport,
-  saveVideoChunk,
+  saveOrderedVideoChunk,
+  saveVideoManifest,
 } from '../../../utils/mentora/db';
 import { exportToZip } from '../../../utils/mentora/zip-export';
+import type {
+  VideoCaptureSummary,
+  VideoChunkManifestEntry,
+  VideoManifest,
+  VideoStopReason,
+} from '../../../utils/mentora/messages';
+import {
+  assembleVideo,
+  chooseMp4MimeType,
+  sha256Blob,
+  validateVideoChunks,
+} from '../../../utils/mentora/video-integrity';
 
 let incrementalRecorder: MediaRecorder | null = null;
 let audioChunkRecorder: MediaRecorder | null = null;
@@ -24,7 +42,6 @@ let chunkCount = 0;
 let audioChunkIndex = 0;
 let audioChunkTimer: number | null = null;
 const pendingAudioChunkSaves = new Set<Promise<void>>();
-const pendingVideoChunkSaves = new Set<Promise<void>>();
 const audioChunkEndTimes = new WeakMap<MediaRecorder, number>();
 let microphoneStream: MediaStream | null = null;
 let displayStream: MediaStream | null = null;
@@ -36,6 +53,7 @@ interface CaptureStopResponse {
   success: boolean;
   error?: string;
   warnings?: string[];
+  videoCapture?: VideoCaptureSummary;
 }
 
 let stopCapturePromise: Promise<CaptureStopResponse> | null = null;
@@ -45,14 +63,33 @@ let activeDownloadUrl: string | null = null;
 let captureStartedAt: number | null = null;
 let capturePausedAt: number | null = null;
 let totalPausedDuration = 0;
+let videoMimeType = '';
+let videoWriteQueue: Promise<void> = Promise.resolve();
+let videoStopPromise: Promise<void> = Promise.resolve();
+let resolveVideoStop: (() => void) | null = null;
+let videoManifestEntries: VideoChunkManifestEntry[] = [];
+let recorderError: string | undefined;
+let lastStopResponse: CaptureStopResponse | null = null;
+let lastVideoManifest: VideoManifest | null = null;
 
 const AUDIO_CHUNK_DURATION_MS = 5 * 60 * 1000;
 const STOP_TIMEOUT_MS = 30_000;
+const VIDEO_WRITE_TIMEOUT_MS = 120_000;
 
 function getCaptureTime(): number {
   if (captureStartedAt === null) return 0;
   const now = capturePausedAt ?? performance.now();
   return Math.max(0, (now - captureStartedAt - totalPausedDuration) / 1000);
+}
+
+function formatCaptureDuration(milliseconds: number): string {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function buildCombinedStream(audioTrack: MediaStreamTrack | null): MediaStream {
@@ -73,32 +110,110 @@ function startIncrementalRecorder(stream: MediaStream): void {
     return;
   }
 
+  const mimeType = chooseMp4MimeType((candidate) => MediaRecorder.isTypeSupported(candidate));
+  if (!mimeType) throw new Error('VIDEO_CODEC_UNAVAILABLE');
+
   incrementalRecorder = new MediaRecorder(stream, {
-    videoBitsPerSecond: 1_500_000, // 1.5 Mbps for good quality/size balance
+    mimeType,
+    videoBitsPerSecond: 1_500_000,
+    audioBitsPerSecond: 64_000,
   });
+  videoMimeType = incrementalRecorder.mimeType || mimeType;
 
   chunkCount = 0;
+  videoWriteQueue = Promise.resolve();
+  videoManifestEntries = [];
+  recorderError = undefined;
+  videoStopPromise = new Promise<void>((resolve) => {
+    resolveVideoStop = resolve;
+  });
 
   incrementalRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
       console.log('[Offscreen] dataavailable size:', event.data.size);
+      const sequence = chunkCount;
       chunkCount += 1;
 
       const recordingId = currentRecordingId;
       if (!recordingId) {
         captureWarnings.push('A video chunk could not be linked to the recording.');
+        videoManifestEntries.push({
+          sequence,
+          timecodeMs: event.timecode,
+          size: event.data.size,
+          mimeType: event.data.type || videoMimeType,
+          attempts: 0,
+          stored: false,
+          error: 'The recording ID was missing.',
+        });
         return;
       }
 
-      const save = event.data
-        .arrayBuffer()
-        .then((buffer) => saveVideoChunk(recordingId, buffer))
-        .catch((error) => {
-          console.error('[Offscreen] Failed to save video chunk:', error);
-          captureWarnings.push('A video chunk could not be saved.');
-        })
-        .finally(() => pendingVideoChunkSaves.delete(save));
-      pendingVideoChunkSaves.add(save);
+      const blob = event.data;
+      videoWriteQueue = videoWriteQueue.then(async () => {
+        let attempts = 0;
+        let lastError: unknown;
+        let sha256: string;
+        try {
+          sha256 = await sha256Blob(blob);
+        } catch (error) {
+          const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+          captureWarnings.push(`Video chunk ${sequence} could not be hashed: ${message}`);
+          videoManifestEntries.push({
+            sequence,
+            timecodeMs: event.timecode,
+            size: blob.size,
+            mimeType: blob.type || videoMimeType,
+            attempts: 0,
+            stored: false,
+            error: message,
+          });
+          return;
+        }
+
+        while (attempts < 3) {
+          attempts += 1;
+          try {
+            await saveOrderedVideoChunk(recordingId, {
+              sequence,
+              blob,
+              timecodeMs: event.timecode,
+              size: blob.size,
+              mimeType: blob.type || videoMimeType,
+              sha256,
+              attempts,
+            });
+            videoManifestEntries.push({
+              sequence,
+              timecodeMs: event.timecode,
+              size: blob.size,
+              mimeType: blob.type || videoMimeType,
+              sha256,
+              attempts,
+              stored: true,
+            });
+            return;
+          } catch (error) {
+            lastError = error;
+            if (error instanceof DOMException && error.name === 'QuotaExceededError') break;
+            if (attempts < 3) await new Promise((resolve) => window.setTimeout(resolve, attempts * 250));
+          }
+        }
+
+        const message = lastError instanceof Error ? `${lastError.name}: ${lastError.message}` : String(lastError);
+        console.error(`[Offscreen] Failed to save video chunk ${sequence}:`, lastError);
+        captureWarnings.push(`Video chunk ${sequence} could not be saved: ${message}`);
+        videoManifestEntries.push({
+          sequence,
+          timecodeMs: event.timecode,
+          size: blob.size,
+          mimeType: blob.type || videoMimeType,
+          sha256,
+          attempts,
+          stored: false,
+          error: message,
+        });
+      });
     } else {
       console.log('[Offscreen] dataavailable empty');
     }
@@ -106,15 +221,17 @@ function startIncrementalRecorder(stream: MediaStream): void {
 
   incrementalRecorder.onerror = (event) => {
     console.error('[Offscreen] MediaRecorder error:', event);
-    chrome.runtime.sendMessage({
-      type: 'CAPTURE_ERROR',
-      error: 'Recording error occurred',
-      target: 'background',
+    recorderError = event.error?.message || 'MediaRecorder reported an unknown error.';
+    captureWarnings.push(`Video recorder error: ${recorderError}`);
+    void stopCapture('recorder-error').then(() => {
+      chrome.runtime.sendMessage({ type: 'CAPTURE_STOPPED_BY_USER', target: 'background' });
     });
   };
 
   incrementalRecorder.onstop = () => {
     console.log('[Offscreen] Incremental recorder stopped');
+    resolveVideoStop?.();
+    resolveVideoStop = null;
   };
 
   incrementalRecorder.start(1000);
@@ -305,6 +422,8 @@ async function startCapture(recordingId?: string) {
     }
     currentRecordingId = recordingId;
     captureWarnings = [];
+    lastStopResponse = null;
+    lastVideoManifest = null;
     console.log('[Offscreen] Starting capture...');
 
     // Try to get microphone audio first
@@ -359,7 +478,7 @@ async function startCapture(recordingId?: string) {
       // Handle track ending (user stops sharing)
       track.onended = async () => {
         console.log('[Offscreen] Display track ended');
-        await stopCapture();
+        await stopCapture('share-ended');
         chrome.runtime.sendMessage({ type: 'CAPTURE_STOPPED_BY_USER', target: 'background' });
       };
     });
@@ -400,7 +519,14 @@ async function startCapture(recordingId?: string) {
   } catch (error) {
     console.error('[Offscreen] Failed to start capture:', error);
     cleanup();
-    return { success: false, error: String(error) };
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      error: message === 'VIDEO_CODEC_UNAVAILABLE'
+        ? 'Chrome cannot encode the required MP4 format.'
+        : message,
+      errorCode: message === 'VIDEO_CODEC_UNAVAILABLE' ? 'VIDEO_CODEC_UNAVAILABLE' : undefined,
+    };
   }
 }
 
@@ -447,58 +573,128 @@ function resumeCapture() {
   return { success: false, error: 'Not paused' };
 }
 
-function stopCapture(): Promise<CaptureStopResponse> {
+function stopCapture(reason: VideoStopReason = 'user'): Promise<CaptureStopResponse> {
+  if (!incrementalRecorder && lastStopResponse) return Promise.resolve(lastStopResponse);
   if (!stopCapturePromise) {
-    stopCapturePromise = performStopCapture().finally(() => {
+    stopCapturePromise = performStopCapture(reason).finally(() => {
       stopCapturePromise = null;
     });
   }
   return stopCapturePromise;
 }
 
-async function performStopCapture(): Promise<CaptureStopResponse> {
+async function performStopCapture(reason: VideoStopReason): Promise<CaptureStopResponse> {
   console.log('[Offscreen] Stop requested');
+  const recordingId = currentRecordingId;
+  if (!recordingId) {
+    return { success: false, error: 'Recording ID is required' };
+  }
+  const activeDurationMs = Math.round(getCaptureTime() * 1000);
+  const pausedDurationMs = Math.round(totalPausedDuration + (
+    capturePausedAt === null ? 0 : performance.now() - capturePausedAt
+  ));
 
-  const audioStopped = await settleWithin(
-    stopAudioChunkRecording(),
-    STOP_TIMEOUT_MS,
-    'The last audio chunk did not finish in time.'
-  );
-  if (!audioStopped) {
-    captureWarnings.push('The last audio chunk may be incomplete.');
+  const audioStopPromise = stopAudioChunkRecording();
+  if (incrementalRecorder && incrementalRecorder.state !== 'inactive') {
+    incrementalRecorder.stop();
+  } else {
+    resolveVideoStop?.();
+    resolveVideoStop = null;
   }
 
-  if (!incrementalRecorder || incrementalRecorder.state === 'inactive') {
-    console.log('[Offscreen] No active recording to stop');
-    cleanup();
-    return { success: true, warnings: captureWarnings };
-  }
-
-  const recorderStopped = await settleWithin(
-    new Promise<void>((resolve) => {
-      if (!incrementalRecorder || incrementalRecorder.state === 'inactive') {
-        resolve();
-        return;
-      }
-      incrementalRecorder.onstop = () => {
-        console.log('[Offscreen] Incremental recorder stopped');
-        resolve();
-      };
-      incrementalRecorder.stop();
-    }),
-    STOP_TIMEOUT_MS,
-    'The video recorder did not stop in time.'
-  );
+  const [audioStopped, recorderStopped] = await Promise.all([
+    settleWithin(audioStopPromise, STOP_TIMEOUT_MS, 'The last audio chunk did not finish in time.'),
+    settleWithin(videoStopPromise, STOP_TIMEOUT_MS, 'The video recorder did not stop in time.'),
+  ]);
+  if (!audioStopped) captureWarnings.push('The last audio chunk may be incomplete.');
   if (!recorderStopped) {
     captureWarnings.push('The last video chunk may be incomplete.');
   }
 
   const videoSaved = await settleWithin(
-    Promise.all([...pendingVideoChunkSaves]).then(() => undefined),
-    STOP_TIMEOUT_MS,
+    videoWriteQueue,
+    VIDEO_WRITE_TIMEOUT_MS,
     'Pending video chunks were not saved in time.'
   );
   if (!videoSaved) captureWarnings.push('Some pending video chunks may be missing.');
+
+  const chunks = await getOrderedVideoChunks(recordingId);
+  const chunkValidation = await validateVideoChunks(chunks, chunkCount);
+  let validationError = recorderError ?? chunkValidation.error;
+  let status: VideoCaptureSummary['status'] = validationError ? 'recovery' : 'valid';
+  const assembledVideo = assembleVideo(chunks, videoMimeType || 'video/mp4');
+
+  if (status === 'valid') {
+    validationError = await validatePlayableVideo(assembledVideo);
+    if (validationError) status = 'recovery';
+  }
+
+  if (status === 'valid') {
+    try {
+      await saveFinalVideo(recordingId, assembledVideo, videoMimeType, 'video.mp4');
+    } catch (error) {
+      validationError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      status = 'recovery';
+    }
+  }
+  if (status === 'valid') {
+    try {
+      await deleteOrderedVideoChunks(recordingId);
+    } catch (error) {
+      captureWarnings.push(`Validated video chunks could not be removed: ${String(error)}`);
+    }
+  }
+  if (status === 'recovery' && validationError) {
+    captureWarnings.push(`The final MP4 could not be validated: ${validationError}`);
+  }
+
+  const manifest: VideoManifest = {
+    version: 1,
+    recordingId,
+    mimeType: videoMimeType || 'video/mp4',
+    activeDurationMs,
+    pausedDurationMs,
+    emittedChunks: chunkCount,
+    storedChunks: chunks.length,
+    totalBytes: chunkValidation.totalBytes,
+    stopReason: recorderError ? 'recorder-error' : reason,
+    status,
+    missingSequences: chunkValidation.missingSequences,
+    validationError,
+    chunks: [...videoManifestEntries].sort((a, b) => a.sequence - b.sequence),
+  };
+  lastVideoManifest = manifest;
+  try {
+    await saveVideoManifest(manifest);
+  } catch (error) {
+    captureWarnings.push(`The video manifest could not be saved: ${String(error)}`);
+  }
+
+  const videoCapture: VideoCaptureSummary = {
+    format: 'mp4',
+    mimeType: manifest.mimeType,
+    activeDurationMs,
+    pausedDurationMs,
+    emittedChunks: chunkCount,
+    storedChunks: chunks.length,
+    totalBytes: chunkValidation.totalBytes,
+    stopReason: manifest.stopReason,
+    status,
+    manifestFile: 'video-manifest.json',
+  };
+  const metadata = await getMetadata(recordingId);
+  if (metadata) {
+    try {
+      await saveMetadata({
+        ...metadata,
+        videoDuration: formatCaptureDuration(activeDurationMs),
+        videoCapture,
+        captureWarnings: [...new Set([...(metadata.captureWarnings ?? []), ...captureWarnings])],
+      });
+    } catch (error) {
+      captureWarnings.push(`The video summary could not be saved: ${String(error)}`);
+    }
+  }
 
   chrome.runtime.sendMessage({
     type: 'CAPTURE_STOPPED',
@@ -506,8 +702,59 @@ async function performStopCapture(): Promise<CaptureStopResponse> {
     target: 'background',
   });
 
+  lastStopResponse = { success: true, warnings: captureWarnings, videoCapture };
   cleanup();
-  return { success: true, warnings: captureWarnings };
+  return lastStopResponse;
+}
+
+async function validatePlayableVideo(blob: Blob): Promise<string | undefined> {
+  if (blob.size === 0) return 'The assembled MP4 is empty.';
+  const url = URL.createObjectURL(blob);
+  const video = document.createElement('video');
+  video.muted = true;
+  video.preload = 'auto';
+
+  try {
+    await waitForMediaEvent(video, url, 'loadedmetadata', 10_000);
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      return 'The MP4 has no finite duration.';
+    }
+    video.currentTime = Math.max(0, video.duration - Math.min(1, video.duration / 2));
+    await waitForMediaEvent(video, url, 'seeked', 10_000, false);
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return 'Chrome could not load a frame near the end of the MP4.';
+    }
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  } finally {
+    video.removeAttribute('src');
+    video.load();
+    URL.revokeObjectURL(url);
+  }
+}
+
+function waitForMediaEvent(
+  video: HTMLVideoElement,
+  url: string,
+  eventName: 'loadedmetadata' | 'seeked',
+  timeoutMs: number,
+  setSource = true
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => finish(new Error(`Timed out waiting for ${eventName}.`)), timeoutMs);
+    const finish = (error?: Error) => {
+      window.clearTimeout(timeout);
+      video.removeEventListener(eventName, handleSuccess);
+      video.removeEventListener('error', handleError);
+      error ? reject(error) : resolve();
+    };
+    const handleSuccess = () => finish();
+    const handleError = () => finish(new Error(video.error?.message || `The MP4 failed during ${eventName}.`));
+    video.addEventListener(eventName, handleSuccess, { once: true });
+    video.addEventListener('error', handleError, { once: true });
+    if (setSource) video.src = url;
+  });
 }
 
 async function settleWithin(
@@ -518,7 +765,13 @@ async function settleWithin(
   let timeout: number | undefined;
   try {
     return await Promise.race([
-      promise.then(() => true),
+      promise.then(
+        () => true,
+        (error) => {
+          console.warn(`[Offscreen] ${timeoutMessage}`, error);
+          return false;
+        }
+      ),
       new Promise<boolean>((resolve) => {
         timeout = window.setTimeout(() => {
           console.warn(`[Offscreen] ${timeoutMessage}`);
@@ -539,6 +792,8 @@ async function exportRecording(
   error?: string;
   downloadUrl?: string;
   filename?: string;
+  artifactKind?: 'recording' | 'recovery';
+  warning?: string;
 }> {
   if (!recordingId) return { success: false, error: 'Recording ID is required' };
 
@@ -551,21 +806,29 @@ async function exportRecording(
         success: true,
         downloadUrl: activeDownloadUrl,
         filename: savedExport.filename,
+        artifactKind: savedExport.artifactKind,
+        warning: savedExport.warning,
       };
     }
 
     const metadata = await getMetadata(recordingId);
     if (!metadata) return { success: false, error: 'Recording metadata not found' };
 
-    const [actions, screenshots, networkEvents, finalVideo, audioChunks] = await Promise.all([
+    const [actions, screenshots, networkEvents, finalVideo, audioChunks, videoManifest] = await Promise.all([
       getActions(recordingId),
       getScreenshots(recordingId),
       getNetworkEvents(recordingId),
       getFinalVideo(recordingId),
       getAudioChunks(recordingId),
+      getVideoManifest(recordingId),
     ]);
-    const videoChunks = finalVideo ? [] : await getVideoChunks(recordingId);
-    const zipBlob = await exportToZip(
+    const orderedChunks = finalVideo ? [] : await getOrderedVideoChunks(recordingId);
+    const videoChunks = orderedChunks.length > 0
+      ? orderedChunks
+      : finalVideo
+        ? []
+        : await getVideoChunks(recordingId);
+    const result = await exportToZip(
       metadata,
       actions,
       screenshots,
@@ -574,19 +837,33 @@ async function exportRecording(
       audioChunks,
       networkEvents,
       openRouterApiKey,
-      notifyExportStage
+      notifyExportStage,
+      videoManifest ?? (lastVideoManifest?.recordingId === recordingId ? lastVideoManifest : null)
     );
 
-    const filename = `mentora-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+    const prefix = result.artifactKind === 'recovery' ? 'mentora-recovery' : 'mentora-recording';
+    const filename = `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
     try {
-      await saveRecordingExport(recordingId, zipBlob, filename);
+      await saveRecordingExport(
+        recordingId,
+        result.blob,
+        filename,
+        result.artifactKind,
+        result.warning
+      );
     } catch (error) {
       console.warn('[Offscreen] The generated ZIP could not be cached:', error);
     }
 
     releaseDownloadUrl();
-    activeDownloadUrl = URL.createObjectURL(zipBlob);
-    return { success: true, downloadUrl: activeDownloadUrl, filename };
+    activeDownloadUrl = URL.createObjectURL(result.blob);
+    return {
+      success: true,
+      downloadUrl: activeDownloadUrl,
+      filename,
+      artifactKind: result.artifactKind,
+      warning: result.warning,
+    };
   } catch (error) {
     console.error('[Offscreen] Export failed:', error);
     return { success: false, error: String(error) };
@@ -633,6 +910,12 @@ function cleanup() {
   audioChunkRecorder = null;
   audioChunkIndex = 0;
   chunkCount = 0;
+  videoMimeType = '';
+  videoWriteQueue = Promise.resolve();
+  videoStopPromise = Promise.resolve();
+  resolveVideoStop = null;
+  videoManifestEntries = [];
+  recorderError = undefined;
   captureStartedAt = null;
   capturePausedAt = null;
   totalPausedDuration = 0;

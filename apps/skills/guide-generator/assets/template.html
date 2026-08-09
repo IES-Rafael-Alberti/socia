@@ -7,7 +7,7 @@
                                                replaced from `brands/<id>/brand.json`
     {{INLINE_CSS}}                           → contents of styles.css, inlined verbatim
 
-  The brand override block at the top of <style> redefines the CSS custom
+  The brand override block after the base stylesheet redefines the CSS custom
   properties declared in styles.css for the chosen brand, so the rest of the
   stylesheet picks them up via var(--brand-*).
 
@@ -23,6 +23,10 @@
 <meta charset="UTF-8">
 <title>{{CASE_TITLE}}</title>
 <style>
+/* Paste the contents of assets/styles.css here — inline so the document is
+   self-contained when rendered. */
+{{INLINE_CSS}}
+
 /* Brand override — substituted from brands/<id>/brand.json */
 :root {
   --brand-primary:      {{BRAND_PRIMARY}};
@@ -33,10 +37,6 @@
   --brand-border:       {{BRAND_BORDER}};
   --brand-page-footer:  "{{BRAND_PAGE_FOOTER}}";
 }
-
-/* Paste the contents of assets/styles.css here — inline so the document is
-   self-contained when rendered. */
-{{INLINE_CSS}}
 </style>
 </head>
 <body>
@@ -68,8 +68,10 @@
   <h2>Índice de contenidos</h2>
 
   <!-- Repeat per phase -->
-  <div class="phase-title">{{PHASE_TOC_TITLE}}</div>
-  <div class="step">{{STEP_TOC_LINE}}</div>
+  <div class="toc-phase">
+    <div class="phase-title">{{PHASE_TOC_TITLE}}</div>
+    <div class="step">{{STEP_TOC_LINE}}</div>
+  </div>
   <!-- ... -->
 </div>
 
@@ -83,15 +85,17 @@
 </div>
 
 <!-- STEP (repeat per step) -->
-<h3>{{STEP_HEADING}}</h3>
-<p>{{STEP_PARAGRAPH}}</p>
-<!-- Optional figure -->
-<figure>
-  <img src="images/{{SCREENSHOT_FILENAME}}">
-  <figcaption>{{SCREENSHOT_CAPTION}}</figcaption>
-</figure>
-<!-- Optional note -->
-<div class="note-box"><b>Nota:</b> {{NOTE_TEXT}}</div>
+<section class="guide-step">
+  <h3>{{STEP_HEADING}}</h3>
+  <p>{{STEP_PARAGRAPH}}</p>
+  <!-- Optional figure -->
+  <figure>
+    <img src="images/{{SCREENSHOT_FILENAME}}">
+    <figcaption>{{SCREENSHOT_CAPTION}}</figcaption>
+  </figure>
+  <!-- Optional note -->
+  <div class="note-box"><b>Nota:</b> {{NOTE_TEXT}}</div>
+</section>
 
 <!-- SUMMARY (always at the end) -->
 <div class="summary">

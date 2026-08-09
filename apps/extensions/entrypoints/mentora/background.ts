@@ -27,6 +27,8 @@ import type {
   Screenshot,
   StartRecordingResponse,
   StateResponse,
+  VideoCaptureSummary,
+  DownloadResponse,
 } from '../../utils/mentora/messages';
 import { loadTranscriptionSettings } from '../../utils/mentora/transcription-settings';
 import { validateOpenRouterKey } from '../../utils/mentora/openrouter-validation';
@@ -91,7 +93,10 @@ export default defineBackground(() => {
     maxBytes: Number.MAX_SAFE_INTEGER,
   });
   const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+  const VIDEO_FINALIZE_TIMEOUT_MS = 3 * 60 * 1000;
   const LAST_DOWNLOADED_RECORDING_KEY = 'mentoraLastDownloadedRecordingId';
+  const LAST_ARTIFACT_KIND_KEY = 'mentoraLastArtifactKind';
+  const LAST_EXPORT_WARNING_KEY = 'mentoraLastExportWarning';
 
   const initializationPromise = restoreBackgroundState();
 
@@ -409,7 +414,11 @@ export default defineBackground(() => {
 
       currentRecordingId = uuidv4();
       resetCaptureLimits();
-      await chrome.storage.local.remove(LAST_DOWNLOADED_RECORDING_KEY);
+      await chrome.storage.local.remove([
+        LAST_DOWNLOADED_RECORDING_KEY,
+        LAST_ARTIFACT_KIND_KEY,
+        LAST_EXPORT_WARNING_KEY,
+      ]);
       visitedPages.clear();
       offscreenReady = false;
 
@@ -449,7 +458,11 @@ export default defineBackground(() => {
         pendingStart = false;
         await stopRecordingState(null);
         await closeOffscreenDocument();
-        return { success: false, error: response?.error || 'User cancelled screen sharing' };
+        return {
+          success: false,
+          error: response?.error || 'User cancelled screen sharing',
+          errorCode: response?.errorCode,
+        };
       }
 
       // Update state after capture begins
@@ -535,12 +548,13 @@ export default defineBackground(() => {
     }
 
     let captureWarnings: string[] = [];
+    let videoCapture: VideoCaptureSummary | undefined;
     let captureContextUsable = true;
     try {
       // Stop capture
       const hasOffscreen = await checkOffscreenExists();
       if (hasOffscreen) {
-        const response = await sendToOffscreen({ type: 'STOP_CAPTURE' }, 35_000);
+        const response = await sendToOffscreen({ type: 'STOP_CAPTURE' }, VIDEO_FINALIZE_TIMEOUT_MS);
         console.log('[Background] Stop response from offscreen:', response);
         if (!response.success) {
           captureContextUsable = false;
@@ -550,7 +564,11 @@ export default defineBackground(() => {
           await closeOffscreenDocument();
         } else {
           captureWarnings = response.warnings ?? [];
+          videoCapture = response.videoCapture;
         }
+      } else {
+        captureContextUsable = false;
+        captureWarnings.push('El contexto de captura se cerró antes de validar el vídeo.');
       }
     } catch (error) {
       console.log('[Background] Error stopping capture (may already be stopped):', error);
@@ -567,22 +585,45 @@ export default defineBackground(() => {
       if (metadata) {
         const actionCount = await getActionCount(recordingId);
         const screenshotCount = await getScreenshotCount(recordingId);
-        await saveMetadata({
-          ...metadata,
-          endTime: Date.now(),
-          duration: Date.now() - metadata.startTime,
-          totalActions: actionCount,
-          totalScreenshots: screenshotCount,
-          pages: Array.from(visitedPages),
-          captureWarnings: [
-            ...new Set([
-              ...(metadata.captureWarnings ?? []),
-              ...captureWarnings,
-              ...captureLimitWarnings(),
-            ]),
-          ],
-          captureLimits: captureLimitMetadata(),
-        });
+        const stoppedAt = Date.now();
+        const duration = stoppedAt - metadata.startTime;
+        const finalVideoCapture = videoCapture ?? (!captureContextUsable
+          ? {
+              format: 'mp4' as const,
+              mimeType: 'video/mp4',
+              activeDurationMs: duration,
+              pausedDurationMs: 0,
+              emittedChunks: 0,
+              storedChunks: 0,
+              totalBytes: 0,
+              stopReason: 'context-restarted' as const,
+              status: 'recovery' as const,
+              manifestFile: 'video-manifest.json' as const,
+            }
+          : metadata.videoCapture);
+        try {
+          await saveMetadata({
+            ...metadata,
+            endTime: stoppedAt,
+            duration,
+            totalActions: actionCount,
+            totalScreenshots: screenshotCount,
+            pages: Array.from(visitedPages),
+            captureWarnings: [
+              ...new Set([
+                ...(metadata.captureWarnings ?? []),
+                ...captureWarnings,
+                ...captureLimitWarnings(),
+              ]),
+            ],
+            captureLimits: captureLimitMetadata(),
+            videoCapture: finalVideoCapture,
+          });
+        } catch (error) {
+          // A full quota can also reject this small write. Keep the offscreen
+          // context alive so export can still use its in-memory manifest.
+          console.warn('[Mentora] Failed to save final recording metadata:', error);
+        }
       }
     }
 
@@ -616,9 +657,12 @@ export default defineBackground(() => {
 
     const relativeTime = await getRelativeTime();
     const hasRecordingData = !!recordingId;
-    const lastDownloadedRecordingId = await chrome.storage.local
-      .get(LAST_DOWNLOADED_RECORDING_KEY)
-      .then((value) => value[LAST_DOWNLOADED_RECORDING_KEY] as string | undefined);
+    const exportState = await chrome.storage.local.get([
+      LAST_DOWNLOADED_RECORDING_KEY,
+      LAST_ARTIFACT_KIND_KEY,
+      LAST_EXPORT_WARNING_KEY,
+    ]);
+    const lastDownloadedRecordingId = exportState[LAST_DOWNLOADED_RECORDING_KEY] as string | undefined;
 
     const response: StateResponse = {
       state: state.state,
@@ -632,6 +676,8 @@ export default defineBackground(() => {
         Boolean(recordingId) && lastDownloadedRecordingId === recordingId,
       isExporting: exportStage !== 'idle',
       exportStage,
+      lastArtifactKind: exportState[LAST_ARTIFACT_KIND_KEY] as 'recording' | 'recovery' | undefined,
+      lastExportWarning: exportState[LAST_EXPORT_WARNING_KEY] as string | undefined,
     };
     console.log('[Background] GET_STATE response:', response);
     return response;
@@ -777,7 +823,7 @@ export default defineBackground(() => {
     return true;
   }
 
-  async function stopAndDownload(): Promise<{ success: boolean; error?: string }> {
+  async function stopAndDownload(): Promise<DownloadResponse> {
     if (exportStage !== 'idle') {
       return { success: false, error: 'Export already in progress' };
     }
@@ -797,7 +843,7 @@ export default defineBackground(() => {
 
   async function downloadRecording(
     continueExport = false
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<DownloadResponse> {
     if (!continueExport && exportStage !== 'idle') {
       return { success: false, error: 'Export already in progress' };
     }
@@ -848,8 +894,15 @@ export default defineBackground(() => {
       await waitForDownload(downloadId);
       await chrome.storage.local.set({
         [LAST_DOWNLOADED_RECORDING_KEY]: recordingId,
+        [LAST_ARTIFACT_KIND_KEY]: response.artifactKind ?? 'recording',
+        [LAST_EXPORT_WARNING_KEY]: response.warning ?? '',
       });
-      return { success: true };
+      return {
+        success: true,
+        artifactKind: response.artifactKind ?? 'recording',
+        warning: response.warning,
+        filename: response.filename,
+      };
     } catch (error) {
       console.error('[Background] Failed to download recording:', error);
       return { success: false, error: String(error) };
@@ -934,6 +987,10 @@ export default defineBackground(() => {
     warnings?: string[];
     downloadUrl?: string;
     filename?: string;
+    artifactKind?: 'recording' | 'recovery';
+    warning?: string;
+    errorCode?: StartRecordingResponse['errorCode'];
+    videoCapture?: VideoCaptureSummary;
   }> {
     // Send message and wait for response
     return new Promise((resolve) => {
