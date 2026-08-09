@@ -22,9 +22,14 @@ MENTORA names screenshots with timestamps and associates them with the action th
 2. For an old package, extract the millisecond timestamp from the ID and match the same suffix in `screenshots/`.
 3. If that fails, use the screenshot whose `actionId` matches the action.
 4. Identify the approximate **time range** of the step from the activity log.
-5. Look for the screenshot taken **right after the last action of the step**.
-6. If the state appears after an async response, use the first screenshot that shows the completed result.
-7. If two candidates remain, open both. Report the ambiguity if neither proves the caption.
+5. Do not assume that the screenshot linked to a click shows its result. MENTORA may capture it before the click or before the page finishes loading.
+6. Inspect the linked screenshot, the next screenshots and, when needed, the matching video interval. Use the first image that proves the completed state.
+7. If the state appears after an async response, wait for the loaded result instead of using a spinner or an empty panel.
+8. If two candidates remain, open both. Report the ambiguity if neither proves the caption.
+
+## Conditional actions
+
+A conditional branch that did not occur does not need a screenshot. Explain the trigger and both outcomes in text. Never reuse an unrelated image or claim that the recording proves the hypothetical outcome.
 
 ## Screenshots to skip
 
