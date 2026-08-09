@@ -154,21 +154,49 @@ def build_toc(phases: list[dict[str, Any]]) -> str:
     return "".join(blocks)
 
 
+def paragraph_or_block(value: str) -> str:
+    return value if re.search(r"<(?:p|ul|ol|div)\b", value) else f"<p>{value}</p>"
+
+
 def body_html(value: str | list[str]) -> str:
     if isinstance(value, str):
-        return value if re.search(r"<(?:p|ul|ol|div)\b", value) else f"<p>{value}</p>"
+        return paragraph_or_block(value)
     if isinstance(value, list) and value and all(isinstance(item, str) for item in value):
-        return "".join(f"<p>{item}</p>" for item in value if item)
+        return "".join(paragraph_or_block(item) for item in value if item)
     raise ValueError("body debe ser un texto o una lista de párrafos")
 
 
+def repeated_case_openings(content: dict[str, Any]) -> int:
+    pattern = re.compile(
+        r"(?:^|<(?:p|li|div)\b[^>]*>)\s*(?:<[^>]+>\s*)*en este caso\b",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    narrative: list[str] = []
+
+    def add(value: Any) -> None:
+        if isinstance(value, str):
+            narrative.append(value)
+        elif isinstance(value, list):
+            narrative.extend(item for item in value if isinstance(item, str))
+
+    for phase in content.get("phases", []):
+        add(phase.get("introduction", phase.get("objective")))
+        add(phase.get("summary"))
+        for step in phase.get("steps", []):
+            for field in ("objective", "body", "result", "note", "evidence"):
+                add(step.get(field))
+            if isinstance(step.get("conditional"), dict):
+                for field in ("condition", "whenTrue", "whenFalse"):
+                    add(step["conditional"].get(field))
+    return sum(len(pattern.findall(text)) for text in narrative)
+
+
 def content_quality_warnings(content: dict[str, Any]) -> list[str]:
-    serialized = json.dumps(content, ensure_ascii=False).casefold()
     warnings: list[str] = []
-    repeated_case = serialized.count("en este caso")
+    repeated_case = repeated_case_openings(content)
     if repeated_case > 2:
         warnings.append(
-            f"La fórmula 'En este caso' aparece {repeated_case} veces; integrar los datos en la narración."
+            f"La fórmula 'En este caso' abre {repeated_case} párrafos de la narración; variar esos comienzos."
         )
     subtitle = str(content.get("caseSubtitle", "")).casefold()
     if re.search(r"caso\s*#?\s*\d+|aplicable a (?:casos|alertas) similares", subtitle):

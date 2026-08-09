@@ -43,6 +43,12 @@ A conditional branch that did not occur does not need a screenshot. Explain the 
 
 The screenshots in the final PDF must follow the narrative order of the steps, not the filesystem order. MENTORA's timestamps give you that ordering naturally, but if you re-number the images when copying them into the guide's `images/` folder (recommended), use a scheme like `paso-01-login.png`, `paso-02-alerts.png` so the correspondence is obvious.
 
+## Consistent framing
+
+Click screenshots often contain only the page viewport, while video frames may also contain browser tabs and the address bar. Compare their dimensions and visible bounds before mixing both sources. Crop video frames when needed so figures use a consistent viewport and the browser chrome does not make some images look smaller than others.
+
+Derive the crop from the recording instead of copying fixed coordinates from another case. Inspect the cropped frame and confirm that it keeps every control or result named in the caption.
+
 ## Captions
 
 Each figure gets a one-line italic caption in Spanish, describing *what the reader is seeing*, not what they're doing. Good captions:

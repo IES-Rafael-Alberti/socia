@@ -103,9 +103,69 @@ class TemplateTest(unittest.TestCase):
 
     def test_quality_warnings_detect_repetitive_case_labels(self):
         content = sample_content()
-        content["phases"][0]["steps"][0]["body"] = "En este caso. En este caso. En este caso."
+        content["phases"][0]["steps"][0]["body"] = [
+            "En este caso revisamos la alerta.",
+            "En este caso buscamos accesos.",
+            "En este caso bloqueamos la dirección.",
+        ]
         warnings = generator.content_quality_warnings(content)
         self.assertTrue(any("En este caso" in warning for warning in warnings))
+
+    def test_quality_warnings_ignore_captions_context_and_inline_uses(self):
+        content = sample_content()
+        content["context"] = "En este caso. En este caso. En este caso."
+        content["phases"][0]["steps"][0]["body"] = (
+            "Revisamos la alerta. En este caso hay una IP de origen. "
+            "En este caso también consta el destino. En este caso falta el usuario."
+        )
+        content["phases"][0]["steps"][0]["figure"] = {
+            "source": "captura.png",
+            "caption": "En este caso. En este caso. En este caso.",
+        }
+        warnings = generator.content_quality_warnings(content)
+        self.assertFalse(any("En este caso" in warning for warning in warnings))
+
+    def test_quality_warnings_include_auxiliary_step_prose(self):
+        content = sample_content()
+        step = content["phases"][0]["steps"][0]
+        step["result"] = "En este caso no hay accesos correctos."
+        step["note"] = "En este caso ampliamos el intervalo."
+        step["evidence"] = "En este caso guardamos la consulta."
+        warnings = generator.content_quality_warnings(content)
+        self.assertTrue(any("abre 3 párrafos" in warning for warning in warnings))
+
+    def test_quality_warnings_include_conditional_prose(self):
+        content = sample_content()
+        content["phases"][0]["steps"][0]["conditional"] = {
+            "condition": "En este caso encontramos actividad",
+            "whenTrue": "En este caso ampliamos el análisis.",
+            "whenFalse": "En este caso documentamos la ausencia.",
+        }
+        warnings = generator.content_quality_warnings(content)
+        self.assertTrue(any("abre 3 párrafos" in warning for warning in warnings))
+
+    def test_quality_warnings_detect_joined_lines(self):
+        content = sample_content()
+        content["phases"][0]["steps"][0]["body"] = (
+            "En este caso revisamos la alerta.\n"
+            "En este caso buscamos accesos.\n"
+            "En este caso bloqueamos la dirección."
+        )
+        warnings = generator.content_quality_warnings(content)
+        self.assertTrue(any("abre 3 párrafos" in warning for warning in warnings))
+
+    def test_body_list_preserves_block_html(self):
+        result = generator.body_html([
+            "Texto normal.",
+            '<div class="note-box">Nota</div>',
+            "<ul><li>Elemento</li></ul>",
+        ])
+        self.assertEqual(
+            result,
+            '<p>Texto normal.</p><div class="note-box">Nota</div><ul><li>Elemento</li></ul>',
+        )
+        self.assertNotIn("<p><div", result)
+        self.assertNotIn("<p><ul", result)
 
     def test_quality_warnings_require_transcript_traceability(self):
         content = sample_content()

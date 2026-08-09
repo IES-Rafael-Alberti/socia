@@ -14,13 +14,15 @@ Accept a MENTORA ZIP or extracted folder. Read `README-FOR-LLM.md`, `metadata.js
 
 MENTORA replaces secrets with `[REDACTED]`. Never recover or guess them. Check every selected image for visible secrets.
 
+Resolve `<skill-dir>` to the absolute directory that contains this `SKILL.md`. Use it in every command; do not assume that the current directory is the skill directory.
+
 ## Workflow
 
 1. Check capture warnings, dropped events, transcript failures and video validity. State any unresolved gap.
 2. Extract the timestamped transcript before reading the activity log:
 
    ```bash
-   python3 scripts/extract_transcript.py <recording>/transcription.json --output <workdir>/transcript.txt
+   python3 <skill-dir>/scripts/extract_transcript.py <recording>/transcription.json --output <workdir>/transcript.txt
    ```
 
    Read it completely. Build notes that preserve the teacher's order, examples, explanations and way of addressing the class. Treat speech-recognition errors as text to resolve against the interface and actions, not as wording to copy.
@@ -30,7 +32,7 @@ MENTORA replaces secrets with `[REDACTED]`. Never recover or guess them. Check e
 6. Run the generator:
 
    ```bash
-   python3 scripts/generate_guide.py \
+   python3 <skill-dir>/scripts/generate_guide.py \
      --recording <recording.zip-or-folder> \
      --content <guide.json> \
      --brand <brand-id> \
@@ -41,7 +43,7 @@ MENTORA replaces secrets with `[REDACTED]`. Never recover or guess them. Check e
 
    Require `contentWarnings` to be empty. Missing transcript references or repeated formulaic wording means the guide needs another writing pass.
 
-7. Run `python3 scripts/quick_validate.py <guide.pdf> --expect-text <case term>`. Render every page with `pdftoppm` and inspect the full contact sheet. Check the cover, index, phase headers, figures, captions, summary, credits, footer and page numbers. Read the PDF as a student who has not seen the video: if it lists actions without explaining the tools, concepts, queries and decisions, rewrite the content.
+7. Run `python3 <skill-dir>/scripts/quick_validate.py <guide.pdf> --expect-text <case term> --render-dir <workdir>/pages`. Open every rendered page at a legible size and compare each figure with its caption. Check the cover, index, phase headers, summary, credits, footer and page numbers. A contact sheet may help spot broad layout problems, but it is optional and does not replace the page-by-page check. Do not require ImageMagick or another unlisted tool. Read the PDF as a student who has not seen the video: if it lists actions without explaining the tools, concepts, queries and decisions, rewrite the content.
 
 ## Duration
 
@@ -53,6 +55,10 @@ The cover and footer must show active recording time, without pauses. The genera
 4. `metadata.duration`, with a warning that it may include pauses.
 
 Do not copy `metadata.duration` directly when pause data exists.
+
+## Time mapping
+
+Use `relativeTime` from the activity log, and from screenshot records when present, as active seconds from the start of the video. MENTORA has already removed pauses from this value, so it maps directly to `videoTime`. Never subtract `pausedDurationMs` from `relativeTime`. The network log uses the same active timeline in milliseconds through `t` and `endT`. Absolute epoch fields such as `timestamp` include pauses and must not be converted directly into video times.
 
 ## Layout rules
 
