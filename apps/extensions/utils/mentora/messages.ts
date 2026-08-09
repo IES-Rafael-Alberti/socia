@@ -182,6 +182,7 @@ export interface StateResponse {
   screenshotCount?: number;
   isPaused?: boolean;
   hasRecordingData?: boolean;
+  hasDownloaded?: boolean;
   /** True while a recording is being stopped or exported. */
   isExporting?: boolean;
   exportStage?: ExportStage;

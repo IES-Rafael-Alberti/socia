@@ -88,6 +88,7 @@ export default function App() {
       setActionCount(response.actionCount || 0);
       setScreenshotCount(response.screenshotCount || 0);
       setExportStage(response.exportStage ?? (response.isExporting ? 'preparing' : 'idle'));
+      setHasDownloaded(response.hasDownloaded ?? false);
 
       // Set elapsed time from background
       if (response.elapsedTime !== undefined) {
@@ -191,6 +192,7 @@ export default function App() {
         setActionCount(response.actionCount || 0);
         setScreenshotCount(response.screenshotCount || 0);
         setExportStage(response.exportStage ?? (response.isExporting ? 'preparing' : 'idle'));
+        setHasDownloaded(response.hasDownloaded ?? false);
 
         // If paused, also sync the elapsed time
         if (state === 'paused' && response.elapsedTime !== undefined) {
@@ -503,7 +505,7 @@ export default function App() {
                   ? 'MENTORA captura pantalla, micro y todas las acciones del navegador.'
                   : hasDownloaded
                     ? 'Empieza una grabación nueva o vuelve a descargar el ZIP.'
-                    : 'Preparando el ZIP…'}
+                    : 'El ZIP está listo para descargar.'}
               </p>
             </div>
 

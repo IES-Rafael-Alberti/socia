@@ -56,6 +56,7 @@ export default defineBackground(() => {
   let exportStage: ExportStage = 'idle';
   let currentRecordingTranscriptionEnabled = false;
   const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+  const LAST_DOWNLOADED_RECORDING_KEY = 'mentoraLastDownloadedRecordingId';
 
   const initializationPromise = restoreBackgroundState();
 
@@ -304,6 +305,7 @@ export default defineBackground(() => {
       }
 
       currentRecordingId = uuidv4();
+      await chrome.storage.local.remove(LAST_DOWNLOADED_RECORDING_KEY);
       visitedPages.clear();
       offscreenReady = false;
 
@@ -506,6 +508,9 @@ export default defineBackground(() => {
 
     const relativeTime = await getRelativeTime();
     const hasRecordingData = !!recordingId;
+    const lastDownloadedRecordingId = await chrome.storage.local
+      .get(LAST_DOWNLOADED_RECORDING_KEY)
+      .then((value) => value[LAST_DOWNLOADED_RECORDING_KEY] as string | undefined);
 
     const response: StateResponse = {
       state: state.state,
@@ -515,6 +520,8 @@ export default defineBackground(() => {
       screenshotCount,
       isPaused: state.state === 'paused',
       hasRecordingData,
+      hasDownloaded:
+        Boolean(recordingId) && lastDownloadedRecordingId === recordingId,
       isExporting: exportStage !== 'idle',
       exportStage,
     };
@@ -694,6 +701,9 @@ export default defineBackground(() => {
         saveAs: true,
       });
       await waitForDownload(downloadId);
+      await chrome.storage.local.set({
+        [LAST_DOWNLOADED_RECORDING_KEY]: recordingId,
+      });
       return { success: true };
     } catch (error) {
       console.error('[Background] Failed to download recording:', error);
