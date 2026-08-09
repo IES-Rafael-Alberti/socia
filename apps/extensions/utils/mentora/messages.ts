@@ -1,5 +1,7 @@
 // Types for messages between extension components
 
+import type { CaptureQuotaSummary } from './capture-limits';
+
 export type RecordingState = 'idle' | 'recording' | 'paused';
 
 // Network event captured by the fetch/XHR interceptor
@@ -137,6 +139,11 @@ export interface RecordingMetadata {
   transcriptionEnabled?: boolean;
   /** Non-fatal capture problems that may leave the final seconds incomplete. */
   captureWarnings?: string[];
+  /** Events kept and dropped by the storage safeguards. */
+  captureLimits?: {
+    actions: CaptureQuotaSummary;
+    network: CaptureQuotaSummary;
+  };
 }
 
 // Messages from popup to background

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ActionLog } from './messages';
 import { sanitizeActionLog } from './action-sanitization';
+import { ACTION_INPUT_VALUE_LIMIT } from './capture-limits';
 
 function action(overrides: Partial<ActionLog> = {}): ActionLog {
   return {
@@ -50,4 +51,20 @@ test('removes a forged sensitive input from details and readable text', () => {
 
   assert.equal(result.details.inputValue, '[REDACTED]');
   assert.doesNotMatch(result.humanReadable, /sk-forged-secret-value/);
+});
+
+test('bounds action fields and removes unknown data before storage', () => {
+  const forged = action({
+    type: 'input',
+    details: {
+      inputName: 'query',
+      inputValue: 'x'.repeat(ACTION_INPUT_VALUE_LIMIT + 100),
+    },
+  }) as ActionLog & { extra: string };
+  forged.extra = 'untrusted';
+
+  const result = sanitizeActionLog(forged);
+
+  assert.equal(result.details.inputValue?.length, ACTION_INPUT_VALUE_LIMIT);
+  assert.equal('extra' in result, false);
 });

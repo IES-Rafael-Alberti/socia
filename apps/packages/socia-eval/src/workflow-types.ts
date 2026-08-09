@@ -140,6 +140,11 @@ export interface StudentNetworkEvent {
   responseBodyLength?: number;
   requestBodyTruncated?: boolean;
   responseBodyTruncated?: boolean;
+  urlRedactions?: string[];
+  responseUrlRedactions?: string[];
+  documentUrlRedactions?: string[];
+  requestBodyRedactions?: string[];
+  responseBodyRedactions?: string[];
   outcome?: 'completed' | 'failed' | 'unknown';
   error?: string;
   documentUrl?: string;

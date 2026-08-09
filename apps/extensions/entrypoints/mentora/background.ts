@@ -6,7 +6,9 @@ import {
   getMetadata,
   getLatestMetadata,
   getActionCount,
+  getActions,
   getScreenshotCount,
+  getNetworkEvents,
   clearRecording,
   saveNetworkEvent,
 } from '../../utils/mentora/db';
@@ -36,6 +38,17 @@ import {
   sanitizeNetworkCaptureMessage,
   type NetworkCaptureMessage,
 } from '../../utils/shared/network-capture';
+import {
+  ACTION_BYTES_PER_RECORDING,
+  ACTION_EVENTS_PER_MINUTE,
+  ACTION_EVENTS_PER_RECORDING,
+  CaptureQuota,
+  NETWORK_BYTES_PER_RECORDING,
+  NETWORK_EVENTS_PER_MINUTE,
+  NETWORK_EVENTS_PER_RECORDING,
+  serializedByteLength,
+  type CaptureQuotaSummary,
+} from '../../utils/mentora/capture-limits';
 
 interface MentoraRuntimeMessage {
   type: string;
@@ -62,6 +75,21 @@ export default defineBackground(() => {
   let startInProgress = false;
   let exportStage: ExportStage = 'idle';
   let currentRecordingTranscriptionEnabled = false;
+  const actionQuota = new CaptureQuota({
+    perMinute: ACTION_EVENTS_PER_MINUTE,
+    maxEvents: ACTION_EVENTS_PER_RECORDING,
+    maxBytes: ACTION_BYTES_PER_RECORDING,
+  });
+  const networkQuota = new CaptureQuota({
+    perMinute: NETWORK_EVENTS_PER_MINUTE,
+    maxEvents: NETWORK_EVENTS_PER_RECORDING,
+    maxBytes: NETWORK_BYTES_PER_RECORDING,
+  });
+  const networkStartQuota = new CaptureQuota({
+    perMinute: NETWORK_EVENTS_PER_MINUTE,
+    maxEvents: Number.MAX_SAFE_INTEGER,
+    maxBytes: Number.MAX_SAFE_INTEGER,
+  });
   const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
   const LAST_DOWNLOADED_RECORDING_KEY = 'mentoraLastDownloadedRecordingId';
 
@@ -117,6 +145,9 @@ export default defineBackground(() => {
         return { success: false };
       case 'LOG_NETWORK_REQUEST_START':
         if (state.state === 'recording' && state.recordingId) {
+          if (!networkStartQuota.tryAccept(sender.tab?.id ?? -1, 0).accepted) {
+            return { success: false };
+          }
           return {
             success: true,
             recordingId: state.recordingId,
@@ -216,6 +247,7 @@ export default defineBackground(() => {
 
     if (state.recordingId) {
       currentRecordingId = state.recordingId;
+      await restoreCaptureLimits(state.recordingId);
     } else {
       const latest = await getLatestMetadata();
       if (latest) {
@@ -237,6 +269,66 @@ export default defineBackground(() => {
     }
   }
 
+  async function restoreCaptureLimits(recordingId: string): Promise<void> {
+    const [actions, networkEvents] = await Promise.all([
+      getActions(recordingId),
+      getNetworkEvents(recordingId),
+    ]);
+    actionQuota.reset(
+      actions.length,
+      actions.reduce((total, action) => total + serializedByteLength(action), 0)
+    );
+    networkQuota.reset(
+      networkEvents.length,
+      networkEvents.reduce(
+        (total, event) => total + serializedByteLength(event),
+        0
+      )
+    );
+    networkStartQuota.reset();
+  }
+
+  function resetCaptureLimits(): void {
+    actionQuota.reset();
+    networkQuota.reset();
+    networkStartQuota.reset();
+  }
+
+  function captureLimitWarnings(): string[] {
+    const actionSummary = actionQuota.summary();
+    const networkSummary = networkLimitSummary();
+    const warnings: string[] = [];
+    if (actionSummary.droppedEvents > 0) {
+      warnings.push(
+        `MENTORA dropped ${actionSummary.droppedEvents} action events after reaching capture limits.`
+      );
+    }
+    if (networkSummary.droppedEvents > 0) {
+      warnings.push(
+        `MENTORA dropped ${networkSummary.droppedEvents} network events after reaching capture limits.`
+      );
+    }
+    return warnings;
+  }
+
+  function networkLimitSummary(): CaptureQuotaSummary {
+    const stored = networkQuota.summary();
+    const starts = networkStartQuota.summary();
+    return {
+      ...stored,
+      droppedEvents: stored.droppedEvents + starts.droppedEvents,
+      droppedBytes: stored.droppedBytes + starts.droppedBytes,
+      limitReached: stored.limitReached || starts.limitReached,
+    };
+  }
+
+  function captureLimitMetadata() {
+    return {
+      actions: actionQuota.summary(),
+      network: networkLimitSummary(),
+    };
+  }
+
   async function finalizeInterruptedRecording(recordingId: string): Promise<void> {
     const metadata = await getMetadata(recordingId);
     if (!metadata) return;
@@ -248,9 +340,13 @@ export default defineBackground(() => {
       totalActions: await getActionCount(recordingId),
       totalScreenshots: await getScreenshotCount(recordingId),
       captureWarnings: [
-        ...(metadata.captureWarnings ?? []),
-        'The capture context restarted before the recording closed.',
+        ...new Set([
+          ...(metadata.captureWarnings ?? []),
+          'The capture context restarted before the recording closed.',
+          ...captureLimitWarnings(),
+        ]),
       ],
+      captureLimits: captureLimitMetadata(),
     });
   }
 
@@ -312,6 +408,7 @@ export default defineBackground(() => {
       }
 
       currentRecordingId = uuidv4();
+      resetCaptureLimits();
       await chrome.storage.local.remove(LAST_DOWNLOADED_RECORDING_KEY);
       visitedPages.clear();
       offscreenReady = false;
@@ -478,9 +575,13 @@ export default defineBackground(() => {
           totalScreenshots: screenshotCount,
           pages: Array.from(visitedPages),
           captureWarnings: [
-            ...(metadata.captureWarnings ?? []),
-            ...captureWarnings,
+            ...new Set([
+              ...(metadata.captureWarnings ?? []),
+              ...captureWarnings,
+              ...captureLimitWarnings(),
+            ]),
           ],
+          captureLimits: captureLimitMetadata(),
         });
       }
     }
@@ -547,6 +648,14 @@ export default defineBackground(() => {
 
     const relativeTime = await getRelativeTime();
     const actionWithTime = sanitizeActionLog({ ...action, relativeTime });
+    if (
+      !actionQuota.tryAccept(
+        tabId ?? -1,
+        serializedByteLength(actionWithTime)
+      ).accepted
+    ) {
+      return { success: false };
+    }
 
     // Track visited pages
     if (actionWithTime.url) {
@@ -639,9 +748,33 @@ export default defineBackground(() => {
       documentUrl: sanitized.documentUrl,
     };
 
+    if (
+      !networkQuota.tryAccept(
+        sender.tab?.id ?? -1,
+        serializedByteLength(event)
+      ).accepted
+    ) {
+      return { success: false };
+    }
+
     await saveNetworkEvent(recordingId, event);
     console.log(`[Background] Network event saved: ${raw.method} ${parsedUrl.pathname} → ${raw.status}`);
     return { success: true };
+  }
+
+  async function saveCapturedAction(
+    recordingId: string,
+    action: ActionLog,
+    source: string | number
+  ): Promise<boolean> {
+    const sanitized = sanitizeActionLog(action);
+    if (
+      !actionQuota.tryAccept(source, serializedByteLength(sanitized)).accepted
+    ) {
+      return false;
+    }
+    await saveAction(recordingId, sanitized);
+    return true;
   }
 
   async function stopAndDownload(): Promise<{ success: boolean; error?: string }> {
@@ -980,7 +1113,7 @@ export default defineBackground(() => {
         humanReadable: `Switched to tab: '${tab.title}'`,
       });
 
-      await saveAction(recordingId, action);
+      await saveCapturedAction(recordingId, action, activeInfo.tabId);
 
       if (tab.url) {
         visitedPages.add(action.url);
@@ -1013,7 +1146,7 @@ export default defineBackground(() => {
       humanReadable: `Created new tab${tab.url ? `: ${tab.url}` : ''}`,
     });
 
-    await saveAction(recordingId, action);
+    await saveCapturedAction(recordingId, action, tab.id ?? -1);
   });
 
   // Listen for tab closes
@@ -1039,7 +1172,7 @@ export default defineBackground(() => {
       humanReadable: `Closed tab #${tabId}`,
     });
 
-    await saveAction(recordingId, action);
+    await saveCapturedAction(recordingId, action, tabId);
   });
 
   // Listen for navigation
@@ -1069,8 +1202,9 @@ export default defineBackground(() => {
         humanReadable: `Navigated to: ${details.url}`,
       });
 
-      await saveAction(recordingId, action);
-      visitedPages.add(action.url);
+      if (await saveCapturedAction(recordingId, action, details.tabId)) {
+        visitedPages.add(action.url);
+      }
     } catch (error) {
       console.error('[Background] Error logging navigation:', error);
     }

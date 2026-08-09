@@ -221,11 +221,7 @@ export async function exportToZip(
     folder.file('network-log.json', JSON.stringify(networkLog, null, 2));
   }
 
-  // 5. Add human-readable activity log for LLM
-  const readableLog = generateReadableLog(safeActions, metadata);
-  folder.file('activity-log-readable.txt', readableLog);
-
-  // 6. Add metadata
+  // 5. Prepare safe metadata for every text file in the ZIP
   const finalMetadata: RecordingMetadata = {
     ...metadata,
     totalActions: safeActions.length,
@@ -234,12 +230,18 @@ export async function exportToZip(
       .map((page) => sanitizeNetworkUrl(page)?.value)
       .filter((page): page is string => Boolean(page)),
   };
+
+  // 6. Add human-readable activity log for LLM
+  const readableLog = generateReadableLog(safeActions, finalMetadata);
+  folder.file('activity-log-readable.txt', readableLog);
+
+  // 7. Add metadata
   folder.file('metadata.json', JSON.stringify(finalMetadata, null, 2));
 
-  // 7. Add LLM instructions file
+  // 8. Add LLM instructions file
   const transcriptionState = getTranscriptionState(transcription);
   const llmInstructions = generateLLMInstructions(
-    metadata,
+    finalMetadata,
     safeActions.length,
     screenshots.length,
     transcriptionState,
@@ -373,6 +375,9 @@ function generateLLMInstructions(
     empty: 'Empty',
     failed: 'Failed',
   }[transcriptionState];
+  const captureWarnings = metadata.captureWarnings?.length
+    ? `\n## Capture Warnings\n\n${metadata.captureWarnings.map((warning) => `- ${warning}`).join('\n')}\n`
+    : '';
 
   return `# MENTORA Recording Package
 
@@ -396,6 +401,7 @@ ${networkFiles}${transcriptionFiles}${transcriptionDataFile}${transcriptionStatu
 - **Pages Visited**: ${metadata.pages.length}
 - **Network Events Captured**: ${networkEventCount}
 - **Audio Transcription**: ${transcriptionLabel}
+${captureWarnings}
 
 ## How to Use This Recording
 

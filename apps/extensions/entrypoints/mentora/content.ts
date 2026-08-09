@@ -9,6 +9,11 @@ import {
   type NetworkCaptureMessage,
 } from '../../utils/shared/network-capture';
 import { injectScript } from 'wxt/client';
+import {
+  NETWORK_PENDING_LIMIT,
+  NETWORK_PENDING_TTL_MS,
+  NETWORK_EVENTS_PER_MINUTE,
+} from '../../utils/mentora/capture-limits';
 
 function sendMessage<T>(message: Record<string, unknown>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -41,6 +46,17 @@ export default defineContentScript({
       string,
       Promise<{ recordingId: string; relativeTime: number } | null>
     >();
+    const networkRelayTimes: number[] = [];
+
+    function canRelayNetworkStart(now = Date.now()): boolean {
+      const cutoff = now - 60_000;
+      while (networkRelayTimes[0] !== undefined && networkRelayTimes[0] <= cutoff) {
+        networkRelayTimes.shift();
+      }
+      if (networkRelayTimes.length >= NETWORK_EVENTS_PER_MINUTE) return false;
+      networkRelayTimes.push(now);
+      return true;
+    }
 
     // Get initial recording state
     sendMessage<{ state: RecordingState; startTime?: number }>({
@@ -61,6 +77,10 @@ export default defineContentScript({
       if (message.type === 'RECORDING_STATE_CHANGED') {
         isRecording = message.state === 'recording';
         recordingStartTime = message.startTime || recordingStartTime;
+        if (!isRecording) {
+          networkStarts.clear();
+          networkRelayTimes.length = 0;
+        }
       }
     });
 
@@ -98,7 +118,7 @@ export default defineContentScript({
     document.addEventListener(
       'click',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         const target = event.target as Element;
         if (!target) return;
@@ -135,7 +155,7 @@ export default defineContentScript({
     document.addEventListener(
       'input',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         const target = event.target as HTMLInputElement | HTMLTextAreaElement;
         if (!target) return;
@@ -182,8 +202,8 @@ export default defineContentScript({
     );
 
     // Scroll handler (debounced)
-    document.addEventListener('scroll', () => {
-      if (!isRecording) return;
+    document.addEventListener('scroll', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       if (scrollTimeout) {
         clearTimeout(scrollTimeout);
@@ -223,8 +243,8 @@ export default defineContentScript({
     });
 
     // Text selection handler
-    document.addEventListener('mouseup', () => {
-      if (!isRecording) return;
+    document.addEventListener('mouseup', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed) return;
@@ -242,15 +262,15 @@ export default defineContentScript({
     });
 
     // Copy handler
-    document.addEventListener('copy', () => {
-      if (!isRecording) return;
+    document.addEventListener('copy', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       logAction('copy', {}, 'Copied content to clipboard');
     });
 
     // Paste handler
-    document.addEventListener('paste', () => {
-      if (!isRecording) return;
+    document.addEventListener('paste', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       logAction('paste', {}, 'Pasted content from clipboard');
     });
@@ -259,7 +279,7 @@ export default defineContentScript({
     document.addEventListener(
       'keydown',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         // Only log special keys and shortcuts
         const specialKeys = [
@@ -322,7 +342,7 @@ export default defineContentScript({
     document.addEventListener(
       'submit',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         const form = event.target as HTMLFormElement;
         if (!form) return;
@@ -346,7 +366,7 @@ export default defineContentScript({
     document.addEventListener(
       'mouseenter',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         const target = event.target as Element;
         if (!target) return;
@@ -393,6 +413,7 @@ export default defineContentScript({
     document.addEventListener(
       'mouseleave',
       (event) => {
+        if (!event.isTrusted) return;
         const target = event.target as Element;
         if (target === hoveredElement) {
           if (hoverTimeout) {
@@ -427,6 +448,8 @@ export default defineContentScript({
       if (message.phase === 'start') {
         if (!isRecording) return;
         if (!isValidNetworkCaptureStart(message)) return;
+        if (networkStarts.size >= NETWORK_PENDING_LIMIT) return;
+        if (!canRelayNetworkStart()) return;
         const startPromise = sendMessage<{
           success: boolean;
           recordingId?: string;
@@ -449,7 +472,7 @@ export default defineContentScript({
           if (networkStarts.get(message.requestId) === startPromise) {
             networkStarts.delete(message.requestId);
           }
-        }, 10 * 60 * 1000);
+        }, NETWORK_PENDING_TTL_MS);
         return;
       }
 
@@ -518,8 +541,8 @@ export default defineContentScript({
       return result;
     };
 
-    window.addEventListener('popstate', () => {
-      if (!isRecording) return;
+    window.addEventListener('popstate', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       logAction(
         'navigation',
