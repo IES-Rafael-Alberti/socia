@@ -28,7 +28,14 @@ import type {
 } from '../../utils/mentora/messages';
 import { loadTranscriptionSettings } from '../../utils/mentora/transcription-settings';
 import { validateOpenRouterKey } from '../../utils/mentora/openrouter-validation';
-import type { NetworkCaptureMessage } from '../../utils/shared/network-capture';
+import {
+  sanitizeActionLog,
+  sanitizeRecordedUrl,
+} from '../../utils/mentora/action-sanitization';
+import {
+  sanitizeNetworkCaptureMessage,
+  type NetworkCaptureMessage,
+} from '../../utils/shared/network-capture';
 
 interface MentoraRuntimeMessage {
   type: string;
@@ -354,7 +361,7 @@ export default defineBackground(() => {
       // Get active tab for tracking
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.url) {
-        visitedPages.add(tab.url);
+        visitedPages.add(sanitizeRecordedUrl(tab.url) ?? '');
       }
 
       // Notify all tabs that recording started
@@ -539,14 +546,11 @@ export default defineBackground(() => {
     }
 
     const relativeTime = await getRelativeTime();
-    const actionWithTime: ActionLog = {
-      ...action,
-      relativeTime,
-    };
+    const actionWithTime = sanitizeActionLog({ ...action, relativeTime });
 
     // Track visited pages
-    if (action.url) {
-      visitedPages.add(action.url);
+    if (actionWithTime.url) {
+      visitedPages.add(actionWithTime.url);
     }
 
     // Take screenshot if needed (for clicks)
@@ -584,47 +588,55 @@ export default defineBackground(() => {
     sender: chrome.runtime.MessageSender,
     relativeEndTime: number
   ): Promise<{ success: boolean }> {
+    const sanitized = sanitizeNetworkCaptureMessage(raw, raw.url);
+    if (!sanitized) return { success: false };
+
     let parsedUrl: URL;
     try {
-      parsedUrl = new URL(raw.url);
+      parsedUrl = new URL(sanitized.url);
     } catch {
       // Relative URL — try to reconstruct
       try {
-        parsedUrl = new URL(raw.url, 'https://localhost');
+        parsedUrl = new URL(sanitized.url, 'https://localhost');
       } catch {
         return { success: false };
       }
     }
 
     const event: NetworkEvent = {
-      id: raw.requestId,
-      requestId: raw.requestId,
+      id: sanitized.requestId,
+      requestId: sanitized.requestId,
       relativeTime: relativeStartTime,
       relativeEndTime,
-      timestamp: raw.startedAt,
-      completedAt: raw.finishedAt,
-      durationMs: raw.durationMs,
-      source: raw.source,
-      method: raw.method,
-      url: raw.url,
-      responseUrl: raw.responseUrl,
-      redirected: raw.redirected,
-      status: raw.status ?? 0,
-      statusText: raw.statusText,
-      contentType: raw.contentType ?? '',
-      requestBody: raw.requestBody?.value ?? null,
-      responseBody: raw.responseBody?.value ?? null,
-      requestBodyLength: raw.requestBody?.originalLength ?? 0,
-      responseBodyLength: raw.responseBody?.originalLength ?? 0,
-      requestBodyTruncated: raw.requestBody?.truncated ?? false,
-      responseBodyTruncated: raw.responseBody?.truncated ?? false,
-      outcome: raw.outcome,
-      error: raw.error,
+      timestamp: sanitized.startedAt,
+      completedAt: sanitized.finishedAt,
+      durationMs: sanitized.durationMs,
+      source: sanitized.source,
+      method: sanitized.method,
+      url: sanitized.url,
+      responseUrl: sanitized.responseUrl,
+      redirected: sanitized.redirected,
+      status: sanitized.status ?? 0,
+      statusText: sanitized.statusText,
+      contentType: sanitized.contentType ?? '',
+      requestBody: sanitized.requestBody?.value ?? null,
+      responseBody: sanitized.responseBody?.value ?? null,
+      requestBodyLength: sanitized.requestBody?.originalLength ?? 0,
+      responseBodyLength: sanitized.responseBody?.originalLength ?? 0,
+      requestBodyTruncated: sanitized.requestBody?.truncated ?? false,
+      responseBodyTruncated: sanitized.responseBody?.truncated ?? false,
+      urlRedactions: sanitized.urlRedactions ?? [],
+      responseUrlRedactions: sanitized.responseUrlRedactions ?? [],
+      documentUrlRedactions: sanitized.documentUrlRedactions ?? [],
+      requestBodyRedactions: sanitized.requestBody?.redactions ?? [],
+      responseBodyRedactions: sanitized.responseBody?.redactions ?? [],
+      outcome: sanitized.outcome,
+      error: sanitized.error,
       host: parsedUrl.host,
       pathname: parsedUrl.pathname,
       tabId: sender.tab?.id,
       frameId: sender.frameId,
-      documentUrl: raw.documentUrl,
+      documentUrl: sanitized.documentUrl,
     };
 
     await saveNetworkEvent(recordingId, event);
@@ -954,7 +966,7 @@ export default defineBackground(() => {
       const tab = await chrome.tabs.get(activeInfo.tabId);
       const relativeTime = await getRelativeTime();
 
-      const action: ActionLog = {
+      const action = sanitizeActionLog({
         id: `action_${Date.now()}`,
         timestamp: Date.now(),
         relativeTime,
@@ -966,12 +978,12 @@ export default defineBackground(() => {
           tabTitle: tab.title,
         },
         humanReadable: `Switched to tab: '${tab.title}'`,
-      };
+      });
 
       await saveAction(recordingId, action);
 
       if (tab.url) {
-        visitedPages.add(tab.url);
+        visitedPages.add(action.url);
       }
     } catch (error) {
       console.error('[Background] Error logging tab switch:', error);
@@ -988,7 +1000,7 @@ export default defineBackground(() => {
 
     const relativeTime = await getRelativeTime();
 
-    const action: ActionLog = {
+    const action = sanitizeActionLog({
       id: `action_${Date.now()}`,
       timestamp: Date.now(),
       relativeTime,
@@ -999,7 +1011,7 @@ export default defineBackground(() => {
         tabId: tab.id,
       },
       humanReadable: `Created new tab${tab.url ? `: ${tab.url}` : ''}`,
-    };
+    });
 
     await saveAction(recordingId, action);
   });
@@ -1014,7 +1026,7 @@ export default defineBackground(() => {
 
     const relativeTime = await getRelativeTime();
 
-    const action: ActionLog = {
+    const action = sanitizeActionLog({
       id: `action_${Date.now()}`,
       timestamp: Date.now(),
       relativeTime,
@@ -1025,7 +1037,7 @@ export default defineBackground(() => {
         tabId,
       },
       humanReadable: `Closed tab #${tabId}`,
-    };
+    });
 
     await saveAction(recordingId, action);
   });
@@ -1044,7 +1056,7 @@ export default defineBackground(() => {
       const tab = await chrome.tabs.get(details.tabId);
       const relativeTime = await getRelativeTime();
 
-      const action: ActionLog = {
+      const action = sanitizeActionLog({
         id: `action_${Date.now()}`,
         timestamp: Date.now(),
         relativeTime,
@@ -1055,10 +1067,10 @@ export default defineBackground(() => {
           toUrl: details.url,
         },
         humanReadable: `Navigated to: ${details.url}`,
-      };
+      });
 
       await saveAction(recordingId, action);
-      visitedPages.add(details.url);
+      visitedPages.add(action.url);
     } catch (error) {
       console.error('[Background] Error logging navigation:', error);
     }

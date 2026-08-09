@@ -1,6 +1,8 @@
 import JSZip from 'jszip';
 import type { ActionLog, Screenshot, RecordingMetadata, NetworkEvent } from './messages';
 import type { RecordedAudioChunk } from './db';
+import { captureText, sanitizeNetworkUrl } from '../shared/network-capture';
+import { sanitizeActionLog } from './action-sanitization';
 import {
   transcribeAudioChunks,
   transcribeVideo,
@@ -25,6 +27,7 @@ export async function exportToZip(
   onStage?: (stage: 'transcribing' | 'packaging') => void | Promise<void>
 ): Promise<Blob> {
   const zip = new JSZip();
+  const safeActions = actions.map(sanitizeActionLog);
 
   // Create folder with timestamp
   const timestamp = new Date(metadata.startTime).toISOString().replace(/[:.]/g, '-');
@@ -130,8 +133,8 @@ export async function exportToZip(
     recordingId: metadata.recordingId,
     startTime: metadata.startTime,
     endTime: metadata.endTime,
-    totalActions: actions.length,
-    actions: actions.map((action) => ({
+    totalActions: safeActions.length,
+    actions: safeActions.map((action) => ({
       ...action,
       // Remove recording-specific internal fields
     })),
@@ -140,47 +143,96 @@ export async function exportToZip(
 
   // 4b. Add network log JSON (API calls captured by fetch/XHR interceptor)
   if (networkEvents && networkEvents.length > 0) {
-    const networkLog = networkEvents.map((evt) => ({
-      t: Math.round(evt.relativeTime * 1000),
-      endT: evt.relativeEndTime !== undefined
-        ? Math.round(evt.relativeEndTime * 1000)
-        : undefined,
-      requestId: evt.requestId,
-      durationMs: evt.durationMs,
-      source: evt.source,
-      method: evt.method,
-      url: evt.url,
-      responseUrl: evt.responseUrl,
-      redirected: evt.redirected,
-      host: evt.host,
-      pathname: evt.pathname,
-      status: evt.status,
-      statusText: evt.statusText,
-      contentType: evt.contentType,
-      requestBody: evt.requestBody,
-      responseBody: evt.responseBody,
-      requestBodyLength: evt.requestBodyLength,
-      responseBodyLength: evt.responseBodyLength,
-      requestBodyTruncated: evt.requestBodyTruncated,
-      responseBodyTruncated: evt.responseBodyTruncated,
-      outcome: evt.outcome,
-      error: evt.error,
-      tabId: evt.tabId,
-      frameId: evt.frameId,
-      documentUrl: evt.documentUrl,
-    }));
+    const networkLog = networkEvents.map((evt) => {
+      const safeUrl = sanitizeNetworkUrl(evt.url);
+      const safeResponseUrl = sanitizeNetworkUrl(evt.responseUrl ?? evt.url);
+      const safeDocumentUrl = sanitizeNetworkUrl(evt.documentUrl ?? evt.url);
+      const safeRequestBody = captureText(evt.requestBody, {
+        contentType: evt.contentType,
+        url: safeUrl?.value ?? evt.url,
+      });
+      const safeResponseBody = captureText(evt.responseBody, {
+        contentType: evt.contentType,
+        url: safeResponseUrl?.value ?? evt.responseUrl ?? evt.url,
+      });
+      return {
+        t: Math.round(evt.relativeTime * 1000),
+        endT:
+          evt.relativeEndTime !== undefined
+            ? Math.round(evt.relativeEndTime * 1000)
+            : undefined,
+        requestId: evt.requestId,
+        durationMs: evt.durationMs,
+        source: evt.source,
+        method: evt.method,
+        url: safeUrl?.value ?? '',
+        responseUrl: safeResponseUrl?.value,
+        redirected: evt.redirected,
+        host: evt.host,
+        pathname: evt.pathname,
+        status: evt.status,
+        statusText: evt.statusText,
+        contentType: evt.contentType,
+        requestBody: safeRequestBody.value,
+        responseBody: safeResponseBody.value,
+        requestBodyLength: evt.requestBodyLength,
+        responseBodyLength: evt.responseBodyLength,
+        requestBodyTruncated:
+          evt.requestBodyTruncated || safeRequestBody.truncated,
+        responseBodyTruncated:
+          evt.responseBodyTruncated || safeResponseBody.truncated,
+        urlRedactions: [
+          ...new Set([
+            ...(evt.urlRedactions ?? []),
+            ...(safeUrl?.redactions ?? []),
+          ]),
+        ],
+        responseUrlRedactions: [
+          ...new Set([
+            ...(evt.responseUrlRedactions ?? []),
+            ...(safeResponseUrl?.redactions ?? []),
+          ]),
+        ],
+        documentUrlRedactions: [
+          ...new Set([
+            ...(evt.documentUrlRedactions ?? []),
+            ...(safeDocumentUrl?.redactions ?? []),
+          ]),
+        ],
+        requestBodyRedactions: [
+          ...new Set([
+            ...(evt.requestBodyRedactions ?? []),
+            ...(safeRequestBody.redactions ?? []),
+          ]),
+        ],
+        responseBodyRedactions: [
+          ...new Set([
+            ...(evt.responseBodyRedactions ?? []),
+            ...(safeResponseBody.redactions ?? []),
+          ]),
+        ],
+        outcome: evt.outcome,
+        error: evt.error,
+        tabId: evt.tabId,
+        frameId: evt.frameId,
+        documentUrl: safeDocumentUrl?.value,
+      };
+    });
     folder.file('network-log.json', JSON.stringify(networkLog, null, 2));
   }
 
   // 5. Add human-readable activity log for LLM
-  const readableLog = generateReadableLog(actions, metadata);
+  const readableLog = generateReadableLog(safeActions, metadata);
   folder.file('activity-log-readable.txt', readableLog);
 
   // 6. Add metadata
   const finalMetadata: RecordingMetadata = {
     ...metadata,
-    totalActions: actions.length,
+    totalActions: safeActions.length,
     totalScreenshots: screenshots.length,
+    pages: metadata.pages
+      .map((page) => sanitizeNetworkUrl(page)?.value)
+      .filter((page): page is string => Boolean(page)),
   };
   folder.file('metadata.json', JSON.stringify(finalMetadata, null, 2));
 
@@ -188,7 +240,7 @@ export async function exportToZip(
   const transcriptionState = getTranscriptionState(transcription);
   const llmInstructions = generateLLMInstructions(
     metadata,
-    actions.length,
+    safeActions.length,
     screenshots.length,
     transcriptionState,
     networkEvents?.length || 0

@@ -9,6 +9,7 @@ import type { StudentAction } from '@socia/eval';
 import { injectScript } from 'wxt/client';
 import { createHintOverlay } from '@socia/runtime';
 import {
+  sanitizeNetworkCaptureMessage,
   shouldRelayNetworkCapture,
   type NetworkCaptureMessage,
 } from '../../utils/shared/network-capture';
@@ -141,13 +142,23 @@ export default defineContentScript({
       const message = event.data as NetworkCaptureMessage;
       if (message.phase !== 'finish') return;
       const url = resolveUrl(message.url);
-      if (!shouldRelayNetworkCapture(message, url)) return;
+      const sanitized = sanitizeNetworkCaptureMessage(
+        {
+          ...message,
+          responseUrl: message.responseUrl
+            ? resolveUrl(message.responseUrl)
+            : url,
+          documentUrl: resolveUrl(message.documentUrl),
+        },
+        url
+      );
+      if (!sanitized || !shouldRelayNetworkCapture(sanitized, sanitized.url)) return;
 
       // Parse URL for host and pathname
       let host = '';
       let pathname = '';
       try {
-        const parsed = new URL(url);
+        const parsed = new URL(sanitized.url);
         host = parsed.host;
         pathname = parsed.pathname;
       } catch {
@@ -158,31 +169,34 @@ export default defineContentScript({
         .sendMessage({
           type: 'SOCIA_STUDENT_NETWORK_EVENT',
           networkEvent: {
-            requestId: message.requestId,
-            timestamp: message.startedAt,
-            completedAt: message.finishedAt,
-            durationMs: message.durationMs,
-            source: message.source,
-            method: message.method,
-            url,
-            responseUrl: message.responseUrl
-              ? resolveUrl(message.responseUrl)
-              : url,
-            redirected: message.redirected ?? false,
+            requestId: sanitized.requestId,
+            timestamp: sanitized.startedAt,
+            completedAt: sanitized.finishedAt,
+            durationMs: sanitized.durationMs,
+            source: sanitized.source,
+            method: sanitized.method,
+            url: sanitized.url,
+            responseUrl: sanitized.responseUrl,
+            redirected: sanitized.redirected ?? false,
             host,
             pathname,
-            status: message.status ?? 0,
-            statusText: message.statusText ?? '',
-            contentType: message.contentType ?? '',
-            requestBody: message.requestBody?.value ?? null,
-            responseBody: message.responseBody?.value ?? null,
-            requestBodyLength: message.requestBody?.originalLength ?? 0,
-            responseBodyLength: message.responseBody?.originalLength ?? 0,
-            requestBodyTruncated: message.requestBody?.truncated ?? false,
-            responseBodyTruncated: message.responseBody?.truncated ?? false,
-            outcome: message.outcome,
-            error: message.error,
-            documentUrl: message.documentUrl,
+            status: sanitized.status ?? 0,
+            statusText: sanitized.statusText ?? '',
+            contentType: sanitized.contentType ?? '',
+            requestBody: sanitized.requestBody?.value ?? null,
+            responseBody: sanitized.responseBody?.value ?? null,
+            requestBodyLength: sanitized.requestBody?.originalLength ?? 0,
+            responseBodyLength: sanitized.responseBody?.originalLength ?? 0,
+            requestBodyTruncated: sanitized.requestBody?.truncated ?? false,
+            responseBodyTruncated: sanitized.responseBody?.truncated ?? false,
+            requestBodyRedactions: sanitized.requestBody?.redactions ?? [],
+            responseBodyRedactions: sanitized.responseBody?.redactions ?? [],
+            urlRedactions: sanitized.urlRedactions ?? [],
+            responseUrlRedactions: sanitized.responseUrlRedactions ?? [],
+            documentUrlRedactions: sanitized.documentUrlRedactions ?? [],
+            outcome: sanitized.outcome,
+            error: sanitized.error,
+            documentUrl: sanitized.documentUrl,
           },
         })
         .catch(() => {});

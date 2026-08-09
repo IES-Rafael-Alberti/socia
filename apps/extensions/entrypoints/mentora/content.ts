@@ -2,6 +2,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { getUniqueSelector, getElementText, getElementDescription } from '../../utils/mentora/selector';
 import type { ActionLog, ActionType, RecordingState } from '../../utils/mentora/messages';
 import {
+  isSensitiveInputField,
+  isValidNetworkCaptureStart,
+  sanitizeNetworkCaptureMessage,
   shouldRelayNetworkCapture,
   type NetworkCaptureMessage,
 } from '../../utils/shared/network-capture';
@@ -137,11 +140,6 @@ export default defineContentScript({
         const target = event.target as HTMLInputElement | HTMLTextAreaElement;
         if (!target) return;
 
-        // Skip password fields
-        if (target instanceof HTMLInputElement && target.type === 'password') {
-          return;
-        }
-
         // Debounce inputs
         const existingTimeout = inputDebounceMap.get(target);
         if (existingTimeout) {
@@ -151,10 +149,15 @@ export default defineContentScript({
         const timeout = window.setTimeout(() => {
           inputDebounceMap.delete(target);
 
-          const value =
-            target instanceof HTMLInputElement && target.type === 'password'
-              ? '[hidden]'
-              : target.value;
+          const sensitive = isSensitiveInputField({
+            type: target instanceof HTMLInputElement ? target.type : 'textarea',
+            name: target.name,
+            id: target.id,
+            autocomplete: target.getAttribute('autocomplete') ?? undefined,
+            value: target.value,
+            url: window.location.href,
+          });
+          const value = sensitive ? '[REDACTED]' : target.value;
 
           logAction(
             'input',
@@ -423,6 +426,7 @@ export default defineContentScript({
 
       if (message.phase === 'start') {
         if (!isRecording) return;
+        if (!isValidNetworkCaptureStart(message)) return;
         const startPromise = sendMessage<{
           success: boolean;
           recordingId?: string;
@@ -454,7 +458,17 @@ export default defineContentScript({
       if (!startPromise) return;
 
       const url = resolveUrl(message.url);
-      if (!shouldRelayNetworkCapture(message, url)) return;
+      const sanitized = sanitizeNetworkCaptureMessage(
+        {
+          ...message,
+          responseUrl: message.responseUrl
+            ? resolveUrl(message.responseUrl)
+            : url,
+          documentUrl: resolveUrl(message.documentUrl),
+        },
+        url
+      );
+      if (!sanitized || !shouldRelayNetworkCapture(sanitized, sanitized.url)) return;
 
       void startPromise.then((start) => {
         if (!start) return;
@@ -462,13 +476,7 @@ export default defineContentScript({
           type: 'LOG_NETWORK_EVENT',
           recordingId: start.recordingId,
           relativeStartTime: start.relativeTime,
-          networkEvent: {
-            ...message,
-            url,
-            responseUrl: message.responseUrl
-              ? resolveUrl(message.responseUrl)
-              : url,
-          },
+          networkEvent: sanitized,
         }).catch(() => {
           // Ignore send failures.
         });
