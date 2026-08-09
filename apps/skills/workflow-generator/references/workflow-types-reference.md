@@ -135,6 +135,11 @@ export interface StudentNetworkEvent {
   responseBodyLength?: number;
   requestBodyTruncated?: boolean;
   responseBodyTruncated?: boolean;
+  urlRedactions?: string[];
+  responseUrlRedactions?: string[];
+  documentUrlRedactions?: string[];
+  requestBodyRedactions?: string[];
+  responseBodyRedactions?: string[];
   outcome?: "completed" | "failed" | "unknown";
   error?: string;
   documentUrl?: string;
@@ -144,6 +149,34 @@ export interface StudentNetworkEvent {
 The matcher still uses only `method`, `url`, `host`, `pathname`, `status`,
 `requestBody` and `responseBody`. The other fields help the generator reject
 failed, redirected or incomplete evidence.
+
+MENTORA writes `[REDACTED]` where it removes a credential or token. The
+`*Redactions` arrays name the affected URL fields or body paths. Never use the
+marker or a listed path in a workflow signature. MENTORA and SOCIA use the
+same body limit and cleaning rules, so retained values remain comparable.
+
+## MENTORA capture limits
+
+`metadata.json` can include this summary:
+
+```typescript
+interface CaptureQuotaSummary {
+  acceptedEvents: number;
+  acceptedBytes: number;
+  droppedEvents: number;
+  droppedBytes: number;
+  limitReached: boolean;
+}
+
+interface RecordingCaptureLimits {
+  actions: CaptureQuotaSummary;
+  network: CaptureQuotaSummary;
+}
+```
+
+If `limitReached` is true or `captureWarnings` reports dropped events, treat
+the recording as partial. Do not create proof for an action whose request is
+missing from `network-log.json`.
 
 ## Matching algorithm summary
 

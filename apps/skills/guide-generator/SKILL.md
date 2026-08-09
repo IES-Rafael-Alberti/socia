@@ -22,7 +22,7 @@ You receive either a MENTORA ZIP or its extracted folder. The folder contains:
 
 | File | Content | Your use |
 |---|---|---|
-| `metadata.json` | Case title, start/end timestamps, duration, page list | Cover metadata, final credits |
+| `metadata.json` | Case title, timestamps, page list, capture warnings and limit counters | Cover metadata, final credits, reliability check |
 | `activity-log.json` | Ordered array of DOM events (clicks, inputs, navigations, form submits) with timestamps and element text | Primary source for reconstructing *what the teacher did* |
 | `activity-log-readable.txt` | Same as above but human-readable | Quick scan to get the narrative |
 | `network-log.json` (optional) | Intercepted HTTP requests — use this to confirm which API calls happened | Useful for disambiguating "login" from other POSTs, and for tool detection by host |
@@ -65,6 +65,17 @@ If the user explicitly asks for a brand that doesn't exist, stop and ask — don
 Open `metadata.json` to get the case title, date and duration. Scan `activity-log-readable.txt` (or the JSON) to build a mental model of the narrative: which tools were used, in what order, what happened at each stage.
 
 If there's a `network-log.json`, scan the hosts that appear — each distinct host usually maps to one tool (172.17.33.104 → TheHive, 172.17.33.153 → Graylog, 172.17.33.103 → Malcolm, 172.17.33.1 → OPNsense, etc.).
+
+Read `metadata.captureWarnings` and `metadata.captureLimits`. If events were
+dropped, treat the timeline as partial and check the video before filling a
+gap. State any unresolved gap in the delivery note.
+
+MENTORA replaces credentials and tokens with `[REDACTED]`. Never restore,
+guess or print a hidden value. Ignore values named by the `*Redactions` arrays
+in `network-log.json`. You may keep non-secret case data such as IP addresses,
+users, email addresses and entity IDs. Check screenshots before using them;
+crop or mask any visible credential that MENTORA could not clean from the
+recorded image.
 
 If `transcription.json` exists, align its segment and word timestamps with
 actions, screenshots and network requests. Use speech to recover the
