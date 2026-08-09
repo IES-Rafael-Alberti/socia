@@ -16,54 +16,8 @@ const metadata: RecordingMetadata = {
   pages: [],
 };
 
-test('keeps incremental video chunks in order', async () => {
-  const stages: string[] = [];
-  const result = await exportToZip(
-    { ...metadata },
-    [],
-    [],
-    [new Uint8Array([1, 2]).buffer, new Uint8Array([3, 4]).buffer],
-    undefined,
-    [],
-    [],
-    undefined,
-    (stage) => {
-      stages.push(stage);
-    }
-  );
-
-  const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
-  const video = zip.file(/video\.webm$/)[0];
-
-  assert.ok(video);
-  assert.deepEqual(
-    Array.from(await video.async('uint8array')),
-    [1, 2, 3, 4]
-  );
-  assert.deepEqual(stages, ['packaging']);
-});
-
-test('keeps support for a legacy final video', async () => {
-  const zipBlob = await exportToZip(
-    { ...metadata },
-    [],
-    [],
-    [new Uint8Array([9]).buffer],
-    {
-      blob: new Blob([new Uint8Array([5, 6, 7])], { type: 'video/webm' }),
-      mimeType: 'video/webm',
-      filename: 'video.webm',
-    }
-  );
-
-  const zip = await JSZip.loadAsync(await zipBlob.blob.arrayBuffer());
-  const video = zip.file(/video\.webm$/)[0];
-
-  assert.ok(video);
-  assert.deepEqual(Array.from(await video.async('uint8array')), [5, 6, 7]);
-});
-
 test('exports a validated MP4 with its manifest', async () => {
+  const stages: string[] = [];
   const manifest: VideoManifest = {
     version: 1,
     recordingId: metadata.recordingId,
@@ -87,13 +41,16 @@ test('exports a validated MP4 with its manifest', async () => {
     [],
     [],
     undefined,
-    undefined,
+    (stage) => {
+      stages.push(stage);
+    },
     manifest
   );
   const zip = await JSZip.loadAsync(await result.blob.arrayBuffer());
   assert.equal(result.artifactKind, 'recording');
   assert.ok(zip.file(/video\.mp4$/)[0]);
   assert.ok(zip.file(/video-manifest\.json$/)[0]);
+  assert.deepEqual(stages, ['packaging']);
 });
 
 test('creates a recovery package for an invalid MP4', async () => {

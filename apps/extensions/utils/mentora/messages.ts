@@ -123,11 +123,11 @@ export interface Screenshot {
   actionId?: string;
 }
 
-export type VideoCaptureStatus = 'valid' | 'recovery' | 'legacy';
+export type VideoCaptureStatus = 'valid' | 'recovery';
 export type VideoStopReason = 'user' | 'share-ended' | 'recorder-error' | 'context-restarted';
 
 export interface VideoCaptureSummary {
-  format: 'mp4' | 'webm';
+  format: 'mp4';
   mimeType: string;
   activeDurationMs: number;
   pausedDurationMs: number;

@@ -12,12 +12,9 @@ import { captureText, sanitizeNetworkUrl } from '../shared/network-capture';
 import { sanitizeActionLog } from './action-sanitization';
 import {
   transcribeAudioChunks,
-  transcribeVideo,
   formatAsSRT,
   type TranscriptionResult,
 } from './transcription';
-
-const MAX_DIRECT_TRANSCRIPTION_SIZE = 25 * 1024 * 1024;
 
 /**
  * Exports recording data to a ZIP file
@@ -26,7 +23,7 @@ export async function exportToZip(
   metadata: RecordingMetadata,
   actions: ActionLog[],
   screenshots: Screenshot[],
-  videoChunks: ArrayBuffer[] | RecordedVideoChunk[],
+  videoChunks: RecordedVideoChunk[],
   finalVideo?: RecordedFinalVideo,
   audioChunks?: RecordedAudioChunk[],
   networkEvents?: NetworkEvent[],
@@ -60,24 +57,24 @@ export async function exportToZip(
   const folderName = `mentora-recording-${timestamp}`;
   const folder = zip.folder(folderName)!;
 
-  // Prepare video data for both saving and transcription
-  let videoBlob: Blob | null = null;
-  const orderedChunks = videoChunks.length > 0 && 'blob' in videoChunks[0]
-    ? [...(videoChunks as RecordedVideoChunk[])].sort((a, b) => a.sequence - b.sequence)
-    : null;
+  const orderedChunks = [...videoChunks].sort((a, b) => a.sequence - b.sequence);
   const artifactKind: ExportArtifactKind = metadata.videoCapture?.status === 'recovery'
     || videoManifest?.status === 'recovery'
-    || orderedChunks !== null
+    || (!finalVideo && orderedChunks.length > 0)
     ? 'recovery'
     : 'recording';
   const warning = artifactKind === 'recovery'
     ? 'El MP4 no superó la validación. Se descargó un paquete de recuperación.'
     : undefined;
+  const highestStoredSequence = orderedChunks.reduce(
+    (highest, chunk) => Math.max(highest, chunk.sequence + 1),
+    0
+  );
   const inferredEmittedChunks = Math.max(
     metadata.videoCapture?.emittedChunks ?? 0,
-    ...(orderedChunks?.map((chunk) => chunk.sequence + 1) ?? [0])
+    highestStoredSequence
   );
-  const inferredSequences = new Set(orderedChunks?.map((chunk) => chunk.sequence) ?? []);
+  const inferredSequences = new Set(orderedChunks.map((chunk) => chunk.sequence));
   const inferredMissingSequences = Array.from(
     { length: inferredEmittedChunks },
     (_, sequence) => sequence
@@ -91,15 +88,15 @@ export async function exportToZip(
           activeDurationMs: metadata.videoCapture?.activeDurationMs ?? metadata.duration ?? 0,
           pausedDurationMs: metadata.videoCapture?.pausedDurationMs ?? 0,
           emittedChunks: inferredEmittedChunks,
-          storedChunks: orderedChunks?.length ?? metadata.videoCapture?.storedChunks ?? 0,
-          totalBytes: orderedChunks?.reduce((total, chunk) => total + chunk.blob.size, 0)
-            ?? metadata.videoCapture?.totalBytes
-            ?? 0,
+          storedChunks: orderedChunks.length || metadata.videoCapture?.storedChunks || 0,
+          totalBytes: orderedChunks.length > 0
+            ? orderedChunks.reduce((total, chunk) => total + chunk.blob.size, 0)
+            : metadata.videoCapture?.totalBytes ?? 0,
           stopReason: metadata.videoCapture?.stopReason ?? 'context-restarted',
           status: 'recovery',
           missingSequences: inferredMissingSequences,
           validationError: 'No se encontró un MP4 final validado.',
-          chunks: orderedChunks?.map((chunk) => ({
+          chunks: orderedChunks.map((chunk) => ({
             sequence: chunk.sequence,
             timecodeMs: chunk.timecodeMs,
             size: chunk.size,
@@ -107,14 +104,14 @@ export async function exportToZip(
             sha256: chunk.sha256,
             attempts: chunk.attempts,
             stored: true,
-          })) ?? [],
+          })),
         }
       : null
   );
 
   // 1. Add video file
   if (finalVideo) {
-    videoBlob = finalVideo.blob;
+    const videoBlob = finalVideo.blob;
     folder.file(
       finalVideo.filename,
       canUseBlobInput() ? videoBlob : await videoBlob.arrayBuffer(),
@@ -123,8 +120,8 @@ export async function exportToZip(
     metadata.videoDuration = formatDuration(
       metadata.videoCapture?.activeDurationMs ?? metadata.duration ?? 0
     );
-  } else if (orderedChunks) {
-    videoBlob = new Blob(orderedChunks.map((chunk) => chunk.blob), {
+  } else if (orderedChunks.length > 0) {
+    const videoBlob = new Blob(orderedChunks.map((chunk) => chunk.blob), {
       type: metadata.videoCapture?.mimeType || 'video/mp4',
     });
     folder.file(
@@ -142,16 +139,6 @@ export async function exportToZip(
     }
     folder.file('RECOVERY.md', buildRecoveryReadme(effectiveVideoManifest));
     metadata.videoDuration = formatDuration(metadata.videoCapture?.activeDurationMs ?? 0);
-  } else if (videoChunks.length > 0) {
-    videoBlob = new Blob(videoChunks as ArrayBuffer[], { type: 'video/webm' });
-    folder.file(
-      'video.webm',
-      canUseBlobInput() ? videoBlob : await videoBlob.arrayBuffer(),
-      { binary: true, compression: 'STORE' }
-    );
-
-    // Calculate video duration for metadata
-    metadata.videoDuration = formatDuration(metadata.duration || 0);
   }
   if (artifactKind === 'recovery' && !zip.file(`${folderName}/RECOVERY.md`)) {
     folder.file('RECOVERY.md', buildRecoveryReadme(effectiveVideoManifest));
@@ -166,20 +153,6 @@ export async function exportToZip(
       // Use pre-recorded audio chunks (supports any recording length)
       console.log(`[Export] Using ${audioChunks.length} pre-recorded audio chunks`);
       transcription = await transcribeAudioChunks(audioChunks, openRouterApiKey);
-    } else if (videoBlob) {
-      // Fallback: send video directly (only works for small files < 25MB)
-      if (videoBlob.size <= MAX_DIRECT_TRANSCRIPTION_SIZE) {
-        console.log('[Export] No audio chunks, falling back to video transcription');
-        const fallbackName = finalVideo?.filename ?? (artifactKind === 'recovery' ? 'video.mp4' : 'video.webm');
-        transcription = await transcribeVideo(
-          await videoBlob.arrayBuffer(),
-          videoBlob.type || 'video/webm',
-          fallbackName.split('.').pop() || 'webm',
-          openRouterApiKey
-        );
-      } else {
-        console.warn('[Export] Video is too large to use as a transcription fallback');
-      }
     }
 
     if (transcription && transcription.segments.length > 0) {
@@ -512,9 +485,7 @@ function generateLLMInstructions(
     : '';
   const videoLabel = metadata.videoCapture?.status === 'recovery'
     ? '- `recovery/` - Unverified MP4 bytes and ordered fragments for recovery\n- `video-manifest.json` - Video fragment integrity and validation report'
-    : metadata.videoCapture?.format === 'mp4'
-      ? '- `video.mp4` - Validated screen recording with audio'
-      : '- `video.webm` - Legacy screen recording with audio';
+    : '- `video.mp4` - Validated screen recording with audio';
   const videoInstruction = metadata.videoCapture?.status === 'recovery'
     ? '4. **Do not treat the recovery video as complete evidence.** Prefer transcription, actions and screenshots.'
     : '4. **Watch the video** for visual context';

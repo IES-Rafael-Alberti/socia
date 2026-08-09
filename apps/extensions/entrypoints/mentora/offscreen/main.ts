@@ -13,7 +13,6 @@ import {
   getScreenshots,
   getOrderedVideoChunks,
   getVideoManifest,
-  getVideoChunks,
   deleteOrderedVideoChunks,
   saveAudioChunk,
   saveFinalVideo,
@@ -823,16 +822,22 @@ async function exportRecording(
       getVideoManifest(recordingId),
     ]);
     const orderedChunks = finalVideo ? [] : await getOrderedVideoChunks(recordingId);
-    const videoChunks = orderedChunks.length > 0
-      ? orderedChunks
-      : finalVideo
-        ? []
-        : await getVideoChunks(recordingId);
+    if (
+      !metadata.videoCapture
+      && !finalVideo
+      && !videoManifest
+      && orderedChunks.length === 0
+    ) {
+      return {
+        success: false,
+        error: 'La grabación no contiene datos MP4 compatibles.',
+      };
+    }
     const result = await exportToZip(
       metadata,
       actions,
       screenshots,
-      videoChunks,
+      orderedChunks,
       finalVideo ?? undefined,
       audioChunks,
       networkEvents,
