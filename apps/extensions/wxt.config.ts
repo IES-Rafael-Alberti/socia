@@ -44,6 +44,7 @@ export default defineConfig({
         version: '1.0.0',
         permissions: [
           'storage',
+          'unlimitedStorage',
           'tabs',
           'activeTab',
           'offscreen',

@@ -9,9 +9,11 @@ import {
   getFinalVideo,
   getMetadata,
   getNetworkEvents,
+  getRecordingExport,
   getScreenshots,
   getVideoChunks,
   saveAudioChunk,
+  saveRecordingExport,
   saveVideoChunk,
 } from '../../../utils/mentora/db';
 import { exportToZip } from '../../../utils/mentora/zip-export';
@@ -541,6 +543,17 @@ async function exportRecording(
   if (!recordingId) return { success: false, error: 'Recording ID is required' };
 
   try {
+    const savedExport = await getRecordingExport(recordingId);
+    if (savedExport) {
+      releaseDownloadUrl();
+      activeDownloadUrl = URL.createObjectURL(savedExport.blob);
+      return {
+        success: true,
+        downloadUrl: activeDownloadUrl,
+        filename: savedExport.filename,
+      };
+    }
+
     const metadata = await getMetadata(recordingId);
     if (!metadata) return { success: false, error: 'Recording metadata not found' };
 
@@ -564,9 +577,15 @@ async function exportRecording(
       notifyExportStage
     );
 
+    const filename = `mentora-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+    try {
+      await saveRecordingExport(recordingId, zipBlob, filename);
+    } catch (error) {
+      console.warn('[Offscreen] The generated ZIP could not be cached:', error);
+    }
+
     releaseDownloadUrl();
     activeDownloadUrl = URL.createObjectURL(zipBlob);
-    const filename = `mentora-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
     return { success: true, downloadUrl: activeDownloadUrl, filename };
   } catch (error) {
     console.error('[Offscreen] Export failed:', error);

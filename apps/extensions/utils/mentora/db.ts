@@ -59,10 +59,19 @@ interface TeachSociaDB extends DBSchema {
     key: string;
     value: RecordingMetadata;
   };
+  recordingExports: {
+    key: string;
+    value: {
+      recordingId: string;
+      blob: Blob;
+      filename: string;
+      createdAt: number;
+    };
+  };
 }
 
 const DB_NAME = 'teach-socia-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbInstance: IDBPDatabase<TeachSociaDB> | null = null;
 let binaryChunkSequence = 0;
@@ -123,6 +132,12 @@ export async function getDB(): Promise<IDBPDatabase<TeachSociaDB>> {
           keyPath: 'id',
         });
         networkStore.createIndex('by-recording', 'recordingId');
+      }
+
+      if (oldVersion < 4) {
+        db.createObjectStore('recordingExports', {
+          keyPath: 'recordingId',
+        });
       }
     },
   });
@@ -284,6 +299,30 @@ export async function getLatestMetadata(): Promise<RecordingMetadata | undefined
   return entries.sort((a, b) => b.startTime - a.startTime)[0];
 }
 
+// Generated ZIP operations
+export async function saveRecordingExport(
+  recordingId: string,
+  blob: Blob,
+  filename: string
+): Promise<void> {
+  const db = await getDB();
+  await db.put('recordingExports', {
+    recordingId,
+    blob,
+    filename,
+    createdAt: Date.now(),
+  });
+}
+
+export async function getRecordingExport(
+  recordingId: string
+): Promise<{ blob: Blob; filename: string } | null> {
+  const db = await getDB();
+  const entry = await db.get('recordingExports', recordingId);
+  if (!entry || entry.blob.size === 0) return null;
+  return { blob: entry.blob, filename: entry.filename };
+}
+
 // Cleanup operations
 export async function clearRecording(recordingId: string): Promise<void> {
   const db = await getDB();
@@ -323,6 +362,9 @@ export async function clearRecording(recordingId: string): Promise<void> {
 
   // Clear final video
   await db.delete('finalVideo', recordingId);
+
+  // Clear generated ZIP
+  await db.delete('recordingExports', recordingId);
 }
 
 export async function clearAllRecordings(): Promise<void> {
@@ -334,4 +376,5 @@ export async function clearAllRecordings(): Promise<void> {
   await db.clear('networkEvents');
   await db.clear('metadata');
   await db.clear('finalVideo');
+  await db.clear('recordingExports');
 }
