@@ -1,7 +1,8 @@
 ---
 name: workflow-generator
 description: >
-  Generate SOCIA workflow.json files from MENTORA recording data (network-log.json, activity-log.json, metadata.json).
+  Generate SOCIA workflow.json files from MENTORA recording data (network-log.json, activity-log.json,
+  transcription.json, metadata.json).
   Use this skill whenever you need to create, design, or update a workflow for the SOCIA student evaluation extension.
   Triggers: "workflow", "workflow.json", "generar workflow", "crear workflow", "convertir grabación en workflow",
   "network-log", "activity-log", "mentora recording", "milestones", "hitos", "fases".
@@ -21,12 +22,21 @@ A MENTORA recording ZIP contains these files:
 
 | File | Content | Your use |
 |---|---|---|
-| `network-log.json` | Array of intercepted HTTP requests/responses (method, url, host, status, requestBody, responseBody, contentType) | **Primary source** — you extract milestone signatures from here |
+| `network-log.json` | Array of intercepted HTTP requests/responses, including truncation and redaction metadata | **Primary source** — you extract milestone signatures from here |
 | `activity-log.json` | Array of DOM events (clicks, inputs, navigations, form submissions) with timestamps, selectors, element text | Context — helps you understand *what* the teacher did between network events |
-| `metadata.json` | Session info: title, duration, page list, timestamps | Context — case title, estimated time |
+| `transcription.json` (optional) | Full transcript with segment and word timestamps | Context — explains the teacher's intent, reasoning, variables and desired milestones |
+| `transcription-status.json` (optional) | Transcription request counts and failures | Reliability check — tells you whether the transcript is complete |
+| `metadata.json` | Session info, timestamps, capture warnings and limit counters | Context — case title, estimated time and recording completeness |
 | Screenshots (PNG) | Visual snapshots of key actions | Context — if provided, helps confirm tool UIs |
 
 The most critical file is `network-log.json`. Every milestone in the workflow must map to a real HTTP request from this file.
+The transcript can explain why an action matters, but it never proves that the action happened.
+
+MENTORA replaces credentials and tokens with `[REDACTED]`. Never copy that
+marker into a signature. Do not use values named by `urlRedactions`,
+`responseUrlRedactions`, `documentUrlRedactions`, `requestBodyRedactions` or
+`responseBodyRedactions`. Keep useful incident data such as IP addresses,
+users, email addresses and entity IDs when it is present and not redacted.
 
 ## The workflow.json schema
 
@@ -100,8 +110,26 @@ Read `network-log.json` and identify the **meaningful API calls** — the ones t
 - Browser-internal requests (`chrome-extension://`, `localhost`)
 - Repeated polling/heartbeat requests (same endpoint hit dozens of times)
 - Preflight OPTIONS requests
+- Requests whose `outcome` is `failed` or `unknown`
+- Beacons without a response
 
 Focus on requests that indicate a clear action: logins (POST to session/auth endpoints), data queries (POST with search bodies), record creation (POST/PUT with meaningful payloads), state changes (PATCH/DELETE).
+
+Use `t` and `endT` to align requests with `activity-log.json` and
+`transcription.json`. `url` is the requested URL; `responseUrl` is the final
+URL after a redirect. Treat `requestBodyTruncated` and
+`responseBodyTruncated` as hard limits: never create a signature from text
+that is not present in the captured body.
+
+Read `metadata.captureWarnings` and `metadata.captureLimits` before defining
+milestones. If either action or network events were dropped, treat the
+recording as partial. Report the gap and do not infer a milestone without a
+matching request that remains in `network-log.json`.
+
+If `transcription-status.json` reports failures, use the available transcript
+only as partial context. Extract explanations, phase goals and hint wording
+from speech, then verify every claimed action against the action and network
+logs.
 
 ### 2. Group actions into phases
 
@@ -136,7 +164,8 @@ The matcher checks these fields **in order** — all must pass:
 - **Check the request body when the URL alone is ambiguous.** For example, TheHive uses `/api/v1/query` for everything — the body distinguishes "getAlert" from "getCase" from "getObservable".
 - **Use `response_body_contains` sparingly** — only when you need to confirm the *result* of an action, not just that it was attempted. Example: verifying a case was actually created (`"_type":"Case"`).
 - **Discriminate the correct entity on generic endpoints.** When a milestone represents "view details of X" and the endpoint returns data for any entity of that type (any alert, any case, any observable), add `response_body_contains` with an identifier of the correct entity — typically `{{alert_title}}`, the case name, or the observable value. Without this, opening *any* entity of the same type would complete the milestone. This is especially important for TheHive's `/api/v1/query` endpoint, which returns different entities depending on the query body but always has the same URL pattern.
-- **Bodies are truncated to 1000 characters** in the network log. Don't rely on content that would appear deep into a large response.
+- **Bodies are limited to 16 KiB** in both MENTORA and SOCIA. Check the truncation fields before relying on body text.
+- **Never match `[REDACTED]` or a redacted field.** Choose another stable path, status or non-secret body value. MENTORA and SOCIA apply the same cleaning rules, so a retained value can be compared in both extensions.
 
 ### 4. Define dependencies
 
@@ -207,6 +236,8 @@ What it covers:
 Things the **validator cannot check** that you must ensure when designing:
 
 - Each `network_signature` maps to at least one real request from `network-log.json`.
+- No signature uses `[REDACTED]` or a path listed in a `*Redactions` field.
+- Capture warnings and dropped-event counters are reported with the verification result.
 - Milestones that detect "viewing details" of an entity (alert, case, observable) include a `response_body_contains` with a discriminating value (`{{alert_title}}`, victim host, observable value) to avoid false positives when the student opens a different entity of the same type.
 
 ## Common patterns and examples

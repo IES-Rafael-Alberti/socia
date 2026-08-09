@@ -122,10 +122,61 @@ export interface StudentNetworkEvent {
   pathname: string;      // "/api/v1/login"
   status: number;        // 200, 201, 401, etc.
   contentType: string;   // "application/json", etc.
-  requestBody: string | null;   // Truncated to 1000 chars, passwords redacted
-  responseBody: string | null;  // Truncated to 1000 chars
+  requestBody: string | null;   // Limited to 16 KiB, secrets redacted
+  responseBody: string | null;  // Limited to 16 KiB, secrets redacted
+  requestId?: string;
+  completedAt?: number;
+  durationMs?: number;
+  source?: "fetch" | "xhr" | "beacon";
+  responseUrl?: string;
+  redirected?: boolean;
+  statusText?: string;
+  requestBodyLength?: number;
+  responseBodyLength?: number;
+  requestBodyTruncated?: boolean;
+  responseBodyTruncated?: boolean;
+  urlRedactions?: string[];
+  responseUrlRedactions?: string[];
+  documentUrlRedactions?: string[];
+  requestBodyRedactions?: string[];
+  responseBodyRedactions?: string[];
+  outcome?: "completed" | "failed" | "unknown";
+  error?: string;
+  documentUrl?: string;
 }
 ```
+
+The matcher still uses only `method`, `url`, `host`, `pathname`, `status`,
+`requestBody` and `responseBody`. The other fields help the generator reject
+failed, redirected or incomplete evidence.
+
+MENTORA writes `[REDACTED]` where it removes a credential or token. The
+`*Redactions` arrays name the affected URL fields or body paths. Never use the
+marker or a listed path in a workflow signature. MENTORA and SOCIA use the
+same body limit and cleaning rules, so retained values remain comparable.
+
+## MENTORA capture limits
+
+`metadata.json` can include this summary:
+
+```typescript
+interface CaptureQuotaSummary {
+  acceptedEvents: number;
+  acceptedBytes: number;
+  droppedEvents: number;
+  droppedBytes: number;
+  limitReached: boolean;
+}
+
+interface RecordingCaptureLimits {
+  actions: CaptureQuotaSummary;
+  network: CaptureQuotaSummary;
+}
+```
+
+If `limitReached` is true or `captureWarnings` reports dropped events, treat
+the recording as partial. Do not create proof for an action whose request is
+missing from `network-log.json`.
 
 ## Matching algorithm summary
 

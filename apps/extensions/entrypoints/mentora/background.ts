@@ -1,22 +1,16 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
-  saveVideoChunk,
-  saveAudioChunk,
   saveScreenshot,
   saveAction,
   saveMetadata,
   getMetadata,
-  getActions,
-  getScreenshots,
-  getVideoChunks,
-  getFinalVideo,
-  getAudioChunks,
+  getLatestMetadata,
   getActionCount,
+  getActions,
   getScreenshotCount,
-  clearRecording,
-  saveFinalVideo,
-  saveNetworkEvent,
   getNetworkEvents,
+  clearRecording,
+  saveNetworkEvent,
 } from '../../utils/mentora/db';
 import {
   getRecordingState,
@@ -26,8 +20,51 @@ import {
   stopRecording as stopRecordingState,
   getRelativeTime,
 } from '../../utils/mentora/storage';
-import type { ActionLog, NetworkEvent, Screenshot, StateResponse } from '../../utils/mentora/messages';
-import { exportToZip } from '../../utils/mentora/zip-export';
+import type {
+  ActionLog,
+  ExportStage,
+  NetworkEvent,
+  Screenshot,
+  StartRecordingResponse,
+  StateResponse,
+  VideoCaptureSummary,
+  DownloadResponse,
+} from '../../utils/mentora/messages';
+import { loadTranscriptionSettings } from '../../utils/mentora/transcription-settings';
+import { validateOpenRouterKey } from '../../utils/mentora/openrouter-validation';
+import {
+  sanitizeActionLog,
+  sanitizeRecordedUrl,
+} from '../../utils/mentora/action-sanitization';
+import {
+  sanitizeNetworkCaptureMessage,
+  type NetworkCaptureMessage,
+} from '../../utils/shared/network-capture';
+import {
+  ACTION_BYTES_PER_RECORDING,
+  ACTION_EVENTS_PER_MINUTE,
+  ACTION_EVENTS_PER_RECORDING,
+  CaptureQuota,
+  NETWORK_BYTES_PER_RECORDING,
+  NETWORK_EVENTS_PER_MINUTE,
+  NETWORK_EVENTS_PER_RECORDING,
+  serializedByteLength,
+  type CaptureQuotaSummary,
+} from '../../utils/mentora/capture-limits';
+
+interface MentoraRuntimeMessage {
+  type: string;
+  action?: ActionLog;
+  networkEvent?: NetworkCaptureMessage;
+  recordingId?: string;
+  relativeStartTime?: number;
+  startedAt?: number;
+  target?: string;
+  apiKey?: string;
+  allowWithoutTranscription?: boolean;
+  warnings?: string[];
+  stage?: ExportStage;
+}
 
 export default defineBackground(() => {
   console.log('[Background] Service worker started');
@@ -38,27 +75,30 @@ export default defineBackground(() => {
   let lastMicPermissionOpen = 0;
   let pendingStart = false;
   let startInProgress = false;
-  let isExporting = false;
-
-  // Restore state on startup
-  getRecordingState().then(async (state) => {
-    if (state.recordingId && state.state !== 'idle') {
-      currentRecordingId = state.recordingId;
-      console.log('[Background] Restored recording state:', state.state);
-
-      // Check if offscreen exists
-      const hasOffscreen = await checkOffscreenExists();
-      if (!hasOffscreen && state.state === 'recording') {
-        // Recording was in progress but offscreen is gone - stop the recording
-        console.log('[Background] Offscreen lost, stopping recording...');
-        await stopRecordingState();
-        currentRecordingId = null;
-        await updateBadge('idle');
-      } else {
-        await updateBadge(state.state === 'paused' ? 'paused' : 'recording');
-      }
-    }
+  let exportStage: ExportStage = 'idle';
+  let currentRecordingTranscriptionEnabled = false;
+  const actionQuota = new CaptureQuota({
+    perMinute: ACTION_EVENTS_PER_MINUTE,
+    maxEvents: ACTION_EVENTS_PER_RECORDING,
+    maxBytes: ACTION_BYTES_PER_RECORDING,
   });
+  const networkQuota = new CaptureQuota({
+    perMinute: NETWORK_EVENTS_PER_MINUTE,
+    maxEvents: NETWORK_EVENTS_PER_RECORDING,
+    maxBytes: NETWORK_BYTES_PER_RECORDING,
+  });
+  const networkStartQuota = new CaptureQuota({
+    perMinute: NETWORK_EVENTS_PER_MINUTE,
+    maxEvents: Number.MAX_SAFE_INTEGER,
+    maxBytes: Number.MAX_SAFE_INTEGER,
+  });
+  const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+  const VIDEO_FINALIZE_TIMEOUT_MS = 3 * 60 * 1000;
+  const LAST_DOWNLOADED_RECORDING_KEY = 'mentoraLastDownloadedRecordingId';
+  const LAST_ARTIFACT_KIND_KEY = 'mentoraLastArtifactKind';
+  const LAST_EXPORT_WARNING_KEY = 'mentoraLastExportWarning';
+
+  const initializationPromise = restoreBackgroundState();
 
   // Handle messages from popup, content scripts, and offscreen
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -73,9 +113,10 @@ export default defineBackground(() => {
   });
 
   async function handleMessage(
-    message: { type: string; action?: ActionLog; networkEvent?: { method: string; url: string; status: number; contentType: string; requestBody: string | null; responseBody: string | null }; chunk?: number[]; data?: number[]; index?: number; target?: string },
+    message: MentoraRuntimeMessage,
     sender: chrome.runtime.MessageSender
   ): Promise<unknown> {
+    await initializationPromise;
     if (sender.url?.includes('offscreen.html') && message.target !== 'background') {
       return { success: false, error: 'Ignored non-background message' };
     }
@@ -85,15 +126,19 @@ export default defineBackground(() => {
     switch (message.type) {
       // Popup messages
       case 'START_RECORDING':
-        return await startRecording();
+        return await startRecording(message.allowWithoutTranscription);
       case 'PAUSE_RECORDING':
         return await pauseRecording();
       case 'RESUME_RECORDING':
         return await resumeRecording();
       case 'STOP_RECORDING':
         return await stopRecording();
+      case 'STOP_AND_DOWNLOAD':
+        return await stopAndDownload();
       case 'GET_STATE':
         return await getState();
+      case 'VALIDATE_OPENROUTER_KEY':
+        return await validateOpenRouterKey(message.apiKey ?? '');
       case 'DOWNLOAD_RECORDING':
         return await downloadRecording();
 
@@ -103,9 +148,36 @@ export default defineBackground(() => {
           return await logAction(message.action, sender.tab?.id);
         }
         return { success: false };
+      case 'LOG_NETWORK_REQUEST_START':
+        if (state.state === 'recording' && state.recordingId) {
+          if (!networkStartQuota.tryAccept(sender.tab?.id ?? -1, 0).accepted) {
+            return { success: false };
+          }
+          return {
+            success: true,
+            recordingId: state.recordingId,
+            relativeTime: await getRelativeTime(),
+          };
+        }
+        return { success: false };
       case 'LOG_NETWORK_EVENT':
-        if (state.state === 'recording' && message.networkEvent) {
-          return await logNetworkEvent(message.networkEvent);
+        if (
+          message.networkEvent &&
+          message.recordingId &&
+          message.relativeStartTime !== undefined &&
+          (message.recordingId === state.recordingId ||
+            message.recordingId === currentRecordingId)
+        ) {
+          return await logNetworkEvent(
+            message.networkEvent,
+            message.recordingId,
+            message.relativeStartTime,
+            sender,
+            state.recordingId === message.recordingId
+              ? await getRelativeTime()
+              : message.relativeStartTime +
+                (message.networkEvent.durationMs ?? 0) / 1000
+          );
         }
         return { success: false };
       case 'GET_RECORDING_STATE':
@@ -119,26 +191,8 @@ export default defineBackground(() => {
         console.log('[Background] Offscreen document ready');
         offscreenReady = true;
         return { success: true };
-      case 'VIDEO_CHUNK':
-        if (currentRecordingId && message.chunk) {
-          const buffer = new Uint8Array(message.chunk).buffer;
-          await saveVideoChunk(currentRecordingId, buffer);
-          console.log('[Background] Video chunk saved, size:', message.chunk.length);
-        }
-        return { success: true };
-      case 'FINAL_VIDEO':
-        if (currentRecordingId && message.data) {
-          const buffer = new Uint8Array(message.data).buffer;
-          await saveFinalVideo(currentRecordingId, buffer);
-          console.log('[Background] Final video saved, size:', message.data.length);
-        }
-        return { success: true };
-      case 'AUDIO_CHUNK':
-        if (currentRecordingId && message.data && message.index !== undefined) {
-          const buffer = new Uint8Array(message.data).buffer;
-          await saveAudioChunk(currentRecordingId, message.index, buffer);
-          console.log(`[Background] Audio chunk ${message.index} saved, size: ${message.data.length}`);
-        }
+      case 'EXPORT_STAGE_CHANGED':
+        if (message.stage) await updateExportStage(message.stage);
         return { success: true };
       case 'CAPTURE_STARTED':
         console.log('[Background] Capture started confirmed');
@@ -156,7 +210,6 @@ export default defineBackground(() => {
       case 'CAPTURE_STOPPED':
         console.log('[Background] Capture stopped confirmed');
         await updateBadge('idle');
-        offscreenReady = false;
         return { success: true };
       case 'CAPTURE_STOPPED_BY_USER':
         console.log('[Background] User stopped sharing');
@@ -164,9 +217,9 @@ export default defineBackground(() => {
         return { success: true };
       case 'CAPTURE_ERROR':
         console.error('[Background] Capture error:', message);
-        await stopRecordingState();
+        if (currentRecordingId) await finalizeInterruptedRecording(currentRecordingId);
+        await stopRecordingState(currentRecordingId);
         await updateBadge('idle');
-        currentRecordingId = null;
         offscreenReady = false;
         return { success: false };
       case 'MIC_PERMISSION_NEEDED':
@@ -174,7 +227,7 @@ export default defineBackground(() => {
         return { success: true };
       case 'MIC_PERMISSION_GRANTED':
         if (pendingStart && !startInProgress) {
-          await startRecording();
+          await startRecording(false, currentRecordingTranscriptionEnabled);
         }
         return { success: true };
 
@@ -184,13 +237,171 @@ export default defineBackground(() => {
     }
   }
 
-  async function startRecording(): Promise<{ success: boolean; error?: string }> {
+  async function restoreBackgroundState(): Promise<void> {
+    const storedStage = await chrome.storage.session
+      .get('mentoraExportStage')
+      .then((value) => value.mentoraExportStage as ExportStage | undefined)
+      .catch(() => undefined);
+    const state = await getRecordingState();
+    const hasOffscreen = await checkOffscreenExists();
+
+    exportStage = storedStage && hasOffscreen ? storedStage : 'idle';
+    if (exportStage === 'idle' && storedStage && storedStage !== 'idle') {
+      await chrome.storage.session.set({ mentoraExportStage: 'idle' }).catch(() => undefined);
+    }
+
+    if (state.recordingId) {
+      currentRecordingId = state.recordingId;
+      await restoreCaptureLimits(state.recordingId);
+    } else {
+      const latest = await getLatestMetadata();
+      if (latest) {
+        currentRecordingId = latest.recordingId;
+        await stopRecordingState(latest.recordingId);
+      }
+    }
+
+    if (state.recordingId && state.state !== 'idle') {
+      console.log('[Background] Restored recording state:', state.state);
+      if (!hasOffscreen) {
+        console.log('[Background] Capture context lost; preserving recorded chunks');
+        await finalizeInterruptedRecording(state.recordingId);
+        await stopRecordingState(state.recordingId);
+        await updateBadge('idle');
+      } else {
+        await updateBadge(state.state === 'paused' ? 'paused' : 'recording');
+      }
+    }
+  }
+
+  async function restoreCaptureLimits(recordingId: string): Promise<void> {
+    const [actions, networkEvents] = await Promise.all([
+      getActions(recordingId),
+      getNetworkEvents(recordingId),
+    ]);
+    actionQuota.reset(
+      actions.length,
+      actions.reduce((total, action) => total + serializedByteLength(action), 0)
+    );
+    networkQuota.reset(
+      networkEvents.length,
+      networkEvents.reduce(
+        (total, event) => total + serializedByteLength(event),
+        0
+      )
+    );
+    networkStartQuota.reset();
+  }
+
+  function resetCaptureLimits(): void {
+    actionQuota.reset();
+    networkQuota.reset();
+    networkStartQuota.reset();
+  }
+
+  function captureLimitWarnings(): string[] {
+    const actionSummary = actionQuota.summary();
+    const networkSummary = networkLimitSummary();
+    const warnings: string[] = [];
+    if (actionSummary.droppedEvents > 0) {
+      warnings.push(
+        `MENTORA dropped ${actionSummary.droppedEvents} action events after reaching capture limits.`
+      );
+    }
+    if (networkSummary.droppedEvents > 0) {
+      warnings.push(
+        `MENTORA dropped ${networkSummary.droppedEvents} network events after reaching capture limits.`
+      );
+    }
+    return warnings;
+  }
+
+  function networkLimitSummary(): CaptureQuotaSummary {
+    const stored = networkQuota.summary();
+    const starts = networkStartQuota.summary();
+    return {
+      ...stored,
+      droppedEvents: stored.droppedEvents + starts.droppedEvents,
+      droppedBytes: stored.droppedBytes + starts.droppedBytes,
+      limitReached: stored.limitReached || starts.limitReached,
+    };
+  }
+
+  function captureLimitMetadata() {
+    return {
+      actions: actionQuota.summary(),
+      network: networkLimitSummary(),
+    };
+  }
+
+  async function finalizeInterruptedRecording(recordingId: string): Promise<void> {
+    const metadata = await getMetadata(recordingId);
+    if (!metadata) return;
+    const endedAt = Date.now();
+    await saveMetadata({
+      ...metadata,
+      endTime: metadata.endTime ?? endedAt,
+      duration: metadata.duration ?? Math.max(0, endedAt - metadata.startTime),
+      totalActions: await getActionCount(recordingId),
+      totalScreenshots: await getScreenshotCount(recordingId),
+      captureWarnings: [
+        ...new Set([
+          ...(metadata.captureWarnings ?? []),
+          'The capture context restarted before the recording closed.',
+          ...captureLimitWarnings(),
+        ]),
+      ],
+      captureLimits: captureLimitMetadata(),
+    });
+  }
+
+  async function updateExportStage(stage: ExportStage): Promise<void> {
+    exportStage = stage;
+    await chrome.storage.session.set({ mentoraExportStage: stage }).catch(() => undefined);
+  }
+
+  async function startRecording(
+    allowWithoutTranscription = false,
+    validatedTranscriptionEnabled?: boolean
+  ): Promise<StartRecordingResponse> {
     if (startInProgress) {
       return { success: false, error: 'Start already in progress' };
     }
+
+    let transcriptionEnabled = validatedTranscriptionEnabled ?? false;
+    if (validatedTranscriptionEnabled === undefined && !allowWithoutTranscription) {
+      const settings = await loadTranscriptionSettings();
+      if (settings.openRouterApiKey) {
+        const validation = await validateOpenRouterKey(settings.openRouterApiKey);
+        if (validation.status === 'invalid') {
+          return {
+            success: false,
+            error: 'OpenRouter API key is invalid',
+            errorCode: 'OPENROUTER_INVALID',
+          };
+        }
+        if (validation.status === 'exhausted') {
+          return {
+            success: false,
+            error: 'OpenRouter API key has no remaining limit',
+            errorCode: 'OPENROUTER_EXHAUSTED',
+          };
+        }
+        if (validation.status === 'unavailable') {
+          return {
+            success: false,
+            error: 'OpenRouter key validation is unavailable',
+            errorCode: 'OPENROUTER_UNAVAILABLE',
+          };
+        }
+        transcriptionEnabled = true;
+      }
+    }
+
     try {
       startInProgress = true;
       pendingStart = true;
+      currentRecordingTranscriptionEnabled = transcriptionEnabled;
       console.log('[Background] Starting recording...');
 
       // Clear any leftover data from a previous (already-downloaded) session
@@ -202,6 +413,12 @@ export default defineBackground(() => {
       }
 
       currentRecordingId = uuidv4();
+      resetCaptureLimits();
+      await chrome.storage.local.remove([
+        LAST_DOWNLOADED_RECORDING_KEY,
+        LAST_ARTIFACT_KIND_KEY,
+        LAST_EXPORT_WARNING_KEY,
+      ]);
       visitedPages.clear();
       offscreenReady = false;
 
@@ -213,13 +430,20 @@ export default defineBackground(() => {
       if (!isReady) {
         console.error('[Background] Offscreen not ready after waiting');
         await closeOffscreenDocument();
+        await stopRecordingState(null);
         currentRecordingId = null;
+        currentRecordingTranscriptionEnabled = false;
+        pendingStart = false;
+        startInProgress = false;
         return { success: false, error: 'Offscreen document not ready' };
       }
 
       // Start capture in offscreen document
       console.log('[Background] Sending START_CAPTURE to offscreen...');
-      const response = await sendToOffscreen({ type: 'START_CAPTURE' });
+      const response = await sendToOffscreen({
+        type: 'START_CAPTURE',
+        recordingId: currentRecordingId,
+      });
       console.log('[Background] Start capture response:', response);
 
       if (!response?.success) {
@@ -230,8 +454,15 @@ export default defineBackground(() => {
           await openMicPermissionPage();
           return { success: false, error: 'Microphone permission required' };
         }
+        currentRecordingTranscriptionEnabled = false;
+        pendingStart = false;
+        await stopRecordingState(null);
         await closeOffscreenDocument();
-        return { success: false, error: response?.error || 'User cancelled screen sharing' };
+        return {
+          success: false,
+          error: response?.error || 'User cancelled screen sharing',
+          errorCode: response?.errorCode,
+        };
       }
 
       // Update state after capture begins
@@ -240,7 +471,7 @@ export default defineBackground(() => {
       // Get active tab for tracking
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.url) {
-        visitedPages.add(tab.url);
+        visitedPages.add(sanitizeRecordedUrl(tab.url) ?? '');
       }
 
       // Notify all tabs that recording started
@@ -252,11 +483,13 @@ export default defineBackground(() => {
       console.log('[Background] Recording started successfully');
       pendingStart = false;
       startInProgress = false;
-      return { success: true };
+      return { success: true, transcriptionEnabled };
     } catch (error) {
       console.error('[Background] Failed to start recording:', error);
-      await stopRecordingState();
+      await stopRecordingState(null);
       currentRecordingId = null;
+      currentRecordingTranscriptionEnabled = false;
+      pendingStart = false;
       await closeOffscreenDocument();
       startInProgress = false;
       return { success: false, error: String(error) };
@@ -299,7 +532,9 @@ export default defineBackground(() => {
     }
   }
 
-  async function stopRecording(): Promise<{ success: boolean }> {
+  async function stopRecording(
+    keepOffscreenOpen = false
+  ): Promise<{ success: boolean; error?: string }> {
     console.log('[Background] Stopping recording...');
 
     const recordingIdToStop = currentRecordingId;
@@ -312,15 +547,33 @@ export default defineBackground(() => {
       }
     }
 
+    let captureWarnings: string[] = [];
+    let videoCapture: VideoCaptureSummary | undefined;
+    let captureContextUsable = true;
     try {
       // Stop capture
       const hasOffscreen = await checkOffscreenExists();
       if (hasOffscreen) {
-        const response = await sendToOffscreen({ type: 'STOP_CAPTURE' });
+        const response = await sendToOffscreen({ type: 'STOP_CAPTURE' }, VIDEO_FINALIZE_TIMEOUT_MS);
         console.log('[Background] Stop response from offscreen:', response);
+        if (!response.success) {
+          captureContextUsable = false;
+          captureWarnings.push(
+            response.error ?? 'The capture context did not finish cleanly.'
+          );
+          await closeOffscreenDocument();
+        } else {
+          captureWarnings = response.warnings ?? [];
+          videoCapture = response.videoCapture;
+        }
+      } else {
+        captureContextUsable = false;
+        captureWarnings.push('El contexto de captura se cerró antes de validar el vídeo.');
       }
     } catch (error) {
       console.log('[Background] Error stopping capture (may already be stopped):', error);
+      captureContextUsable = false;
+      captureWarnings.push('The capture context failed while stopping.');
     }
 
     // Update metadata
@@ -332,23 +585,54 @@ export default defineBackground(() => {
       if (metadata) {
         const actionCount = await getActionCount(recordingId);
         const screenshotCount = await getScreenshotCount(recordingId);
-        await saveMetadata({
-          ...metadata,
-          endTime: Date.now(),
-          duration: Date.now() - metadata.startTime,
-          totalActions: actionCount,
-          totalScreenshots: screenshotCount,
-          pages: Array.from(visitedPages),
-        });
+        const stoppedAt = Date.now();
+        const duration = stoppedAt - metadata.startTime;
+        const finalVideoCapture = videoCapture ?? (!captureContextUsable
+          ? {
+              format: 'mp4' as const,
+              mimeType: 'video/mp4',
+              activeDurationMs: duration,
+              pausedDurationMs: 0,
+              emittedChunks: 0,
+              storedChunks: 0,
+              totalBytes: 0,
+              stopReason: 'context-restarted' as const,
+              status: 'recovery' as const,
+              manifestFile: 'video-manifest.json' as const,
+            }
+          : metadata.videoCapture);
+        try {
+          await saveMetadata({
+            ...metadata,
+            endTime: stoppedAt,
+            duration,
+            totalActions: actionCount,
+            totalScreenshots: screenshotCount,
+            pages: Array.from(visitedPages),
+            captureWarnings: [
+              ...new Set([
+                ...(metadata.captureWarnings ?? []),
+                ...captureWarnings,
+                ...captureLimitWarnings(),
+              ]),
+            ],
+            captureLimits: captureLimitMetadata(),
+            videoCapture: finalVideoCapture,
+          });
+        } catch (error) {
+          // A full quota can also reject this small write. Keep the offscreen
+          // context alive so export can still use its in-memory manifest.
+          console.warn('[Mentora] Failed to save final recording metadata:', error);
+        }
       }
     }
 
-    await stopRecordingState();
+    await stopRecordingState(recordingId);
     await notifyAllTabs('RECORDING_STATE_CHANGED', { state: 'idle' });
-    await closeOffscreenDocument();
+    if (!keepOffscreenOpen || !captureContextUsable) await closeOffscreenDocument();
     await closeMicPermissionTab();
     await updateBadge('idle');
-    offscreenReady = false;
+    if (!keepOffscreenOpen || !captureContextUsable) offscreenReady = false;
 
     // Don't clear currentRecordingId so we can still download
     console.log('[Background] Recording stopped');
@@ -373,6 +657,12 @@ export default defineBackground(() => {
 
     const relativeTime = await getRelativeTime();
     const hasRecordingData = !!recordingId;
+    const exportState = await chrome.storage.local.get([
+      LAST_DOWNLOADED_RECORDING_KEY,
+      LAST_ARTIFACT_KIND_KEY,
+      LAST_EXPORT_WARNING_KEY,
+    ]);
+    const lastDownloadedRecordingId = exportState[LAST_DOWNLOADED_RECORDING_KEY] as string | undefined;
 
     const response: StateResponse = {
       state: state.state,
@@ -382,7 +672,12 @@ export default defineBackground(() => {
       screenshotCount,
       isPaused: state.state === 'paused',
       hasRecordingData,
-      isExporting,
+      hasDownloaded:
+        Boolean(recordingId) && lastDownloadedRecordingId === recordingId,
+      isExporting: exportStage !== 'idle',
+      exportStage,
+      lastArtifactKind: exportState[LAST_ARTIFACT_KIND_KEY] as 'recording' | 'recovery' | undefined,
+      lastExportWarning: exportState[LAST_EXPORT_WARNING_KEY] as string | undefined,
     };
     console.log('[Background] GET_STATE response:', response);
     return response;
@@ -398,14 +693,19 @@ export default defineBackground(() => {
     }
 
     const relativeTime = await getRelativeTime();
-    const actionWithTime: ActionLog = {
-      ...action,
-      relativeTime,
-    };
+    const actionWithTime = sanitizeActionLog({ ...action, relativeTime });
+    if (
+      !actionQuota.tryAccept(
+        tabId ?? -1,
+        serializedByteLength(actionWithTime)
+      ).accepted
+    ) {
+      return { success: false };
+    }
 
     // Track visited pages
-    if (action.url) {
-      visitedPages.add(action.url);
+    if (actionWithTime.url) {
+      visitedPages.add(actionWithTime.url);
     }
 
     // Take screenshot if needed (for clicks)
@@ -437,108 +737,181 @@ export default defineBackground(() => {
   }
 
   async function logNetworkEvent(
-    raw: { method: string; url: string; status: number; contentType: string; requestBody: string | null; responseBody: string | null }
+    raw: NetworkCaptureMessage,
+    recordingId: string,
+    relativeStartTime: number,
+    sender: chrome.runtime.MessageSender,
+    relativeEndTime: number
   ): Promise<{ success: boolean }> {
-    const recordingId = currentRecordingId || (await getRecordingState()).recordingId;
-    if (!recordingId) return { success: false };
+    const sanitized = sanitizeNetworkCaptureMessage(raw, raw.url);
+    if (!sanitized) return { success: false };
 
     let parsedUrl: URL;
     try {
-      parsedUrl = new URL(raw.url);
+      parsedUrl = new URL(sanitized.url);
     } catch {
       // Relative URL — try to reconstruct
       try {
-        parsedUrl = new URL(raw.url, 'https://localhost');
+        parsedUrl = new URL(sanitized.url, 'https://localhost');
       } catch {
         return { success: false };
       }
     }
 
-    const relTime = await getRelativeTime();
-
     const event: NetworkEvent = {
-      id: `net_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-      relativeTime: relTime,
-      timestamp: Date.now(),
-      method: raw.method,
-      url: raw.url,
-      status: raw.status,
-      contentType: raw.contentType,
-      requestBody: raw.requestBody,
-      responseBody: raw.responseBody,
+      id: sanitized.requestId,
+      requestId: sanitized.requestId,
+      relativeTime: relativeStartTime,
+      relativeEndTime,
+      timestamp: sanitized.startedAt,
+      completedAt: sanitized.finishedAt,
+      durationMs: sanitized.durationMs,
+      source: sanitized.source,
+      method: sanitized.method,
+      url: sanitized.url,
+      responseUrl: sanitized.responseUrl,
+      redirected: sanitized.redirected,
+      status: sanitized.status ?? 0,
+      statusText: sanitized.statusText,
+      contentType: sanitized.contentType ?? '',
+      requestBody: sanitized.requestBody?.value ?? null,
+      responseBody: sanitized.responseBody?.value ?? null,
+      requestBodyLength: sanitized.requestBody?.originalLength ?? 0,
+      responseBodyLength: sanitized.responseBody?.originalLength ?? 0,
+      requestBodyTruncated: sanitized.requestBody?.truncated ?? false,
+      responseBodyTruncated: sanitized.responseBody?.truncated ?? false,
+      urlRedactions: sanitized.urlRedactions ?? [],
+      responseUrlRedactions: sanitized.responseUrlRedactions ?? [],
+      documentUrlRedactions: sanitized.documentUrlRedactions ?? [],
+      requestBodyRedactions: sanitized.requestBody?.redactions ?? [],
+      responseBodyRedactions: sanitized.responseBody?.redactions ?? [],
+      outcome: sanitized.outcome,
+      error: sanitized.error,
       host: parsedUrl.host,
       pathname: parsedUrl.pathname,
+      tabId: sender.tab?.id,
+      frameId: sender.frameId,
+      documentUrl: sanitized.documentUrl,
     };
+
+    if (
+      !networkQuota.tryAccept(
+        sender.tab?.id ?? -1,
+        serializedByteLength(event)
+      ).accepted
+    ) {
+      return { success: false };
+    }
 
     await saveNetworkEvent(recordingId, event);
     console.log(`[Background] Network event saved: ${raw.method} ${parsedUrl.pathname} → ${raw.status}`);
     return { success: true };
   }
 
-  async function downloadRecording(): Promise<{ success: boolean; error?: string }> {
-    if (isExporting) {
+  async function saveCapturedAction(
+    recordingId: string,
+    action: ActionLog,
+    source: string | number
+  ): Promise<boolean> {
+    const sanitized = sanitizeActionLog(action);
+    if (
+      !actionQuota.tryAccept(source, serializedByteLength(sanitized)).accepted
+    ) {
+      return false;
+    }
+    await saveAction(recordingId, sanitized);
+    return true;
+  }
+
+  async function stopAndDownload(): Promise<DownloadResponse> {
+    if (exportStage !== 'idle') {
+      return { success: false, error: 'Export already in progress' };
+    }
+    await updateExportStage('stopping');
+    try {
+      const stopResponse = await stopRecording(true);
+      if (!stopResponse.success) {
+        await updateExportStage('idle');
+        return stopResponse;
+      }
+      return await downloadRecording(true);
+    } catch (error) {
+      await updateExportStage('idle');
+      return { success: false, error: String(error) };
+    }
+  }
+
+  async function downloadRecording(
+    continueExport = false
+  ): Promise<DownloadResponse> {
+    if (!continueExport && exportStage !== 'idle') {
       return { success: false, error: 'Export already in progress' };
     }
     const state = await getRecordingState();
     const recordingId = currentRecordingId || state.recordingId;
 
     if (!recordingId) {
+      await updateExportStage('idle');
       return { success: false, error: 'No recording available' };
     }
 
-    isExporting = true;
+    await updateExportStage('preparing');
+    let hasDownloadUrl = false;
     try {
-      console.log('[Background] Preparing download for recording:', recordingId);
-
+      await ensureOffscreenDocument();
+      if (!(await waitForOffscreenReady(7000))) {
+        return { success: false, error: 'Export context is not ready' };
+      }
       const metadata = await getMetadata(recordingId);
-      const actions = await getActions(recordingId);
-      const screenshots = await getScreenshots(recordingId);
-      const networkEvents = await getNetworkEvents(recordingId);
-      const finalVideo = await getFinalVideo(recordingId);
-      const videoChunks = finalVideo ? [] : await getVideoChunks(recordingId);
-      const audioChunks = await getAudioChunks(recordingId);
-
-      const totalVideoBytes = videoChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-      console.log('[Background] Data collected:', {
-        hasMetadata: !!metadata,
-        actions: actions.length,
-        screenshots: screenshots.length,
-        networkEvents: networkEvents.length,
-        videoChunks: videoChunks.length,
-        videoBytes: totalVideoBytes,
-        audioChunks: audioChunks.length,
-      });
-
-      if (!metadata) {
-        return { success: false, error: 'Recording metadata not found' };
+      if (!metadata) return { success: false, error: 'Recording metadata not found' };
+      const settings = await loadTranscriptionSettings();
+      const transcriptionEnabled =
+        metadata.transcriptionEnabled ?? Boolean(settings.openRouterApiKey);
+      const response = await sendToOffscreen(
+        {
+          type: 'EXPORT_RECORDING',
+          recordingId,
+          openRouterApiKey: transcriptionEnabled
+            ? settings.openRouterApiKey ?? undefined
+            : undefined,
+        },
+        60 * 60 * 1000
+      );
+      if (!response.success || !response.downloadUrl || !response.filename) {
+        return {
+          success: false,
+          error: response.error ?? 'Export did not create a download',
+        };
       }
 
-      const zipBlob = await exportToZip(metadata, actions, screenshots, videoChunks, finalVideo || undefined, audioChunks, networkEvents);
-
-      // Convert blob to base64 data URL (Service Workers don't have URL.createObjectURL)
-      const arrayBuffer = await zipBlob.arrayBuffer();
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      const dataUrl = `data:application/zip;base64,${base64}`;
-
-      const filename = `mentora-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
-
-      await chrome.downloads.download({
-        url: dataUrl,
-        filename,
+      hasDownloadUrl = true;
+      await updateExportStage('downloading');
+      const downloadId = await chrome.downloads.download({
+        url: response.downloadUrl,
+        filename: response.filename,
         saveAs: true,
       });
-
-      // Recording data is intentionally preserved so the user can re-download
-      // the ZIP if needed; it's wiped at the start of the next recording.
-      console.log('[Background] Download initiated');
-      return { success: true };
+      await waitForDownload(downloadId);
+      await chrome.storage.local.set({
+        [LAST_DOWNLOADED_RECORDING_KEY]: recordingId,
+        [LAST_ARTIFACT_KIND_KEY]: response.artifactKind ?? 'recording',
+        [LAST_EXPORT_WARNING_KEY]: response.warning ?? '',
+      });
+      return {
+        success: true,
+        artifactKind: response.artifactKind ?? 'recording',
+        warning: response.warning,
+        filename: response.filename,
+      };
     } catch (error) {
       console.error('[Background] Failed to download recording:', error);
       return { success: false, error: String(error) };
     } finally {
-      isExporting = false;
+      if (hasDownloadUrl) {
+        await sendToOffscreen({ type: 'RELEASE_DOWNLOAD_URL' }).catch(() => undefined);
+      }
+      await updateExportStage('idle');
+      await closeOffscreenDocument();
     }
   }
 
@@ -562,10 +935,15 @@ export default defineBackground(() => {
 
       if (!exists) {
         console.log('[Background] Creating offscreen document...');
+        offscreenReady = false;
         await chrome.offscreen.createDocument({
           url: 'offscreen.html',
-          reasons: [chrome.offscreen.Reason.USER_MEDIA],
-          justification: 'Recording screen and microphone for tutorial capture',
+          reasons: [
+            chrome.offscreen.Reason.USER_MEDIA,
+            chrome.offscreen.Reason.DISPLAY_MEDIA,
+            chrome.offscreen.Reason.BLOBS,
+          ],
+          justification: 'Capture media and prepare recording downloads',
         });
         console.log('[Background] Offscreen document created');
       } else {
@@ -599,16 +977,74 @@ export default defineBackground(() => {
     return offscreenReady;
   }
 
-  async function sendToOffscreen(message: { type: string }): Promise<{ success: boolean; error?: string }> {
+  async function sendToOffscreen(message: {
+    type: string;
+    recordingId?: string;
+    openRouterApiKey?: string;
+  }, timeoutMs = 30_000): Promise<{
+    success: boolean;
+    error?: string;
+    warnings?: string[];
+    downloadUrl?: string;
+    filename?: string;
+    artifactKind?: 'recording' | 'recovery';
+    warning?: string;
+    errorCode?: StartRecordingResponse['errorCode'];
+    videoCapture?: VideoCaptureSummary;
+  }> {
     // Send message and wait for response
     return new Promise((resolve) => {
+      let settled = false;
+      const timeout = globalThis.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve({ success: false, error: `${message.type} timed out` });
+      }, timeoutMs);
       chrome.runtime.sendMessage({ ...message, target: 'offscreen' }, (response) => {
+        if (settled) return;
+        settled = true;
+        globalThis.clearTimeout(timeout);
         if (chrome.runtime.lastError) {
           console.error('[Background] Error sending to offscreen:', chrome.runtime.lastError);
           resolve({ success: false, error: chrome.runtime.lastError.message });
         } else {
           resolve(response || { success: false, error: 'No response' });
         }
+      });
+    });
+  }
+
+  function waitForDownload(downloadId: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = globalThis.setTimeout(() => {
+        cleanupListener();
+        reject(new Error('Download did not finish in time'));
+      }, DOWNLOAD_TIMEOUT_MS);
+
+      const handleChanged = (delta: chrome.downloads.DownloadDelta) => {
+        if (delta.id !== downloadId) return;
+        if (delta.error?.current) {
+          cleanupListener();
+          reject(new Error(delta.error.current));
+        } else if (delta.state?.current === 'complete') {
+          cleanupListener();
+          resolve();
+        }
+      };
+
+      const cleanupListener = () => {
+        globalThis.clearTimeout(timeout);
+        chrome.downloads.onChanged.removeListener(handleChanged);
+      };
+
+      chrome.downloads.onChanged.addListener(handleChanged);
+      chrome.downloads.search({ id: downloadId }).then(([item]) => {
+        if (item?.state === 'complete') {
+          cleanupListener();
+          resolve();
+        }
+      }).catch(() => {
+        // The change listener remains authoritative.
       });
     });
   }
@@ -703,6 +1139,7 @@ export default defineBackground(() => {
         totalActions: 0,
         totalScreenshots: 0,
         pages: [],
+        transcriptionEnabled: currentRecordingTranscriptionEnabled,
       });
     }
   }
@@ -719,7 +1156,7 @@ export default defineBackground(() => {
       const tab = await chrome.tabs.get(activeInfo.tabId);
       const relativeTime = await getRelativeTime();
 
-      const action: ActionLog = {
+      const action = sanitizeActionLog({
         id: `action_${Date.now()}`,
         timestamp: Date.now(),
         relativeTime,
@@ -731,12 +1168,12 @@ export default defineBackground(() => {
           tabTitle: tab.title,
         },
         humanReadable: `Switched to tab: '${tab.title}'`,
-      };
+      });
 
-      await saveAction(recordingId, action);
+      await saveCapturedAction(recordingId, action, activeInfo.tabId);
 
       if (tab.url) {
-        visitedPages.add(tab.url);
+        visitedPages.add(action.url);
       }
     } catch (error) {
       console.error('[Background] Error logging tab switch:', error);
@@ -753,7 +1190,7 @@ export default defineBackground(() => {
 
     const relativeTime = await getRelativeTime();
 
-    const action: ActionLog = {
+    const action = sanitizeActionLog({
       id: `action_${Date.now()}`,
       timestamp: Date.now(),
       relativeTime,
@@ -764,9 +1201,9 @@ export default defineBackground(() => {
         tabId: tab.id,
       },
       humanReadable: `Created new tab${tab.url ? `: ${tab.url}` : ''}`,
-    };
+    });
 
-    await saveAction(recordingId, action);
+    await saveCapturedAction(recordingId, action, tab.id ?? -1);
   });
 
   // Listen for tab closes
@@ -779,7 +1216,7 @@ export default defineBackground(() => {
 
     const relativeTime = await getRelativeTime();
 
-    const action: ActionLog = {
+    const action = sanitizeActionLog({
       id: `action_${Date.now()}`,
       timestamp: Date.now(),
       relativeTime,
@@ -790,9 +1227,9 @@ export default defineBackground(() => {
         tabId,
       },
       humanReadable: `Closed tab #${tabId}`,
-    };
+    });
 
-    await saveAction(recordingId, action);
+    await saveCapturedAction(recordingId, action, tabId);
   });
 
   // Listen for navigation
@@ -809,7 +1246,7 @@ export default defineBackground(() => {
       const tab = await chrome.tabs.get(details.tabId);
       const relativeTime = await getRelativeTime();
 
-      const action: ActionLog = {
+      const action = sanitizeActionLog({
         id: `action_${Date.now()}`,
         timestamp: Date.now(),
         relativeTime,
@@ -820,10 +1257,11 @@ export default defineBackground(() => {
           toUrl: details.url,
         },
         humanReadable: `Navigated to: ${details.url}`,
-      };
+      });
 
-      await saveAction(recordingId, action);
-      visitedPages.add(details.url);
+      if (await saveCapturedAction(recordingId, action, details.tabId)) {
+        visitedPages.add(action.url);
+      }
     } catch (error) {
       console.error('[Background] Error logging navigation:', error);
     }

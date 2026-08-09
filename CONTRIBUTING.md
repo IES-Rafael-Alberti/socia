@@ -29,7 +29,7 @@ cp apps/extensions/.env.example apps/extensions/.env
 
 Las más relevantes:
 
-- **`EXT_OPENROUTER_API_KEY`** → SOCIA + MENTORA. En SOCIA, la usa para generar pistas y la evaluación en standalone (en la práctica el alumno la mete por Ajustes; solo tiene sentido fijarla aquí si vas a distribuir un build con la clave preconfigurada, no si se usa el panel de control). En MENTORA, habilita la transcripción Whisper del audio del recording (`transcription.srt`); sin ella la grabación se exporta sin la transcripción en el archivo ZIP.
+- **`EXT_OPENROUTER_API_KEY`** → SOCIA. La usa para generar pistas y la evaluación en modo autónomo. En la práctica, el alumno la introduce en Ajustes. MENTORA guarda su propia clave desde el popup para no incluirla en la extensión compilada.
 
 > Todas las variables empiezan por **`EXT_`** (configurado en `apps/extensions/wxt.config.ts`). Cualquier variable sin ese prefijo se ignora.
 
@@ -84,7 +84,7 @@ Un "caso" en SOCIA es un `workflow.json`: la definición del ejercicio (fases, h
 
 Flujo recomendado para contribuir un caso nuevo:
 
-1. **Créalo con MENTORA.** Instala la extensión MENTORA, ejecuta tú mismo el ejercicio de principio a fin sobre las herramientas reales (TheHive, Graylog, etc.), explicándolo usando tu micrófono y exporta el ZIP. Dentro encontrarás `network-log.json`, `activity-log.json`, `metadata.json` y capturas, así como el vídeo y la transcripción (si pusiste la API KEY).
+1. **Créalo con MENTORA.** Instala la extensión MENTORA, ejecuta tú mismo el ejercicio de principio a fin sobre las herramientas reales (TheHive, Graylog, etc.), explícalo con el micrófono y exporta el ZIP. Dentro encontrarás `network-log.json`, `activity-log.json`, `metadata.json`, capturas y vídeo. Si configuraste OpenRouter, también incluye `transcription.json`, `transcription.srt` y el estado de la transcripción.
 2. **Genera el `workflow.json`.** Instala el skill [`apps/skills/workflow-generator`](apps/skills/workflow-generator) en el agente que quieras utilizar. Pásale el ZIP de MENTORA como entrada.
 3. **Pruébalo con SOCIA.**
    - `pnpm dev:extensions:socia` para arrancar la extensión.

@@ -8,6 +8,11 @@
 import type { StudentAction } from '@socia/eval';
 import { injectScript } from 'wxt/client';
 import { createHintOverlay } from '@socia/runtime';
+import {
+  sanitizeNetworkCaptureMessage,
+  shouldRelayNetworkCapture,
+  type NetworkCaptureMessage,
+} from '../../utils/shared/network-capture';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -120,25 +125,6 @@ export default defineContentScript({
     // ──────────────── Network Event Relay ────────────────
     // Listen for events from the MAIN world network interceptor
 
-    // Content-types that indicate static resources (not API calls)
-    const STATIC_CT = [
-      'text/css',
-      'text/javascript',
-      'application/javascript',
-      'text/html',
-      'image/',
-      'font/',
-      'application/wasm',
-      'application/octet-stream',
-      'audio/',
-      'video/',
-    ];
-
-    function isStaticResource(ct: string): boolean {
-      const lower = ct.toLowerCase();
-      return STATIC_CT.some((prefix) => lower.includes(prefix));
-    }
-
     function resolveUrl(raw: string): string {
       if (raw.startsWith('/') || (!raw.startsWith('http') && !raw.startsWith('//'))) {
         try {
@@ -153,24 +139,26 @@ export default defineContentScript({
     window.addEventListener('message', (event) => {
       if (event.source !== window) return;
       if (!event.data || event.data.type !== 'SOCIA_NETWORK_EVENT') return;
-
-      const { method, status, contentType, requestBody, responseBody } = event.data;
-      const url = resolveUrl(event.data.url);
-
-      // Skip extension-internal requests
-      if (url.startsWith('chrome-extension://')) return;
-
-      // Skip static resources (CSS, JS, images, fonts, etc.)
-      if (contentType && isStaticResource(contentType)) return;
-
-      // For GETs without a content type or with binary content, skip (likely asset loads)
-      if (method === 'GET' && (!contentType || contentType === 'application/binary')) return;
+      const message = event.data as NetworkCaptureMessage;
+      if (message.phase !== 'finish') return;
+      const url = resolveUrl(message.url);
+      const sanitized = sanitizeNetworkCaptureMessage(
+        {
+          ...message,
+          responseUrl: message.responseUrl
+            ? resolveUrl(message.responseUrl)
+            : url,
+          documentUrl: resolveUrl(message.documentUrl),
+        },
+        url
+      );
+      if (!sanitized || !shouldRelayNetworkCapture(sanitized, sanitized.url)) return;
 
       // Parse URL for host and pathname
       let host = '';
       let pathname = '';
       try {
-        const parsed = new URL(url);
+        const parsed = new URL(sanitized.url);
         host = parsed.host;
         pathname = parsed.pathname;
       } catch {
@@ -181,15 +169,34 @@ export default defineContentScript({
         .sendMessage({
           type: 'SOCIA_STUDENT_NETWORK_EVENT',
           networkEvent: {
-            timestamp: Date.now(),
-            method,
-            url,
+            requestId: sanitized.requestId,
+            timestamp: sanitized.startedAt,
+            completedAt: sanitized.finishedAt,
+            durationMs: sanitized.durationMs,
+            source: sanitized.source,
+            method: sanitized.method,
+            url: sanitized.url,
+            responseUrl: sanitized.responseUrl,
+            redirected: sanitized.redirected ?? false,
             host,
             pathname,
-            status,
-            contentType: contentType || '',
-            requestBody: requestBody || null,
-            responseBody: responseBody || null,
+            status: sanitized.status ?? 0,
+            statusText: sanitized.statusText ?? '',
+            contentType: sanitized.contentType ?? '',
+            requestBody: sanitized.requestBody?.value ?? null,
+            responseBody: sanitized.responseBody?.value ?? null,
+            requestBodyLength: sanitized.requestBody?.originalLength ?? 0,
+            responseBodyLength: sanitized.responseBody?.originalLength ?? 0,
+            requestBodyTruncated: sanitized.requestBody?.truncated ?? false,
+            responseBodyTruncated: sanitized.responseBody?.truncated ?? false,
+            requestBodyRedactions: sanitized.requestBody?.redactions ?? [],
+            responseBodyRedactions: sanitized.responseBody?.redactions ?? [],
+            urlRedactions: sanitized.urlRedactions ?? [],
+            responseUrlRedactions: sanitized.responseUrlRedactions ?? [],
+            documentUrlRedactions: sanitized.documentUrlRedactions ?? [],
+            outcome: sanitized.outcome,
+            error: sanitized.error,
+            documentUrl: sanitized.documentUrl,
           },
         })
         .catch(() => {});

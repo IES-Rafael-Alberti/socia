@@ -39,11 +39,13 @@ export default defineConfig({
       }
     : {
         name: 'MENTORA',
+        minimum_chrome_version: '126',
         description:
           'Capture tutorials with screen recording, screenshots, and action logging for LLM comprehension',
         version: '1.0.0',
         permissions: [
           'storage',
+          'unlimitedStorage',
           'tabs',
           'activeTab',
           'offscreen',

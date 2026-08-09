@@ -1,5 +1,7 @@
 // Types for messages between extension components
 
+import type { CaptureQuotaSummary } from './capture-limits';
+
 export type RecordingState = 'idle' | 'recording' | 'paused';
 
 // Network event captured by the fetch/XHR interceptor
@@ -25,6 +27,34 @@ export interface NetworkEvent {
   host: string;
   /** URL pathname (e.g. "/api/v1/case") */
   pathname: string;
+  /** Stable identifier assigned when the page starts the request. */
+  requestId?: string;
+  /** Recording time when the response completed. */
+  relativeEndTime?: number;
+  /** Absolute time when the request completed. */
+  completedAt?: number;
+  /** Wall-clock request duration. */
+  durationMs?: number;
+  /** Browser API that initiated the request. */
+  source?: 'fetch' | 'xhr' | 'beacon';
+  /** Final response URL after redirects. */
+  responseUrl?: string;
+  redirected?: boolean;
+  statusText?: string;
+  requestBodyLength?: number;
+  responseBodyLength?: number;
+  requestBodyTruncated?: boolean;
+  responseBodyTruncated?: boolean;
+  urlRedactions?: string[];
+  responseUrlRedactions?: string[];
+  documentUrlRedactions?: string[];
+  requestBodyRedactions?: string[];
+  responseBodyRedactions?: string[];
+  outcome?: 'completed' | 'failed' | 'unknown';
+  error?: string;
+  tabId?: number;
+  frameId?: number;
+  documentUrl?: string;
 }
 
 // Action types captured by content script
@@ -93,6 +123,49 @@ export interface Screenshot {
   actionId?: string;
 }
 
+export type VideoCaptureStatus = 'valid' | 'recovery';
+export type VideoStopReason = 'user' | 'share-ended' | 'recorder-error' | 'context-restarted';
+
+export interface VideoCaptureSummary {
+  format: 'mp4';
+  mimeType: string;
+  activeDurationMs: number;
+  pausedDurationMs: number;
+  emittedChunks: number;
+  storedChunks: number;
+  totalBytes: number;
+  stopReason: VideoStopReason;
+  status: VideoCaptureStatus;
+  manifestFile?: 'video-manifest.json';
+}
+
+export interface VideoChunkManifestEntry {
+  sequence: number;
+  timecodeMs: number;
+  size: number;
+  mimeType: string;
+  sha256?: string;
+  attempts: number;
+  stored: boolean;
+  error?: string;
+}
+
+export interface VideoManifest {
+  version: 1;
+  recordingId: string;
+  mimeType: string;
+  activeDurationMs: number;
+  pausedDurationMs: number;
+  emittedChunks: number;
+  storedChunks: number;
+  totalBytes: number;
+  stopReason: VideoStopReason;
+  status: VideoCaptureStatus;
+  missingSequences: number[];
+  validationError?: string;
+  chunks: VideoChunkManifestEntry[];
+}
+
 // Recording session metadata
 export interface RecordingMetadata {
   extensionName: string;
@@ -105,32 +178,47 @@ export interface RecordingMetadata {
   totalScreenshots: number;
   videoDuration?: string;
   pages: string[];
+  /** Whether this recording may send audio to OpenRouter during export. */
+  transcriptionEnabled?: boolean;
+  /** Non-fatal capture problems that may leave the final seconds incomplete. */
+  captureWarnings?: string[];
+  /** Events kept and dropped by the storage safeguards. */
+  captureLimits?: {
+    actions: CaptureQuotaSummary;
+    network: CaptureQuotaSummary;
+  };
+  /** Summary of the recorded media and its final validation. */
+  videoCapture?: VideoCaptureSummary;
 }
 
 // Messages from popup to background
 export type PopupToBackgroundMessage =
-  | { type: 'START_RECORDING' }
+  | { type: 'START_RECORDING'; allowWithoutTranscription?: boolean }
   | { type: 'PAUSE_RECORDING' }
   | { type: 'RESUME_RECORDING' }
   | { type: 'STOP_RECORDING' }
+  | { type: 'STOP_AND_DOWNLOAD' }
   | { type: 'GET_STATE' }
+  | { type: 'VALIDATE_OPENROUTER_KEY'; apiKey: string }
   | { type: 'DOWNLOAD_RECORDING' };
 
 // Messages from background to offscreen
 export type BackgroundToOffscreenMessage =
-  | { type: 'START_CAPTURE'; streamId: string }
+  | { type: 'START_CAPTURE'; recordingId: string }
   | { type: 'PAUSE_CAPTURE' }
   | { type: 'RESUME_CAPTURE' }
-  | { type: 'STOP_CAPTURE' };
+  | { type: 'STOP_CAPTURE' }
+  | { type: 'EXPORT_RECORDING'; recordingId: string; openRouterApiKey?: string }
+  | { type: 'RELEASE_DOWNLOAD_URL' };
 
 // Messages from offscreen to background
 export type OffscreenToBackgroundMessage =
   | { type: 'CAPTURE_STARTED' }
   | { type: 'CAPTURE_PAUSED' }
   | { type: 'CAPTURE_RESUMED' }
-  | { type: 'CAPTURE_STOPPED'; chunks: Blob[] }
+  | { type: 'CAPTURE_STOPPED'; totalChunks: number }
   | { type: 'CAPTURE_ERROR'; error: string }
-  | { type: 'VIDEO_CHUNK'; chunk: ArrayBuffer };
+  | { type: 'EXPORT_STAGE_CHANGED'; stage: ExportStage };
 
 // Messages from content script to background
 export type ContentToBackgroundMessage =
@@ -151,11 +239,41 @@ export interface StateResponse {
   screenshotCount?: number;
   isPaused?: boolean;
   hasRecordingData?: boolean;
-  /** True while `DOWNLOAD_RECORDING` is in flight in the background. */
+  hasDownloaded?: boolean;
+  /** True while a recording is being stopped or exported. */
   isExporting?: boolean;
+  exportStage?: ExportStage;
+  lastArtifactKind?: ExportArtifactKind;
+  lastExportWarning?: string;
+}
+
+export type ExportStage =
+  | 'idle'
+  | 'stopping'
+  | 'preparing'
+  | 'transcribing'
+  | 'packaging'
+  | 'downloading';
+
+export type StartRecordingErrorCode =
+  | 'OPENROUTER_INVALID'
+  | 'OPENROUTER_EXHAUSTED'
+  | 'OPENROUTER_UNAVAILABLE'
+  | 'VIDEO_CODEC_UNAVAILABLE';
+
+export interface StartRecordingResponse {
+  success: boolean;
+  error?: string;
+  errorCode?: StartRecordingErrorCode;
+  transcriptionEnabled?: boolean;
 }
 
 export interface DownloadResponse {
   success: boolean;
   error?: string;
+  artifactKind?: ExportArtifactKind;
+  warning?: string;
+  filename?: string;
 }
+
+export type ExportArtifactKind = 'recording' | 'recovery';

@@ -1,7 +1,19 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getUniqueSelector, getElementText, getElementDescription } from '../../utils/mentora/selector';
 import type { ActionLog, ActionType, RecordingState } from '../../utils/mentora/messages';
+import {
+  isSensitiveInputField,
+  isValidNetworkCaptureStart,
+  sanitizeNetworkCaptureMessage,
+  shouldRelayNetworkCapture,
+  type NetworkCaptureMessage,
+} from '../../utils/shared/network-capture';
 import { injectScript } from 'wxt/client';
+import {
+  NETWORK_PENDING_LIMIT,
+  NETWORK_PENDING_TTL_MS,
+  NETWORK_EVENTS_PER_MINUTE,
+} from '../../utils/mentora/capture-limits';
 
 function sendMessage<T>(message: Record<string, unknown>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -30,6 +42,21 @@ export default defineContentScript({
     let scrollTimeout: number | null = null;
     let hoverTimeout: number | null = null;
     let hoveredElement: Element | null = null;
+    const networkStarts = new Map<
+      string,
+      Promise<{ recordingId: string; relativeTime: number } | null>
+    >();
+    const networkRelayTimes: number[] = [];
+
+    function canRelayNetworkStart(now = Date.now()): boolean {
+      const cutoff = now - 60_000;
+      while (networkRelayTimes[0] !== undefined && networkRelayTimes[0] <= cutoff) {
+        networkRelayTimes.shift();
+      }
+      if (networkRelayTimes.length >= NETWORK_EVENTS_PER_MINUTE) return false;
+      networkRelayTimes.push(now);
+      return true;
+    }
 
     // Get initial recording state
     sendMessage<{ state: RecordingState; startTime?: number }>({
@@ -50,6 +77,10 @@ export default defineContentScript({
       if (message.type === 'RECORDING_STATE_CHANGED') {
         isRecording = message.state === 'recording';
         recordingStartTime = message.startTime || recordingStartTime;
+        if (!isRecording) {
+          networkStarts.clear();
+          networkRelayTimes.length = 0;
+        }
       }
     });
 
@@ -87,7 +118,7 @@ export default defineContentScript({
     document.addEventListener(
       'click',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         const target = event.target as Element;
         if (!target) return;
@@ -124,15 +155,10 @@ export default defineContentScript({
     document.addEventListener(
       'input',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         const target = event.target as HTMLInputElement | HTMLTextAreaElement;
         if (!target) return;
-
-        // Skip password fields
-        if (target instanceof HTMLInputElement && target.type === 'password') {
-          return;
-        }
 
         // Debounce inputs
         const existingTimeout = inputDebounceMap.get(target);
@@ -143,10 +169,15 @@ export default defineContentScript({
         const timeout = window.setTimeout(() => {
           inputDebounceMap.delete(target);
 
-          const value =
-            target instanceof HTMLInputElement && target.type === 'password'
-              ? '[hidden]'
-              : target.value;
+          const sensitive = isSensitiveInputField({
+            type: target instanceof HTMLInputElement ? target.type : 'textarea',
+            name: target.name,
+            id: target.id,
+            autocomplete: target.getAttribute('autocomplete') ?? undefined,
+            value: target.value,
+            url: window.location.href,
+          });
+          const value = sensitive ? '[REDACTED]' : target.value;
 
           logAction(
             'input',
@@ -171,8 +202,8 @@ export default defineContentScript({
     );
 
     // Scroll handler (debounced)
-    document.addEventListener('scroll', () => {
-      if (!isRecording) return;
+    document.addEventListener('scroll', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       if (scrollTimeout) {
         clearTimeout(scrollTimeout);
@@ -212,8 +243,8 @@ export default defineContentScript({
     });
 
     // Text selection handler
-    document.addEventListener('mouseup', () => {
-      if (!isRecording) return;
+    document.addEventListener('mouseup', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed) return;
@@ -231,15 +262,15 @@ export default defineContentScript({
     });
 
     // Copy handler
-    document.addEventListener('copy', () => {
-      if (!isRecording) return;
+    document.addEventListener('copy', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       logAction('copy', {}, 'Copied content to clipboard');
     });
 
     // Paste handler
-    document.addEventListener('paste', () => {
-      if (!isRecording) return;
+    document.addEventListener('paste', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       logAction('paste', {}, 'Pasted content from clipboard');
     });
@@ -248,7 +279,7 @@ export default defineContentScript({
     document.addEventListener(
       'keydown',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         // Only log special keys and shortcuts
         const specialKeys = [
@@ -311,7 +342,7 @@ export default defineContentScript({
     document.addEventListener(
       'submit',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         const form = event.target as HTMLFormElement;
         if (!form) return;
@@ -335,7 +366,7 @@ export default defineContentScript({
     document.addEventListener(
       'mouseenter',
       (event) => {
-        if (!isRecording) return;
+        if (!isRecording || !event.isTrusted) return;
 
         const target = event.target as Element;
         if (!target) return;
@@ -382,6 +413,7 @@ export default defineContentScript({
     document.addEventListener(
       'mouseleave',
       (event) => {
+        if (!event.isTrusted) return;
         const target = event.target as Element;
         if (target === hoveredElement) {
           if (hoverTimeout) {
@@ -395,25 +427,6 @@ export default defineContentScript({
     );
 
     // ─── Network event relay (from MAIN world interceptor) ───
-
-    // Content-types that indicate static resources (not API calls)
-    const STATIC_CT = [
-      'text/css',
-      'text/javascript',
-      'application/javascript',
-      'text/html',
-      'image/',
-      'font/',
-      'application/wasm',
-      'application/octet-stream',
-      'audio/',
-      'video/',
-    ];
-
-    function isStaticResource(ct: string): boolean {
-      const lower = ct.toLowerCase();
-      return STATIC_CT.some((prefix) => lower.includes(prefix));
-    }
 
     function resolveUrl(raw: string): string {
       // Resolve relative URLs against the page origin
@@ -430,32 +443,66 @@ export default defineContentScript({
     window.addEventListener('message', (event) => {
       if (event.source !== window) return;
       if (!event.data || event.data.type !== 'MENTORA_NETWORK_EVENT') return;
-      if (!isRecording) return;
+      const message = event.data as NetworkCaptureMessage;
 
-      const { method, status, contentType, requestBody, responseBody } = event.data;
-      const url = resolveUrl(event.data.url);
+      if (message.phase === 'start') {
+        if (!isRecording) return;
+        if (!isValidNetworkCaptureStart(message)) return;
+        if (networkStarts.size >= NETWORK_PENDING_LIMIT) return;
+        if (!canRelayNetworkStart()) return;
+        const startPromise = sendMessage<{
+          success: boolean;
+          recordingId?: string;
+          relativeTime?: number;
+        }>({
+          type: 'LOG_NETWORK_REQUEST_START',
+          startedAt: message.startedAt,
+        })
+          .then((response) =>
+            response.success && response.recordingId && response.relativeTime !== undefined
+              ? {
+                  recordingId: response.recordingId,
+                  relativeTime: response.relativeTime,
+                }
+              : null
+          )
+          .catch(() => null);
+        networkStarts.set(message.requestId, startPromise);
+        window.setTimeout(() => {
+          if (networkStarts.get(message.requestId) === startPromise) {
+            networkStarts.delete(message.requestId);
+          }
+        }, NETWORK_PENDING_TTL_MS);
+        return;
+      }
 
-      // Skip extension-internal requests
-      if (url.startsWith('chrome-extension://')) return;
+      const startPromise = networkStarts.get(message.requestId);
+      networkStarts.delete(message.requestId);
+      if (!startPromise) return;
 
-      // Skip static resources (CSS, JS, images, fonts, etc.)
-      if (contentType && isStaticResource(contentType)) return;
-
-      // For GETs without a content type or with binary content, skip (likely asset loads)
-      if (method === 'GET' && (!contentType || contentType === 'application/binary')) return;
-
-      sendMessage({
-        type: 'LOG_NETWORK_EVENT',
-        networkEvent: {
-          method,
-          url,
-          status,
-          contentType: contentType || '',
-          requestBody: requestBody || null,
-          responseBody: responseBody || null,
+      const url = resolveUrl(message.url);
+      const sanitized = sanitizeNetworkCaptureMessage(
+        {
+          ...message,
+          responseUrl: message.responseUrl
+            ? resolveUrl(message.responseUrl)
+            : url,
+          documentUrl: resolveUrl(message.documentUrl),
         },
-      }).catch(() => {
-        // Ignore send failures
+        url
+      );
+      if (!sanitized || !shouldRelayNetworkCapture(sanitized, sanitized.url)) return;
+
+      void startPromise.then((start) => {
+        if (!start) return;
+        sendMessage({
+          type: 'LOG_NETWORK_EVENT',
+          recordingId: start.recordingId,
+          relativeStartTime: start.relativeTime,
+          networkEvent: sanitized,
+        }).catch(() => {
+          // Ignore send failures.
+        });
       });
     });
 
@@ -494,8 +541,8 @@ export default defineContentScript({
       return result;
     };
 
-    window.addEventListener('popstate', () => {
-      if (!isRecording) return;
+    window.addEventListener('popstate', (event) => {
+      if (!isRecording || !event.isTrusted) return;
 
       logAction(
         'navigation',

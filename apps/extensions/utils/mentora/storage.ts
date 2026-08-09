@@ -75,9 +75,13 @@ export async function resumeRecording(): Promise<void> {
   }
 }
 
-export async function stopRecording(): Promise<void> {
+export async function stopRecording(recordingId?: string | null): Promise<void> {
+  const current = await getRecordingState();
   await chrome.storage.local.set({
-    [STORAGE_KEY]: defaultState,
+    [STORAGE_KEY]: {
+      ...defaultState,
+      recordingId: recordingId === undefined ? current.recordingId : recordingId,
+    },
   });
 }
 

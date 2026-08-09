@@ -16,12 +16,20 @@ Examples:
 
 ## How to find the right screenshot from the recording
 
-MENTORA names screenshots with timestamps and associates them with the action that triggered them in `activity-log.json`. To locate the best one for a step:
+MENTORA names screenshots with timestamps and associates them with the action that triggered them in `activity-log.json`. New packages rewrite `screenshotId` to the exported filename. Older packages may keep the original `screenshot_<timestamp>.png` ID while exporting `click_<index>_<timestamp>.png`. To locate the best one for a step:
 
-1. Identify the approximate **time range** of the step from the activity log (the clicks that correspond to performing the action).
-2. Look for the screenshot taken **right after the last action of the step** — this captures the completed state.
-3. If the state is only visible after an async response (e.g. waiting for analyzer results), use the screenshot taken after the response arrived.
-4. When in doubt, open the screenshot and check: does it clearly show *what the student should see if they did this step correctly*?
+1. Try the exact `screenshotId` as an exported filename.
+2. For an old package, extract the millisecond timestamp from the ID and match the same suffix in `screenshots/`.
+3. If that fails, use the screenshot whose `actionId` matches the action.
+4. Identify the approximate **time range** of the step from the activity log.
+5. Do not assume that the screenshot linked to a click shows its result. MENTORA may capture it before the click or before the page finishes loading.
+6. Inspect the linked screenshot, the next screenshots and, when needed, the matching video interval. Use the first image that proves the completed state.
+7. If the state appears after an async response, wait for the loaded result instead of using a spinner or an empty panel.
+8. If two candidates remain, open both. Report the ambiguity if neither proves the caption.
+
+## Conditional actions
+
+A conditional branch that did not occur does not need a screenshot. Explain the trigger and both outcomes in text. Never reuse an unrelated image or claim that the recording proves the hypothetical outcome.
 
 ## Screenshots to skip
 
@@ -34,6 +42,12 @@ MENTORA names screenshots with timestamps and associates them with the action th
 ## Ordering
 
 The screenshots in the final PDF must follow the narrative order of the steps, not the filesystem order. MENTORA's timestamps give you that ordering naturally, but if you re-number the images when copying them into the guide's `images/` folder (recommended), use a scheme like `paso-01-login.png`, `paso-02-alerts.png` so the correspondence is obvious.
+
+## Consistent framing
+
+Click screenshots often contain only the page viewport, while video frames may also contain browser tabs and the address bar. Compare their dimensions and visible bounds before mixing both sources. Crop video frames when needed so figures use a consistent viewport and the browser chrome does not make some images look smaller than others.
+
+Derive the crop from the recording instead of copying fixed coordinates from another case. Inspect the cropped frame and confirm that it keeps every control or result named in the caption.
 
 ## Captions
 

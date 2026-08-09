@@ -12,15 +12,11 @@ import mentoraPermisosCaptura from '../../../assets/mentora-permisos-captura.png
 import mentoraPopupGrabando from '../../../assets/mentora-popup-grabando.png';
 import mentoraGuiaGenerada from '../../../assets/mentora-guia-generada.png';
 
-<Aside type="caution" title="En construcción">
-Esta página está en borrador.
-</Aside>
-
 ## Qué es MENTORA
 
 MENTORA es una extensión de navegador pensada para facilitar la creación de casos para la [extensión SOCIA](/docs/ia/socia/) por parte del profesorado. Su uso es bastante intuitivo, solamente es necesario ponerla en marcha y realizar el caso mientras se explica usando la voz, tal y como se haría para explicar el caso en el aula al alumnado.
 
-MENTORA va registrando las diferentes acciones realizadas: qué se hace con el ratón y el teclado, graba un vídeo, realiza capturas de pantalla, captura peticiones de red... Al detener la grabación, MENTORA prepara un ZIP con todo ese material. Dicho material se utilizará como fuente de información para poder crear posteriormente el caso preparado en formato JSON.
+MENTORA va registrando las diferentes acciones realizadas: qué se hace con el ratón y el teclado, graba un vídeo, realiza capturas de pantalla, captura peticiones de red... Al detener la grabación, MENTORA prepara un ZIP con todo ese material. Dicho material se utilizará como fuente de información para poder crear posteriormente el caso preparado en formato JSON. También se podrá utilizar para generar una guía didáctica.
 
 <figure class="screenshot">
   <Image src={mentoraPopupLista} alt="Popup de MENTORA listo para iniciar una grabación" />
@@ -58,7 +54,9 @@ cd apps
 pnpm --filter @socia/extensions zip:mentora
 ```
 
-La extensión necesita permiso para capturar la pantalla y el micrófono. La primera vez que se use puede abrir una pantalla auxiliar de permisos. Es necesario concederlos antes de grabar una sesión; si falta el micrófono, la grabación seguirá siendo útil para el workflow, pero se perderá el contexto verbal, que es muy importante para la fiabilidad de la creación del caso.
+La extensión necesita permiso para capturar la pantalla y el micrófono. La primera vez que se use puede abrir una pantalla auxiliar de permisos. Es necesario concederlos antes de grabar una sesión, ya que el contexto es muy importante para la fiabilidad de la creación del caso.
+
+La transcripción es opcional, pero muy recomendable. Para activarla hay que guardar una clave de OpenRouter en el popup de MENTORA. Cuando se detiene la grabación, MENTORA envía el audio a OpenRouter para transcribirlo.
 
 <figure class="screenshot">
   <Image src={mentoraPermisosCaptura} alt="Selector del navegador para compartir pantalla con MENTORA y pestaña de permiso de micrófono" />
@@ -81,6 +79,8 @@ Cuando todo esté listo, abre el popup de la extensión MENTORA y pulsa **Empeza
 
 Al terminar, pulsa **Detener**. MENTORA prepara automáticamente el ZIP y abre el diálogo de descarga. El nombre del archivo sigue el patrón `mentora-recording-<fecha>.zip`.
 
+MENTORA conserva la grabación después de descargarla. Se puede usar **Volver a descargar** hasta que se inicie una grabación nueva. Al empezar otra sesión, la extensión elimina los datos de la anterior.
+
 <figure class="screenshot">
   <Image src={mentoraPopupGrabando} alt="Popup de MENTORA durante una grabación con temporizador, acciones y capturas" />
   <figcaption>Grabación activa de una resolución docente.</figcaption>
@@ -94,22 +94,31 @@ Si todo ha ido bien contiene:
 
 | Archivo o carpeta | Contenido |
 | --- | --- |
-| `metadata.json` | Metadatos de la sesión: duración, páginas visitadas, fecha y versión de la extensión |
+| `metadata.json` | Duración, páginas visitadas, fecha, versión, avisos, límites de captura y estado del vídeo |
 | `activity-log.json` | Registro estructurado de acciones del navegador |
 | `activity-log-readable.txt` | Versión legible del registro, útil para revisar la historia de la sesión |
-| `network-log.json` | Peticiones HTTP capturadas por el interceptor de MENTORA |
+| `network-log.json` | Peticiones HTTP con tiempos, redirecciones y errores |
 | `screenshots/` | Capturas asociadas a acciones significativas |
-| `video.webm` | Grabación de pantalla |
-| `transcription.srt` | Transcripción de audio, si la configuración permite generarla |
+| `video.mp4` | Grabación de pantalla |
+| `video-manifest.json` | Estado del MP4, duración activa, fragmentos guardados y posibles errores |
+| `transcription.json` | Texto, segmentos y palabras con sus tiempos, si se ha configurado OpenRouter |
+| `transcription.srt` | Subtítulos creados con los segmentos de la transcripción |
+| `transcription-status.json` | Resultado de las peticiones de transcripción y posibles fallos |
 | `README-FOR-LLM.md` | Instrucciones para que el agente entienda el paquete |
 
 El archivo más importante para el workflow es `network-log.json`, porque SOCIA valida los pasos del alumnado a partir de peticiones reales. Para la guía, en cambio, pesan más `activity-log-readable.txt`, las capturas y la transcripción.
+
+<Aside type="note" title="Alcance del registro de red">
+`network-log.json` no es un HAR completo. Registra las llamadas hechas con `fetch`, XHR y `sendBeacon`, pero no el tráfico de workers, WebSocket, SSE ni todas las navegaciones del navegador.
+</Aside>
 
 ## Convertir la grabación en un workflow JSON
 
 El primer producto que suele salir de una grabación es el `workflow.json`. Ese archivo es el caso que después se carga en SOCIA o en el panel web para lanzarlo al alumnado.
 
 Para generarlo se usa la skill **workflow-generator**, incluida en el repositorio en `apps/skills/workflow-generator`. La idea es adjuntar el ZIP de MENTORA al agente y pedirle que use la skill correspondiente para generar el workflow. La grabación puede entregarse como ZIP o como carpeta descomprimida, y la skill le proporciona las instrucciones para transformar las peticiones de red en diferentes fases e hitos.
+
+La skill cruza los tiempos de las peticiones, las acciones y la voz. La explicación del profesorado sirve para entender la intención, redactar el contexto y preparar las pistas. Aun así, cada hito debe corresponder a una petición válida de `network-log.json`: la transcripción aporta contexto, pero no prueba que la acción se haya completado.
 
 Se recomienda usar un agente potente, como Codex o Claude, ya que los resultados serán mejores. La instalación de la skill depende del sistema que uses. Por ejemplo, en las [releases del repositorio](https://github.com/IES-Rafael-Alberti/socia/releases) puedes encontrar el archivo `.skill`, que se instala directamente en Claude abriendo el archivo con su aplicación de escritorio.
 
@@ -125,12 +134,24 @@ La guía se puede utilizar como material didáctico para que el alumnado aprenda
 
 La skill trabaja a partir del mismo ZIP de MENTORA, pero utiliza otros elementos. Observa la línea temporal, selecciona capturas, decide las fases, redacta los pasos y aplica una identidad visual del centro o del proyecto. El resultado esperado es un PDF con portada, índice, pasos ilustrados y demás.
 
+Si existe `transcription.json`, la skill usa los tiempos de sus segmentos y palabras para relacionar cada explicación con la acción y la captura correctas. Si la transcripción está incompleta, consulta `transcription-status.json` y rellena los huecos con el SRT, el registro de acciones o el vídeo.
+
 La idea es adjuntar el ZIP al agente y pedirle que use la skill **guide-generator** para crear la guía. Un buen uso de la guía es generar primero una versión amplia y después revisarla con ojo crítico, pudiendo pedirle al agente que itere haciendo las modificaciones que prefieras hacer.
 
 <figure class="screenshot">
   <Image src={mentoraGuiaGenerada} alt="Ejemplo de guía paso a paso generada a partir de una grabación de MENTORA" />
   <figcaption>Ejemplo de guía paso a paso generada a partir de una grabación de MENTORA.</figcaption>
 </figure>
+
+## Ejemplo de captura y guía didáctica
+
+Los tres archivos siguientes parten de la misma grabación de una respuesta a un ataque de fuerza bruta por SSH. Puedes descargar la grabación y comparar las guías que crearon dos agentes con la misma fuente usando la skill sin iteraciones:
+
+- [Grabación original de MENTORA (ZIP, 139,6 MiB)](https://drive.google.com/file/d/1qfcJKwwt8r-uodIe17VXL0JYdQN4e3kD/view?usp=sharing)
+- [Guía creada con Claude Code y Opus 5 (PDF, 22 páginas)](/docs/ejemplos/mentora/fuerza-bruta-ssh/guia-fuerza-bruta-ssh-claude-code-opus-5.pdf)
+- [Guía creada con Codex y GPT-5.6-sol, razonamiento xhigh (PDF, 12 páginas)](/docs/ejemplos/mentora/fuerza-bruta-ssh/guia-fuerza-bruta-ssh-codex-gpt5.6-sol-xhigh.pdf)
+
+Los agentes pueden elegir otra estructura, extensión o selección de capturas. Por eso las dos guías son distintas, aunque parten del mismo material.
 
 ## Flujo recomendado
 
@@ -147,10 +168,10 @@ El flujo completo queda así:
 
 Si quieres compartirlo con la comunidad, haz un Pull Request al repositorio siguiendo [estas instrucciones](https://github.com/IES-Rafael-Alberti/socia?tab=contributing-ov-file#a%C3%B1adir-un-caso-nuevo-pr).
 
-Lo importante es no confundir la grabación con el producto final. MENTORA captura la resolución docente; las skills convierten esa captura en materiales utilizables. Ahí está la ventaja: el conocimiento del profesorado entra por una demostración natural, y sale como caso ejecutable y documentación didáctica.
+No hay que confundir la grabación con el producto final. MENTORA captura la resolución docente y las skills la convierten en materiales que se pueden revisar, probar y publicar.
 
 ## Límites actuales
 
 MENTORA no interpreta por sí sola si un caso está bien diseñado. Tampoco sabe qué parte de una explicación es esencial y cuál es accidental y no debe incluirse.
 
-Esto no es una limitación menor, pero sí una decisión consciente. Preferimos que la herramienta haga muy bien la parte pesada: registrar y estructurar la resolución, y que el profesorado conserve el control sobre el diseño didáctico del caso.
+Por eso el profesorado debe conservar el control del diseño del caso, probar el workflow y revisar la guía antes de usarlos en clase.

@@ -1,14 +1,40 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { ActionLog, Screenshot, RecordingMetadata, NetworkEvent } from './messages';
+import type {
+  ActionLog,
+  Screenshot,
+  RecordingMetadata,
+  NetworkEvent,
+  VideoManifest,
+} from './messages';
+
+export interface RecordedAudioChunk {
+  index: number;
+  data: ArrayBuffer;
+  start: number;
+  end: number;
+}
+
+export interface RecordedVideoChunk {
+  sequence: number;
+  blob: Blob;
+  timecodeMs: number;
+  size: number;
+  mimeType: string;
+  sha256: string;
+  attempts: number;
+}
+
+export interface RecordedFinalVideo {
+  blob: Blob;
+  mimeType: string;
+  filename: string;
+}
 
 interface TeachSociaDB extends DBSchema {
-  videoChunks: {
-    key: number;
-    value: {
-      id: number;
+  videoChunksV2: {
+    key: [string, number];
+    value: RecordedVideoChunk & {
       recordingId: string;
-      chunk: ArrayBuffer;
-      timestamp: number;
     };
     indexes: { 'by-recording': string };
   };
@@ -16,8 +42,10 @@ interface TeachSociaDB extends DBSchema {
     key: string;
     value: {
       recordingId: string;
-      data: ArrayBuffer;
+      data: Blob;
       timestamp: number;
+      mimeType: string;
+      filename: string;
     };
   };
   audioChunks: {
@@ -27,6 +55,8 @@ interface TeachSociaDB extends DBSchema {
       recordingId: string;
       index: number;
       data: ArrayBuffer;
+      start?: number;
+      end?: number;
       timestamp: number;
     };
     indexes: { 'by-recording': string };
@@ -50,12 +80,34 @@ interface TeachSociaDB extends DBSchema {
     key: string;
     value: RecordingMetadata;
   };
+  recordingExports: {
+    key: string;
+    value: {
+      recordingId: string;
+      blob: Blob;
+      filename: string;
+      createdAt: number;
+      artifactKind?: 'recording' | 'recovery';
+      warning?: string;
+    };
+  };
+  videoManifests: {
+    key: string;
+    value: VideoManifest;
+  };
 }
 
 const DB_NAME = 'teach-socia-db';
-const DB_VERSION = 3;
+const DB_VERSION = 6;
 
 let dbInstance: IDBPDatabase<TeachSociaDB> | null = null;
+let binaryChunkSequence = 0;
+
+function nextBinaryChunkId(): number {
+  const sequence = binaryChunkSequence % 1000;
+  binaryChunkSequence += 1;
+  return Date.now() * 1000 + sequence;
+}
 
 export async function getDB(): Promise<IDBPDatabase<TeachSociaDB>> {
   if (dbInstance) return dbInstance;
@@ -63,13 +115,6 @@ export async function getDB(): Promise<IDBPDatabase<TeachSociaDB>> {
   dbInstance = await openDB<TeachSociaDB>(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion) {
       if (oldVersion < 1) {
-        // Video chunks store
-        const videoStore = db.createObjectStore('videoChunks', {
-          keyPath: 'id',
-          autoIncrement: true,
-        });
-        videoStore.createIndex('by-recording', 'recordingId');
-
         // Screenshots store
         const screenshotStore = db.createObjectStore('screenshots', {
           keyPath: 'id',
@@ -108,67 +153,136 @@ export async function getDB(): Promise<IDBPDatabase<TeachSociaDB>> {
         });
         networkStore.createIndex('by-recording', 'recordingId');
       }
+
+      if (oldVersion < 4) {
+        db.createObjectStore('recordingExports', {
+          keyPath: 'recordingId',
+        });
+      }
+      if (oldVersion < 5) {
+        const videoStore = db.createObjectStore('videoChunksV2', {
+          keyPath: ['recordingId', 'sequence'],
+        });
+        videoStore.createIndex('by-recording', 'recordingId');
+        db.createObjectStore('videoManifests', { keyPath: 'recordingId' });
+      }
+      const upgradeDatabase = db as unknown as {
+        objectStoreNames: DOMStringList;
+        deleteObjectStore(name: string): void;
+      };
+      if (oldVersion < 6 && upgradeDatabase.objectStoreNames.contains('videoChunks')) {
+        upgradeDatabase.deleteObjectStore('videoChunks');
+      }
     },
   });
 
   return dbInstance;
 }
 
-// Video chunks operations
-export async function saveVideoChunk(
+export async function saveOrderedVideoChunk(
   recordingId: string,
-  chunk: ArrayBuffer
+  chunk: RecordedVideoChunk
 ): Promise<void> {
   const db = await getDB();
-  await db.add('videoChunks', {
-    id: Date.now(),
-    recordingId,
-    chunk,
-    timestamp: Date.now(),
-  });
+  await db.put('videoChunksV2', { ...chunk, recordingId });
 }
 
-export async function getVideoChunks(recordingId: string): Promise<ArrayBuffer[]> {
+export async function getOrderedVideoChunks(
+  recordingId: string
+): Promise<RecordedVideoChunk[]> {
   const db = await getDB();
-  const chunks = await db.getAllFromIndex('videoChunks', 'by-recording', recordingId);
-  return chunks.sort((a, b) => a.timestamp - b.timestamp).map((c) => c.chunk);
+  const chunks = await db.getAllFromIndex('videoChunksV2', 'by-recording', recordingId);
+  return chunks.sort((a, b) => a.sequence - b.sequence).map(({ recordingId: _, ...chunk }) => chunk);
 }
 
-export async function saveFinalVideo(recordingId: string, data: ArrayBuffer): Promise<void> {
+export async function deleteOrderedVideoChunks(recordingId: string): Promise<void> {
+  const db = await getDB();
+  const chunks = await db.getAllFromIndex('videoChunksV2', 'by-recording', recordingId);
+  const transaction = db.transaction('videoChunksV2', 'readwrite');
+  await Promise.all([
+    ...chunks.map((chunk) => transaction.store.delete([recordingId, chunk.sequence])),
+    transaction.done,
+  ]);
+}
+
+export async function saveVideoManifest(manifest: VideoManifest): Promise<void> {
+  const db = await getDB();
+  await db.put('videoManifests', manifest);
+}
+
+export async function getVideoManifest(recordingId: string): Promise<VideoManifest | null> {
+  const db = await getDB();
+  return (await db.get('videoManifests', recordingId)) ?? null;
+}
+
+export async function saveFinalVideo(
+  recordingId: string,
+  data: Blob,
+  mimeType = 'video/mp4',
+  filename = 'video.mp4'
+): Promise<void> {
   const db = await getDB();
   await db.put('finalVideo', {
     recordingId,
     data,
     timestamp: Date.now(),
+    mimeType,
+    filename,
   });
 }
 
-export async function getFinalVideo(recordingId: string): Promise<ArrayBuffer | null> {
+export async function getFinalVideo(recordingId: string): Promise<RecordedFinalVideo | null> {
   const db = await getDB();
   const entry = await db.get('finalVideo', recordingId);
-  return entry?.data ?? null;
+  if (!entry) return null;
+  const data = entry.data as unknown;
+  if (!(data instanceof Blob) || !entry.mimeType.startsWith('video/mp4') || entry.filename !== 'video.mp4') {
+    return null;
+  }
+  return {
+    blob: data,
+    mimeType: entry.mimeType,
+    filename: entry.filename,
+  };
 }
 
 // Audio chunk operations (for transcription)
 export async function saveAudioChunk(
   recordingId: string,
   index: number,
-  data: ArrayBuffer
+  data: ArrayBuffer,
+  start: number,
+  end: number
 ): Promise<void> {
   const db = await getDB();
   await db.add('audioChunks', {
-    id: Date.now() + index,
+    id: nextBinaryChunkId(),
     recordingId,
     index,
     data,
+    start,
+    end,
     timestamp: Date.now(),
   });
 }
 
-export async function getAudioChunks(recordingId: string): Promise<ArrayBuffer[]> {
+export async function getAudioChunks(recordingId: string): Promise<RecordedAudioChunk[]> {
   const db = await getDB();
   const chunks = await db.getAllFromIndex('audioChunks', 'by-recording', recordingId);
-  return chunks.sort((a, b) => a.index - b.index).map((c) => c.data);
+  let fallbackStart = 0;
+  return chunks
+    .sort((a, b) => a.index - b.index)
+    .map((chunk) => {
+      const start = chunk.start ?? fallbackStart;
+      const end = chunk.end ?? start;
+      fallbackStart = end;
+      return {
+        index: chunk.index,
+        data: chunk.data,
+        start,
+        end,
+      };
+    });
 }
 
 // Screenshot operations
@@ -245,14 +359,57 @@ export async function getMetadata(recordingId: string): Promise<RecordingMetadat
   return db.get('metadata', recordingId);
 }
 
+export async function getLatestMetadata(): Promise<RecordingMetadata | undefined> {
+  const db = await getDB();
+  const entries = await db.getAll('metadata');
+  return entries.sort((a, b) => b.startTime - a.startTime)[0];
+}
+
+// Generated ZIP operations
+export async function saveRecordingExport(
+  recordingId: string,
+  blob: Blob,
+  filename: string,
+  artifactKind: 'recording' | 'recovery' = 'recording',
+  warning?: string
+): Promise<void> {
+  const db = await getDB();
+  await db.put('recordingExports', {
+    recordingId,
+    blob,
+    filename,
+    createdAt: Date.now(),
+    artifactKind,
+    warning,
+  });
+}
+
+export async function getRecordingExport(
+  recordingId: string
+): Promise<{
+  blob: Blob;
+  filename: string;
+  artifactKind: 'recording' | 'recovery';
+  warning?: string;
+} | null> {
+  const db = await getDB();
+  const entry = await db.get('recordingExports', recordingId);
+  if (!entry || entry.blob.size === 0) return null;
+  return {
+    blob: entry.blob,
+    filename: entry.filename,
+    artifactKind: entry.artifactKind ?? 'recording',
+    warning: entry.warning,
+  };
+}
+
 // Cleanup operations
 export async function clearRecording(recordingId: string): Promise<void> {
   const db = await getDB();
 
-  // Clear video chunks
-  const videoChunks = await db.getAllFromIndex('videoChunks', 'by-recording', recordingId);
-  for (const chunk of videoChunks) {
-    await db.delete('videoChunks', chunk.id);
+  const orderedVideoChunks = await db.getAllFromIndex('videoChunksV2', 'by-recording', recordingId);
+  for (const chunk of orderedVideoChunks) {
+    await db.delete('videoChunksV2', [recordingId, chunk.sequence]);
   }
 
   // Clear screenshots
@@ -284,14 +441,21 @@ export async function clearRecording(recordingId: string): Promise<void> {
 
   // Clear final video
   await db.delete('finalVideo', recordingId);
+
+  // Clear generated ZIP
+  await db.delete('recordingExports', recordingId);
+  await db.delete('videoManifests', recordingId);
 }
 
 export async function clearAllRecordings(): Promise<void> {
   const db = await getDB();
-  await db.clear('videoChunks');
+  await db.clear('videoChunksV2');
   await db.clear('audioChunks');
   await db.clear('screenshots');
   await db.clear('actions');
   await db.clear('networkEvents');
   await db.clear('metadata');
+  await db.clear('finalVideo');
+  await db.clear('recordingExports');
+  await db.clear('videoManifests');
 }
