@@ -31,6 +31,11 @@ export function sendRuntimeMessageSilently(message: unknown): void {
   void sendRuntimeMessage(message).catch(() => {});
 }
 
+/** Returns true only for the error Chrome raises after an extension reload. */
+export function isExtensionContextInvalidatedError(error: unknown): boolean {
+  return /extension context invalidated/i.test(toError(error).message);
+}
+
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }

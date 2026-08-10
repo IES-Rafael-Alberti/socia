@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import {
+  isExtensionContextInvalidatedError,
   sendRuntimeMessage,
   sendRuntimeMessageSilently,
 } from '../../../packages/socia-runtime/src/runtime-messaging';
@@ -44,6 +45,17 @@ test('turns a synchronous invalidated-context error into a rejection', async () 
   await assert.rejects(
     sendRuntimeMessage({ type: 'TEST' }),
     /Extension context invalidated/
+  );
+});
+
+test('recognizes only invalidated-context errors', () => {
+  assert.equal(
+    isExtensionContextInvalidatedError(new Error('Extension context invalidated.')),
+    true
+  );
+  assert.equal(
+    isExtensionContextInvalidatedError(new Error('Could not establish connection.')),
+    false
   );
 });
 

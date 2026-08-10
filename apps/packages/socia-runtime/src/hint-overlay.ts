@@ -245,10 +245,12 @@ interface OverlayState {
   typewriterTimer: number | null;
   debugVisible: boolean;
   signal?: AbortSignal;
+  onRuntimeError?: (error: unknown) => void;
 }
 
 export interface HintOverlayOptions {
   signal?: AbortSignal;
+  onRuntimeError?: (error: unknown) => void;
 }
 
 const FAB_SIZE = 44;
@@ -338,6 +340,7 @@ export function createHintOverlay(options: HintOverlayOptions = {}): OverlayStat
     typewriterTimer: null,
     debugVisible: false,
     signal: options.signal,
+    onRuntimeError: options.onRuntimeError,
   };
 
   const eventOptions = options.signal ? { signal: options.signal } : undefined;
@@ -597,11 +600,13 @@ async function requestHint(s: OverlayState) {
           s.debugToggle.textContent = '▼ Ver prompt enviado al LLM';
           s.debugToggle.style.display = 'block';
         }
-      } catch {
+      } catch (error) {
+        s.onRuntimeError?.(error);
         /* debug fetch failed — not critical */
       }
     }
   } catch (err) {
+    s.onRuntimeError?.(err);
     if (s.signal?.aborted) return;
     showBubbleWithTypewriter(
       s,

@@ -9,8 +9,8 @@ import type { StudentAction } from '@socia/eval';
 import { injectScript } from 'wxt/client';
 import {
   createHintOverlay,
+  isExtensionContextInvalidatedError,
   sendRuntimeMessage,
-  sendRuntimeMessageSilently,
 } from '@socia/runtime';
 import {
   sanitizeNetworkCaptureMessage,
@@ -24,11 +24,50 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   main(ctx) {
+    const lifecycle = new AbortController();
+    const { signal } = lifecycle;
+    const intervalIds = new Set<number>();
+    const inputDebounce = new Map<Element, number>();
+
+    // WXT still detects newer copies of this content script. We only use its
+    // abort event: its timer and listener wrappers read chrome.runtime.id and
+    // Chrome throws when an old page keeps a script after an extension reload.
+    ctx.onInvalidated(() => lifecycle.abort());
+
+    signal.addEventListener(
+      'abort',
+      () => {
+        for (const id of intervalIds) window.clearInterval(id);
+        intervalIds.clear();
+        for (const id of inputDebounce.values()) window.clearTimeout(id);
+        inputDebounce.clear();
+      },
+      { once: true }
+    );
+
+    function handleRuntimeError(error: unknown) {
+      if (isExtensionContextInvalidatedError(error)) lifecycle.abort();
+    }
+
+    function sendMessageSilently(message: unknown) {
+      void sendRuntimeMessage(message).catch(handleRuntimeError);
+    }
+
+    function setLifecycleInterval(callback: () => void, delay: number): number {
+      const id = window.setInterval(() => {
+        if (!signal.aborted) callback();
+      }, delay);
+      intervalIds.add(id);
+      return id;
+    }
+
     console.log('[SOCIA Content] Recording on', window.location.href);
 
     // Inject the network interceptor into the page's MAIN JS context.
     // Uses <script src="chrome-extension://…"> which bypasses CSP (unlike inline scripts).
-    void injectScript('/interceptor-main.js', { keepInDom: true }).catch(() => {});
+    void injectScript('/interceptor-main.js', { keepInDom: true }).catch(
+      handleRuntimeError
+    );
 
     // Notify background of navigation
     sendAction({ type: 'navigation', url: window.location.href, timestamp: Date.now() });
@@ -44,12 +83,13 @@ export default defineContentScript({
       sendAction({ type: 'navigation', url: newUrl, timestamp: Date.now() });
     }
 
-    ctx.addEventListener(window, 'wxt:locationchange', onUrlChange);
+    window.addEventListener('popstate', onUrlChange, { signal });
+    window.addEventListener('hashchange', onUrlChange, { signal });
+    setLifecycleInterval(onUrlChange, 1000);
 
     // ──────────────── Click Tracking ────────────────
 
-    ctx.addEventListener(
-      document,
+    document.addEventListener(
       'click',
       (event) => {
         const target = getEventElement(event);
@@ -69,15 +109,12 @@ export default defineContentScript({
           timestamp: Date.now(),
         });
       },
-      { capture: true }
+      { capture: true, signal }
     );
 
     // ──────────────── Input Tracking ────────────────
 
-    const inputDebounce = new Map<Element, number>();
-
-    ctx.addEventListener(
-      document,
+    document.addEventListener(
       'input',
       (event) => {
         const target = getEventElement(event);
@@ -93,7 +130,8 @@ export default defineContentScript({
         const existing = inputDebounce.get(target);
         if (existing) clearTimeout(existing);
 
-        const timeout = ctx.setTimeout(() => {
+        const timeout = window.setTimeout(() => {
+          if (signal.aborted) return;
           inputDebounce.delete(target);
           sendAction({
             type: 'input',
@@ -105,13 +143,12 @@ export default defineContentScript({
         }, 400);
         inputDebounce.set(target, timeout);
       },
-      { capture: true }
+      { capture: true, signal }
     );
 
     // ──────────────── Form Submit Tracking ────────────────
 
-    ctx.addEventListener(
-      document,
+    document.addEventListener(
       'submit',
       (event) => {
         const form = getEventElement(event);
@@ -123,7 +160,7 @@ export default defineContentScript({
           timestamp: Date.now(),
         });
       },
-      { capture: true }
+      { capture: true, signal }
     );
 
     // ──────────────── Network Event Relay ────────────────
@@ -140,7 +177,7 @@ export default defineContentScript({
       return raw;
     }
 
-    ctx.addEventListener(window, 'message', (event) => {
+    window.addEventListener('message', (event) => {
       if (event.source !== window) return;
       if (!event.data || event.data.type !== 'SOCIA_NETWORK_EVENT') return;
       const message = event.data as NetworkCaptureMessage;
@@ -169,7 +206,7 @@ export default defineContentScript({
         return;
       }
 
-      sendRuntimeMessageSilently({
+      sendMessageSilently({
         type: 'SOCIA_STUDENT_NETWORK_EVENT',
         networkEvent: {
           requestId: sanitized.requestId,
@@ -202,7 +239,7 @@ export default defineContentScript({
           documentUrl: sanitized.documentUrl,
         },
       });
-    });
+    }, { signal });
 
     // ──────────────── Floating hint overlay ────────────────
     // Show the FAB whenever a workflow is loaded — pistas disponibles en
@@ -212,26 +249,28 @@ export default defineContentScript({
     let overlayCreated = false;
 
     async function maybeShowOverlay() {
-      if (overlayCreated || ctx.signal.aborted) return;
+      if (overlayCreated || signal.aborted) return;
       try {
         const resp = await sendRuntimeMessage<{ workflow?: unknown }>({
           type: 'SOCIA_GET_STATE',
         });
-        if (ctx.signal.aborted) return;
+        if (signal.aborted) return;
         if (resp?.workflow && !overlayCreated) {
           overlayCreated = true;
-          createHintOverlay({ signal: ctx.signal });
+          createHintOverlay({ signal, onRuntimeError: handleRuntimeError });
         }
-      } catch {
+      } catch (error) {
+        handleRuntimeError(error);
         // The background may be restarting or the extension may have reloaded.
       }
     }
 
     // Check now and periodically (workflow may be loaded after page is open)
     void maybeShowOverlay();
-    const overlayPoll = ctx.setInterval(() => {
+    const overlayPoll = setLifecycleInterval(() => {
       if (overlayCreated) {
-        clearInterval(overlayPoll);
+        window.clearInterval(overlayPoll);
+        intervalIds.delete(overlayPoll);
         return;
       }
       void maybeShowOverlay();
@@ -240,7 +279,7 @@ export default defineContentScript({
     // ──────────────── Utils ────────────────
 
     function sendAction(action: StudentAction) {
-      sendRuntimeMessageSilently({ type: 'SOCIA_STUDENT_ACTION', action });
+      sendMessageSilently({ type: 'SOCIA_STUDENT_ACTION', action });
     }
 
     function safeSelector(el: Element): string {
