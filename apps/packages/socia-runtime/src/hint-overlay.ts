@@ -7,6 +7,8 @@
  * the most available space.
  */
 
+import { sendRuntimeMessage } from './runtime-messaging';
+
 // ─── CSS (isolated inside Shadow DOM) ───
 
 const OVERLAY_CSS = /* css */ `
@@ -242,13 +244,18 @@ interface OverlayState {
   isLoading: boolean;
   typewriterTimer: number | null;
   debugVisible: boolean;
+  signal?: AbortSignal;
+}
+
+export interface HintOverlayOptions {
+  signal?: AbortSignal;
 }
 
 const FAB_SIZE = 44;
 const MARGIN = 12;
 const BUBBLE_GAP = 8;
 
-export function createHintOverlay(): OverlayState {
+export function createHintOverlay(options: HintOverlayOptions = {}): OverlayState {
   // ─── Build DOM ───
   const container = document.createElement('div');
   container.id = 'socia-hint-overlay';
@@ -330,7 +337,10 @@ export function createHintOverlay(): OverlayState {
     isLoading: false,
     typewriterTimer: null,
     debugVisible: false,
+    signal: options.signal,
   };
+
+  const eventOptions = options.signal ? { signal: options.signal } : undefined;
 
   // ─── Drag behaviour ───
 
@@ -343,7 +353,7 @@ export function createHintOverlay(): OverlayState {
     state.fabStartX = state.posX;
     state.fabStartY = state.posY;
     fab.classList.add('dragging');
-  });
+  }, eventOptions);
 
   document.addEventListener('mousemove', (e: MouseEvent) => {
     if (!state.isDragging) return;
@@ -366,13 +376,13 @@ export function createHintOverlay(): OverlayState {
     if (bubble.classList.contains('visible')) {
       positionBubble(state);
     }
-  });
+  }, eventOptions);
 
   document.addEventListener('mouseup', () => {
     if (!state.isDragging) return;
     state.isDragging = false;
     fab.classList.remove('dragging');
-  });
+  }, eventOptions);
 
   // ─── Click → request hint ───
 
@@ -386,14 +396,14 @@ export function createHintOverlay(): OverlayState {
     }
 
     requestHint(state);
-  });
+  }, eventOptions);
 
   // ─── Close button ───
 
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     hideBubble(state);
-  });
+  }, eventOptions);
 
   // ─── Debug toggle ───
 
@@ -405,7 +415,7 @@ export function createHintOverlay(): OverlayState {
       ? '▲ Ocultar debug'
       : '▼ Ver prompt enviado al LLM';
     positionBubble(state);
-  });
+  }, eventOptions);
 
   // ─── Dismiss on Escape ───
 
@@ -413,7 +423,7 @@ export function createHintOverlay(): OverlayState {
     if (e.key === 'Escape' && bubble.classList.contains('visible')) {
       hideBubble(state);
     }
-  });
+  }, eventOptions);
 
   // ─── Reposition on resize ───
 
@@ -425,7 +435,17 @@ export function createHintOverlay(): OverlayState {
     if (bubble.classList.contains('visible')) {
       positionBubble(state);
     }
-  });
+  }, eventOptions);
+
+  options.signal?.addEventListener(
+    'abort',
+    () => {
+      if (state.typewriterTimer) clearInterval(state.typewriterTimer);
+      state.typewriterTimer = null;
+      container.remove();
+    },
+    { once: true }
+  );
 
   return state;
 }
@@ -521,23 +541,20 @@ function showBubbleWithTypewriter(s: OverlayState, text: string) {
 // ─── Hint request ───
 
 async function requestHint(s: OverlayState) {
+  if (s.signal?.aborted) return;
   s.isLoading = true;
   // The 'loading' class hides the icon and overlays the spinner via ::after,
   // so we don't need to touch the FAB's children.
   s.fab.classList.add('loading');
 
   try {
-    const resp: { success: boolean; hint?: string; error?: string } = await new Promise(
-      (resolve, reject) => {
-        chrome.runtime.sendMessage({ type: 'SOCIA_REQUEST_HINT' }, (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          resolve(response);
-        });
-      }
-    );
+    const resp = await sendRuntimeMessage<{
+      success: boolean;
+      hint?: string;
+      error?: string;
+    }>({ type: 'SOCIA_REQUEST_HINT' });
+
+    if (s.signal?.aborted) return;
 
     const hintText =
       resp.success && resp.hint
@@ -549,18 +566,12 @@ async function requestHint(s: OverlayState) {
     // Fetch debug info if DEBUG mode is on
     if (IS_DEBUG) {
       try {
-        const dbg: {
+        const dbg = await sendRuntimeMessage<{
           success: boolean;
           debug?: { systemPrompt: string; userPrompt: string; response: string };
-        } = await new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage({ type: 'SOCIA_GET_HINT_DEBUG' }, (response) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-              return;
-            }
-            resolve(response);
-          });
-        });
+        }>({ type: 'SOCIA_GET_HINT_DEBUG' });
+
+        if (s.signal?.aborted) return;
 
         if (dbg.success && dbg.debug) {
           s.debugPanel.innerHTML = '';
@@ -591,6 +602,7 @@ async function requestHint(s: OverlayState) {
       }
     }
   } catch (err) {
+    if (s.signal?.aborted) return;
     showBubbleWithTypewriter(
       s,
       `Error: ${err instanceof Error ? err.message : String(err)}`

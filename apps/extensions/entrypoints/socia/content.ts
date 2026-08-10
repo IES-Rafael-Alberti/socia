@@ -7,7 +7,11 @@
 
 import type { StudentAction } from '@socia/eval';
 import { injectScript } from 'wxt/client';
-import { createHintOverlay } from '@socia/runtime';
+import {
+  createHintOverlay,
+  sendRuntimeMessage,
+  sendRuntimeMessageSilently,
+} from '@socia/runtime';
 import {
   sanitizeNetworkCaptureMessage,
   shouldRelayNetworkCapture,
@@ -19,12 +23,12 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   runAt: 'document_idle',
 
-  main() {
+  main(ctx) {
     console.log('[SOCIA Content] Recording on', window.location.href);
 
     // Inject the network interceptor into the page's MAIN JS context.
     // Uses <script src="chrome-extension://…"> which bypasses CSP (unlike inline scripts).
-    injectScript('/interceptor-main.js', { keepInDom: true });
+    void injectScript('/interceptor-main.js', { keepInDom: true }).catch(() => {});
 
     // Notify background of navigation
     sendAction({ type: 'navigation', url: window.location.href, timestamp: Date.now() });
@@ -40,24 +44,12 @@ export default defineContentScript({
       sendAction({ type: 'navigation', url: newUrl, timestamp: Date.now() });
     }
 
-    const origPushState = history.pushState;
-    const origReplaceState = history.replaceState;
-    history.pushState = function (...args) {
-      const result = origPushState.apply(this, args);
-      onUrlChange();
-      return result;
-    };
-    history.replaceState = function (...args) {
-      const result = origReplaceState.apply(this, args);
-      onUrlChange();
-      return result;
-    };
-    window.addEventListener('popstate', onUrlChange);
-    window.addEventListener('hashchange', onUrlChange);
+    ctx.addEventListener(window, 'wxt:locationchange', onUrlChange);
 
     // ──────────────── Click Tracking ────────────────
 
-    document.addEventListener(
+    ctx.addEventListener(
+      document,
       'click',
       (event) => {
         const target = getEventElement(event);
@@ -84,7 +76,8 @@ export default defineContentScript({
 
     const inputDebounce = new Map<Element, number>();
 
-    document.addEventListener(
+    ctx.addEventListener(
+      document,
       'input',
       (event) => {
         const target = getEventElement(event);
@@ -100,7 +93,7 @@ export default defineContentScript({
         const existing = inputDebounce.get(target);
         if (existing) clearTimeout(existing);
 
-        const timeout = window.setTimeout(() => {
+        const timeout = ctx.setTimeout(() => {
           inputDebounce.delete(target);
           sendAction({
             type: 'input',
@@ -117,7 +110,8 @@ export default defineContentScript({
 
     // ──────────────── Form Submit Tracking ────────────────
 
-    document.addEventListener(
+    ctx.addEventListener(
+      document,
       'submit',
       (event) => {
         const form = getEventElement(event);
@@ -146,7 +140,7 @@ export default defineContentScript({
       return raw;
     }
 
-    window.addEventListener('message', (event) => {
+    ctx.addEventListener(window, 'message', (event) => {
       if (event.source !== window) return;
       if (!event.data || event.data.type !== 'SOCIA_NETWORK_EVENT') return;
       const message = event.data as NetworkCaptureMessage;
@@ -175,41 +169,39 @@ export default defineContentScript({
         return;
       }
 
-      chrome.runtime
-        .sendMessage({
-          type: 'SOCIA_STUDENT_NETWORK_EVENT',
-          networkEvent: {
-            requestId: sanitized.requestId,
-            timestamp: sanitized.startedAt,
-            completedAt: sanitized.finishedAt,
-            durationMs: sanitized.durationMs,
-            source: sanitized.source,
-            method: sanitized.method,
-            url: sanitized.url,
-            responseUrl: sanitized.responseUrl,
-            redirected: sanitized.redirected ?? false,
-            host,
-            pathname,
-            status: sanitized.status ?? 0,
-            statusText: sanitized.statusText ?? '',
-            contentType: sanitized.contentType ?? '',
-            requestBody: sanitized.requestBody?.value ?? null,
-            responseBody: sanitized.responseBody?.value ?? null,
-            requestBodyLength: sanitized.requestBody?.originalLength ?? 0,
-            responseBodyLength: sanitized.responseBody?.originalLength ?? 0,
-            requestBodyTruncated: sanitized.requestBody?.truncated ?? false,
-            responseBodyTruncated: sanitized.responseBody?.truncated ?? false,
-            requestBodyRedactions: sanitized.requestBody?.redactions ?? [],
-            responseBodyRedactions: sanitized.responseBody?.redactions ?? [],
-            urlRedactions: sanitized.urlRedactions ?? [],
-            responseUrlRedactions: sanitized.responseUrlRedactions ?? [],
-            documentUrlRedactions: sanitized.documentUrlRedactions ?? [],
-            outcome: sanitized.outcome,
-            error: sanitized.error,
-            documentUrl: sanitized.documentUrl,
-          },
-        })
-        .catch(() => {});
+      sendRuntimeMessageSilently({
+        type: 'SOCIA_STUDENT_NETWORK_EVENT',
+        networkEvent: {
+          requestId: sanitized.requestId,
+          timestamp: sanitized.startedAt,
+          completedAt: sanitized.finishedAt,
+          durationMs: sanitized.durationMs,
+          source: sanitized.source,
+          method: sanitized.method,
+          url: sanitized.url,
+          responseUrl: sanitized.responseUrl,
+          redirected: sanitized.redirected ?? false,
+          host,
+          pathname,
+          status: sanitized.status ?? 0,
+          statusText: sanitized.statusText ?? '',
+          contentType: sanitized.contentType ?? '',
+          requestBody: sanitized.requestBody?.value ?? null,
+          responseBody: sanitized.responseBody?.value ?? null,
+          requestBodyLength: sanitized.requestBody?.originalLength ?? 0,
+          responseBodyLength: sanitized.responseBody?.originalLength ?? 0,
+          requestBodyTruncated: sanitized.requestBody?.truncated ?? false,
+          responseBodyTruncated: sanitized.responseBody?.truncated ?? false,
+          requestBodyRedactions: sanitized.requestBody?.redactions ?? [],
+          responseBodyRedactions: sanitized.responseBody?.redactions ?? [],
+          urlRedactions: sanitized.urlRedactions ?? [],
+          responseUrlRedactions: sanitized.responseUrlRedactions ?? [],
+          documentUrlRedactions: sanitized.documentUrlRedactions ?? [],
+          outcome: sanitized.outcome,
+          error: sanitized.error,
+          documentUrl: sanitized.documentUrl,
+        },
+      });
     });
 
     // ──────────────── Floating hint overlay ────────────────
@@ -219,31 +211,36 @@ export default defineContentScript({
 
     let overlayCreated = false;
 
-    function maybeShowOverlay() {
-      if (overlayCreated) return;
-      chrome.runtime.sendMessage({ type: 'SOCIA_GET_STATE' }, (resp) => {
-        if (chrome.runtime.lastError) return;
+    async function maybeShowOverlay() {
+      if (overlayCreated || ctx.signal.aborted) return;
+      try {
+        const resp = await sendRuntimeMessage<{ workflow?: unknown }>({
+          type: 'SOCIA_GET_STATE',
+        });
+        if (ctx.signal.aborted) return;
         if (resp?.workflow && !overlayCreated) {
           overlayCreated = true;
-          createHintOverlay();
+          createHintOverlay({ signal: ctx.signal });
         }
-      });
+      } catch {
+        // The background may be restarting or the extension may have reloaded.
+      }
     }
 
     // Check now and periodically (workflow may be loaded after page is open)
-    maybeShowOverlay();
-    const overlayPoll = setInterval(() => {
+    void maybeShowOverlay();
+    const overlayPoll = ctx.setInterval(() => {
       if (overlayCreated) {
         clearInterval(overlayPoll);
         return;
       }
-      maybeShowOverlay();
+      void maybeShowOverlay();
     }, 3000);
 
     // ──────────────── Utils ────────────────
 
     function sendAction(action: StudentAction) {
-      chrome.runtime.sendMessage({ type: 'SOCIA_STUDENT_ACTION', action }).catch(() => {});
+      sendRuntimeMessageSilently({ type: 'SOCIA_STUDENT_ACTION', action });
     }
 
     function safeSelector(el: Element): string {
