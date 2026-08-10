@@ -219,6 +219,47 @@ def milestone_list(workflow: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def event_reference(event: dict[str, Any]) -> str:
+    reference = f"t={event_time(event)}"
+    request_id = event.get("requestId")
+    if isinstance(request_id, str) and request_id:
+        reference += f", requestId={request_id}"
+    return reference
+
+
+def replay_milestones(
+    events: list[dict[str, Any]],
+    milestones: list[dict[str, Any]],
+    variables: dict[str, str],
+) -> tuple[set[str], dict[str, int], dict[int, list[str]]]:
+    completed: set[str] = set()
+    replayed_event_index: dict[str, int] = {}
+    completed_by_event: dict[int, list[str]] = {}
+    for event_index, event in enumerate(events):
+        for milestone in milestones:
+            milestone_id = milestone["id"]
+            if milestone_id in completed or not dependencies_met(milestone, completed):
+                continue
+            if matches(event, milestone, variables):
+                completed.add(milestone_id)
+                replayed_event_index[milestone_id] = event_index
+                completed_by_event.setdefault(event_index, []).append(milestone_id)
+    return completed, replayed_event_index, completed_by_event
+
+
+def early_match_events(
+    independent_event_indices: dict[str, list[int]],
+    replayed_event_index: dict[str, int],
+) -> dict[str, tuple[int, int]]:
+    return {
+        milestone_id: (event_indices[0], replayed_event_index[milestone_id])
+        for milestone_id, event_indices in independent_event_indices.items()
+        if event_indices
+        and milestone_id in replayed_event_index
+        and event_indices[0] != replayed_event_index[milestone_id]
+    }
+
+
 def capture_health(metadata: dict[str, Any] | None) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     notes: list[str] = []
@@ -276,9 +317,16 @@ def main(argv: list[str]) -> int:
             errors.append(f"{path} contiene {REDACTED}")
 
     independent: dict[str, list[dict[str, Any]]] = {}
+    independent_event_indices: dict[str, list[int]] = {}
     for milestone in milestones:
-        found = [event for event in events if matches(event, milestone, variables)]
+        found_indices = [
+            event_index
+            for event_index, event in enumerate(events)
+            if matches(event, milestone, variables)
+        ]
+        found = [events[event_index] for event_index in found_indices]
         independent[milestone["id"]] = found
+        independent_event_indices[milestone["id"]] = found_indices
         if not found:
             errors.append(f"{milestone['id']}: la firma no coincide con ningún evento")
             continue
@@ -306,19 +354,9 @@ def main(argv: list[str]) -> int:
                         f"oculto(s) del cuerpo {body}: {', '.join(sorted(reused))}"
                     )
 
-    completed: set[str] = set()
-    replayed_at: dict[str, int] = {}
-    shared_event: dict[int, list[str]] = {}
-    for event in events:
-        for milestone in milestones:
-            milestone_id = milestone["id"]
-            if milestone_id in completed or not dependencies_met(milestone, completed):
-                continue
-            if matches(event, milestone, variables):
-                completed.add(milestone_id)
-                timestamp = event_time(event)
-                replayed_at[milestone_id] = timestamp
-                shared_event.setdefault(timestamp, []).append(milestone_id)
+    completed, replayed_event_index, completed_by_event = replay_milestones(
+        events, milestones, variables
+    )
 
     missing_in_replay = [m["id"] for m in milestones if m["id"] not in completed]
     if missing_in_replay:
@@ -334,20 +372,34 @@ def main(argv: list[str]) -> int:
     for milestone in milestones:
         milestone_id = milestone["id"]
         found = independent[milestone_id]
-        first = event_time(found[0]) if found else "—"
-        replay = replayed_at.get(milestone_id, "—")
+        first = event_reference(found[0]) if found else "—"
+        replay_index = replayed_event_index.get(milestone_id)
+        replay = event_reference(events[replay_index]) if replay_index is not None else "—"
         marker = "✅" if found and milestone_id in completed else "❌"
         print(
             f"{marker} {milestone_id}: {len(found)} coincidencia(s), "
-            f"primera t={first}, reproducción t={replay}"
+            f"primera {first}, reproducción {replay}"
         )
 
-    collisions = {t: ids for t, ids in shared_event.items() if len(ids) > 1}
-    if collisions:
+    collisions = {
+        event_index: ids
+        for event_index, ids in completed_by_event.items()
+        if len(ids) > 1
+    }
+    early_matches = early_match_events(independent_event_indices, replayed_event_index)
+    if collisions or early_matches:
         print("\nAvisos:")
-        for timestamp, ids in collisions.items():
+        for event_index, ids in collisions.items():
             print(
-                f"- Un mismo evento t={timestamp} completa varios hitos: {', '.join(ids)}"
+                f"- Un mismo evento ({event_reference(events[event_index])}) "
+                f"completa varios hitos: {', '.join(ids)}"
+            )
+        for milestone_id, (first_index, replay_index) in early_matches.items():
+            print(
+                f"- {milestone_id}: la firma coincide antes de activarse "
+                f"(primera {event_reference(events[first_index])}; "
+                f"reproducción {event_reference(events[replay_index])}). "
+                "Revisa la precisión de la firma y sus dependencias."
             )
 
     print(
