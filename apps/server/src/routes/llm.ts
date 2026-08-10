@@ -80,6 +80,7 @@ llmRouter.post('/hint', async (req, res) => {
 });
 
 interface EvaluationRequestBody {
+  submissionId: string;
   launchId: string;
   workflow: WorkflowData;
   traceExport: TraceExport;
@@ -89,6 +90,8 @@ llmRouter.post('/evaluation', async (req: StudentReq, res) => {
   const s = req.student!;
   const body = req.body as Partial<EvaluationRequestBody>;
   if (
+    typeof body.submissionId !== 'string' ||
+    !body.submissionId.trim() ||
     typeof body.launchId !== 'string' ||
     !body.workflow?.case ||
     !Array.isArray(body.workflow.phases) ||
@@ -97,7 +100,28 @@ llmRouter.post('/evaluation', async (req: StudentReq, res) => {
     res.status(400).json({ error: 'invalid_payload' });
     return;
   }
-  const { launchId, workflow, traceExport } = body as EvaluationRequestBody;
+  const { submissionId, launchId, workflow, traceExport } = body as EvaluationRequestBody;
+
+  const existing = db
+    .prepare(
+      `SELECT id, grade, pdf_path AS pdfPath
+       FROM evaluations
+       WHERE student_id = ? AND launch_id = ? AND submission_id = ?`,
+    )
+    .get(s.id, launchId, submissionId) as
+    | { id: string; grade: number; pdfPath: string | null }
+    | undefined;
+  if (existing) {
+    const cls = db
+      .prepare('SELECT allow_pdf_download AS allowPdfDownload FROM classes WHERE id = ?')
+      .get(s.class_id) as { allowPdfDownload: number } | undefined;
+    res.json({
+      evalId: existing.id,
+      grade: existing.grade,
+      pdfAvailable: !!cls?.allowPdfDownload && !!existing.pdfPath,
+    });
+    return;
+  }
 
   const stepsTotal = workflow.phases.reduce((acc, p) => acc + p.milestones.length, 0);
   const stepsDone = traceExport.outcome?.milestones_completed?.length ?? 0;
@@ -110,8 +134,7 @@ llmRouter.post('/evaluation', async (req: StudentReq, res) => {
   const grading = gradeFromTrace(workflow, traceExport);
 
   // Run the canonical SOCIA evaluation prompt with the pre-computed grade.
-  let report: EvaluationReport | null = null;
-  let evalError: string | undefined;
+  let report: EvaluationReport;
   try {
     const { systemPrompt, userPrompt } = buildEvaluationMessages(
       workflow,
@@ -135,46 +158,73 @@ llmRouter.post('/evaluation', async (req: StudentReq, res) => {
       grade_out_of_10: grading.grade,
     };
   } catch (err) {
-    evalError = err instanceof Error ? err.message : String(err);
-  }
-
-  // Persist evaluation + render PDF if we have a report.
-  const id = uid('ev_');
-  let pdfRel: string | null = null;
-  if (report) {
-    pdfRel = path.join('evaluations', `${id}.pdf`);
-    const pdfAbs = path.join(config.dataDir, pdfRel);
-    const brand = getBrand(config.brandId);
-    writeEvaluationPdf({
-      filePath: pdfAbs,
-      caseId: workflow.case.id,
-      caseTitle: caseName,
-      sessionStartedAt: traceExport.session.started_at,
-      durationText: traceExport.session.duration,
-      mode: traceExport.session.mode ?? 'guided',
-      report,
-      brand,
+    res.status(502).json({
+      error: err instanceof Error ? err.message : String(err),
     });
+    return;
   }
 
-  db.prepare(
-    `INSERT INTO evaluations (id, student_id, launch_id, workflow_title, case_name, steps_done,
-                              steps_total, hints, duration_seconds, grade, pdf_path, closed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    id,
-    s.id,
-    launchId,
-    workflow.case.title,
-    caseName,
-    stepsDone,
-    stepsTotal,
-    hints,
-    durationSeconds,
-    grading.grade,
-    pdfRel,
-    Date.now(),
-  );
+  // Persist only completed evaluations. A failed request remains retryable.
+  const id = uid('ev_');
+  const pdfRel = path.join('evaluations', `${id}.pdf`);
+  const pdfAbs = path.join(config.dataDir, pdfRel);
+  const brand = getBrand(config.brandId);
+  writeEvaluationPdf({
+    filePath: pdfAbs,
+    caseId: workflow.case.id,
+    caseTitle: caseName,
+    sessionStartedAt: traceExport.session.started_at,
+    durationText: traceExport.session.duration,
+    mode: traceExport.session.mode ?? 'guided',
+    report,
+    brand,
+  });
+
+  try {
+    db.prepare(
+      `INSERT INTO evaluations (id, submission_id, student_id, launch_id, workflow_title,
+                                case_name, steps_done, steps_total, hints, duration_seconds,
+                                grade, pdf_path, closed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      submissionId,
+      s.id,
+      launchId,
+      workflow.case.title,
+      caseName,
+      stepsDone,
+      stepsTotal,
+      hints,
+      durationSeconds,
+      grading.grade,
+      pdfRel,
+      Date.now(),
+    );
+  } catch (error) {
+    try {
+      fs.unlinkSync(pdfAbs);
+    } catch {}
+    const duplicate = db
+      .prepare(
+        `SELECT id, grade, pdf_path AS pdfPath
+         FROM evaluations
+         WHERE student_id = ? AND launch_id = ? AND submission_id = ?`,
+      )
+      .get(s.id, launchId, submissionId) as
+      | { id: string; grade: number; pdfPath: string | null }
+      | undefined;
+    if (!duplicate) throw error;
+    const cls = db
+      .prepare('SELECT allow_pdf_download AS allowPdfDownload FROM classes WHERE id = ?')
+      .get(s.class_id) as { allowPdfDownload: number } | undefined;
+    res.json({
+      evalId: duplicate.id,
+      grade: duplicate.grade,
+      pdfAvailable: !!cls?.allowPdfDownload && !!duplicate.pdfPath,
+    });
+    return;
+  }
 
   db.prepare(
     `UPDATE progress SET status = 'finished', finished_at = ?, updated_at = ?
@@ -191,7 +241,6 @@ llmRouter.post('/evaluation', async (req: StudentReq, res) => {
     evalId: id,
     grade: grading.grade,
     pdfAvailable: !!cls?.allowPdfDownload && !!pdfRel,
-    error: evalError,
   });
 });
 

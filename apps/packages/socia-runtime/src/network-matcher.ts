@@ -116,6 +116,23 @@ export function matchesSignature(
   return true;
 }
 
+/** Return the complete alternative signatures declared for a milestone. */
+export function getMilestoneSignatures(milestone: Milestone): NetworkSignature[] {
+  if (milestone.network_signatures?.length) return milestone.network_signatures;
+  return milestone.network_signature ? [milestone.network_signature] : [];
+}
+
+/** A milestone matches when any one of its complete signatures matches. */
+export function matchesMilestoneSignature(
+  event: StudentNetworkEvent,
+  milestone: Milestone,
+  vars: Record<string, string>,
+): boolean {
+  return getMilestoneSignatures(milestone).some((signature) =>
+    matchesSignature(event, signature, vars, milestone.match_mode),
+  );
+}
+
 /**
  * Check if a milestone's dependencies are all satisfied.
  */
@@ -159,7 +176,7 @@ export function checkMilestones(
       if (!areDependenciesMet(milestone, completedSet)) continue;
 
       // Check network signature match
-      if (matchesSignature(event, milestone.network_signature, workflow.variables, milestone.match_mode)) {
+      if (matchesMilestoneSignature(event, milestone, workflow.variables)) {
         newlyCompleted.push(milestone.id);
         completedSet.add(milestone.id); // So subsequent milestones in this loop can see it
         console.log(`[SOCIA Matcher] ✅ Milestone completed: ${milestone.id} (${milestone.label})`);

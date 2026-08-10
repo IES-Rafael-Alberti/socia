@@ -7,7 +7,6 @@
 import type { StudentAction } from '@socia/eval';
 
 const TRACE_KEY = 'SOCIA_trace';
-const MAX_ACTIONS = 5000;
 
 /**
  * Load the full student trace from storage.
@@ -30,33 +29,33 @@ export async function saveTrace(trace: StudentAction[]): Promise<void> {
 }
 
 /**
- * Append an action to the trace. Saves periodically (every 10 actions)
- * to avoid excessive storage writes.
+ * Append an action to the trace and persist an immutable snapshot. Writes are
+ * serialized so a slower earlier write cannot replace a newer trace.
  */
-export function appendAction(
+let traceWriteQueue: Promise<void> = Promise.resolve();
+
+function queueTraceSave(trace: StudentAction[]): Promise<void> {
+  const snapshot = trace.map((action) => ({ ...action }));
+  const operation = traceWriteQueue
+    .catch(() => undefined)
+    .then(() => saveTrace(snapshot));
+  traceWriteQueue = operation;
+  return operation;
+}
+
+export async function appendAction(
   trace: StudentAction[],
   action: StudentAction,
-  forceSave: boolean = false
-): StudentAction[] {
+): Promise<void> {
   trace.push(action);
-
-  // Cap the trace to avoid unbounded growth
-  if (trace.length > MAX_ACTIONS) {
-    trace.splice(0, trace.length - MAX_ACTIONS);
-  }
-
-  // Save periodically or when forced
-  if (forceSave || trace.length % 10 === 0) {
-    saveTrace(trace);
-  }
-
-  return trace;
+  await queueTraceSave(trace);
 }
 
 /**
  * Clear the trace from storage.
  */
 export async function clearTrace(): Promise<void> {
+  await traceWriteQueue.catch(() => undefined);
   return new Promise((resolve) => {
     chrome.storage.local.remove(TRACE_KEY, resolve);
   });

@@ -12,6 +12,7 @@ import type {
   Milestone,
   HintEvent,
 } from '@socia/eval';
+import { formatWorkflowValidationIssues, validateWorkflowData } from '@socia/eval';
 import { getBrand } from '@socia/branding';
 import {
   createInitialState,
@@ -30,6 +31,12 @@ import {
 } from '@socia/runtime';
 import { buildTraceExport, downloadTraceExport } from '@socia/runtime';
 import { finishAndDownload } from '@socia/runtime';
+import {
+  clearPendingFinish,
+  loadPendingFinish,
+  savePendingFinish,
+  type PendingFinish,
+} from '@socia/runtime';
 import { requestHint, lastHintDebug, clearHintHistory } from '@socia/runtime';
 import {
   checkMilestones,
@@ -54,6 +61,7 @@ export default defineBackground(() => {
   let trace: StudentAction[] = [];
   let hintEvents: HintEvent[] = [];
   let networkTrace: StudentNetworkEvent[] = [];
+  let pendingFinish: PendingFinish | null = null;
   let isFinishing = false;
 
   // Managed-mode tracking
@@ -90,6 +98,26 @@ export default defineBackground(() => {
     state = await loadStateFromStorage();
     trace = await loadTrace();
     hintEvents = await loadHintEvents();
+    pendingFinish = await loadPendingFinish();
+
+    if (workflow) {
+      const validation = validateWorkflowData(workflow);
+      if (!validation.valid) {
+        console.error(
+          '[SOCIA Background] Stored workflow is invalid:',
+          formatWorkflowValidationIssues(validation.errors),
+        );
+        await clearAllFromStorage();
+        await clearTrace();
+        await clearHintEvents();
+        await clearPendingFinish();
+        workflow = null;
+        state = null;
+        trace = [];
+        hintEvents = [];
+        pendingFinish = null;
+      }
+    }
 
     // Migration for pre-4.0 states that lack the new timestamp fields
     if (state) {
@@ -100,6 +128,8 @@ export default defineBackground(() => {
         const firstPhaseId = workflow?.phases[0]?.id;
         if (firstPhaseId) state.phaseEnteredAt[firstPhaseId] = state.timerStartTime;
       }
+      managedLaunchId = state.managedLaunchId ?? null;
+      managedLaunchGuided = state.managedLaunchGuided ?? null;
     }
 
     if (workflow && state) {
@@ -120,6 +150,16 @@ export default defineBackground(() => {
     const settings = await loadServerSettings();
     if (!isManaged(settings)) {
       stopManagedPoll();
+      if (managedLaunchId !== null || managedLaunchGuided !== null) {
+        managedLaunchId = null;
+        managedLaunchGuided = null;
+        if (state) {
+          delete state.managedLaunchId;
+          delete state.managedLaunchGuided;
+          await saveStateToStorage(state);
+        }
+        await refreshCurrentMode();
+      }
       return;
     }
     if (managedPoll) return;
@@ -144,13 +184,28 @@ export default defineBackground(() => {
         ) {
           // A launch different from the one we're running (teacher launched
           // or relaunched a case) → replace whatever is loaded with it.
+          const wfData = await fetchWorkflow(me.launch.workflowId);
+          const validation = validateWorkflowData(wfData);
+          if (!validation.valid) {
+            console.error(
+              '[SOCIA Background] Managed workflow rejected:',
+              formatWorkflowValidationIssues(validation.errors),
+            );
+            return;
+          }
+          const previousLaunchId = managedLaunchId;
+          const previousLaunchGuided = managedLaunchGuided;
           managedLaunchId = me.launch.launchId;
           managedLaunchGuided = me.launch.guided ?? true;
           await refreshCurrentMode();
-          const wfData = (await fetchWorkflow(me.launch.workflowId)) as WorkflowData;
-          if (wfData?.phases && wfData?.case) {
-            await loadWorkflow(wfData);
+          const loaded = await loadWorkflow(wfData);
+          if (loaded.success) {
             await reportProgress();
+          } else {
+            managedLaunchId = previousLaunchId;
+            managedLaunchGuided = previousLaunchGuided;
+            await refreshCurrentMode();
+            console.error('[SOCIA Background] Managed workflow rejected:', loaded.error);
           }
         } else if (!me.launch && managedLaunchId) {
           // Teacher closed/stopped the case → stop the student.
@@ -214,7 +269,7 @@ export default defineBackground(() => {
   async function handleMessage(msg: Record<string, unknown>) {
     switch (msg.type) {
       case 'SOCIA_LOAD_WORKFLOW':
-        return await loadWorkflow(msg.workflow as WorkflowData);
+        return await loadWorkflow(msg.workflow);
       case 'SOCIA_GET_STATE':
         return getStateResponse();
       case 'SOCIA_RESET_CASE':
@@ -260,17 +315,31 @@ export default defineBackground(() => {
 
   // ──────────────── Workflow Management ────────────────
 
-  async function loadWorkflow(w: WorkflowData) {
+  async function loadWorkflow(value: unknown) {
+    const validation = validateWorkflowData(value);
+    if (!validation.valid) {
+      return {
+        success: false,
+        error: `Workflow no válido:\n${formatWorkflowValidationIssues(validation.errors)}`,
+      };
+    }
+    const w = value as WorkflowData;
     workflow = w;
     state = createInitialState(w);
+    if (managedLaunchId) {
+      state.managedLaunchId = managedLaunchId;
+      state.managedLaunchGuided = managedLaunchGuided ?? true;
+    }
     trace = [];
     hintEvents = [];
     networkTrace = [];
+    pendingFinish = null;
     clearHintHistory();
     await saveWorkflowToStorage(w);
     await saveStateToStorage(state);
     await clearTrace();
     await clearHintEvents();
+    await clearPendingFinish();
     await refreshCurrentMode();
     broadcastStateChange();
     return { success: true };
@@ -302,26 +371,34 @@ export default defineBackground(() => {
       currentPhase,
       currentPhaseIndex: state.currentPhaseIndex,
       totalPhases: workflow.phases.length,
-      elapsedSeconds: getElapsedSeconds(state),
+      elapsedSeconds: pendingFinish?.traceExport.session.duration_seconds ?? getElapsedSeconds(state),
       traceLength: trace.length,
       networkEventCount: networkTrace.length,
       mode: currentMode,
       completedMilestones: state.completedMilestones,
       milestoneStatus,
       isFinishing,
+      finishError: pendingFinish?.error ?? null,
+      canRetryEvaluation: Boolean(pendingFinish?.error),
     };
   }
 
   async function resetCase() {
     if (!workflow) return { success: false, error: 'No workflow loaded' };
     state = createInitialState(workflow);
+    if (managedLaunchId) {
+      state.managedLaunchId = managedLaunchId;
+      state.managedLaunchGuided = managedLaunchGuided ?? true;
+    }
     trace = [];
     hintEvents = [];
     networkTrace = [];
+    pendingFinish = null;
     clearHintHistory();
     await saveStateToStorage(state);
     await clearTrace();
     await clearHintEvents();
+    await clearPendingFinish();
     broadcastStateChange();
     return { success: true };
   }
@@ -336,8 +413,10 @@ export default defineBackground(() => {
     trace = [];
     hintEvents = [];
     networkTrace = [];
+    pendingFinish = null;
     lastReportedMilestoneCount = -1;
     lastReportedHintCount = -1;
+    await clearPendingFinish();
     broadcastStateChange();
   }
 
@@ -348,53 +427,56 @@ export default defineBackground(() => {
     isFinishing = true;
     broadcastStateChange();
     try {
-    const evaluate = opts.evaluate !== false;
-    let result: {
-      success: boolean;
-      evaluationSucceeded?: boolean;
-      error?: string;
-      managed?: boolean;
-      evalId?: string;
-      pdfAvailable?: boolean;
-      grade?: number;
-    } = { success: true };
-
-    const settings = await loadServerSettings();
-    const managed = isManaged(settings) && !!managedLaunchId;
-
-    if (managed && workflow && state) {
-      // Managed mode always evaluates — the "no evaluar" branch is standalone-only.
-      try {
-        const exportData = buildTraceExport(workflow, state, trace, hintEvents, currentMode);
-        const r = await postEvaluation({
-          launchId: managedLaunchId!,
-          workflow,
-          traceExport: exportData,
-        });
-        await reportProgress('finished');
-        result = {
-          success: true,
-          evaluationSucceeded: !r.error,
-          managed: true,
-          evalId: r.evalId,
-          grade: r.grade,
-          pdfAvailable: r.pdfAvailable,
-          error: r.error,
-        };
-      } catch (err) {
-        result = {
-          success: true,
-          evaluationSucceeded: false,
-          managed: true,
-          error: err instanceof Error ? err.message : String(err),
-        };
+      const requestedEvaluation = opts.evaluate !== false;
+      if (!workflow || !state) {
+        return { success: false, error: 'No workflow loaded' };
       }
-    } else if (workflow && state && trace.length > 0) {
+
+      const settings = await loadServerSettings();
+      const managed = isManaged(settings) && !!managedLaunchId;
+      const evaluate = managed || requestedEvaluation;
+      const exportData = pendingFinish?.traceExport
+        ?? buildTraceExport(workflow, state, trace, hintEvents, currentMode);
+
+      if (evaluate && !pendingFinish) {
+        pendingFinish = {
+          submissionId: globalThis.crypto.randomUUID(),
+          traceExport: exportData,
+          error: '',
+        };
+        await savePendingFinish(pendingFinish);
+      }
+
+      let result: {
+        success: boolean;
+        evaluationSucceeded?: boolean;
+        error?: string;
+        managed?: boolean;
+        evalId?: string;
+        pdfAvailable?: boolean;
+        grade?: number;
+      };
+
       try {
-        const exportData = buildTraceExport(workflow, state, trace, hintEvents, currentMode);
-        if (evaluate) {
-          const localSettings = await loadServerSettings();
-          const brand = getBrand(localSettings.standaloneBrandId);
+        if (managed) {
+          const response = await postEvaluation({
+            submissionId: pendingFinish!.submissionId,
+            launchId: managedLaunchId!,
+            workflow,
+            traceExport: exportData,
+          });
+          if (response.error) throw new Error(response.error);
+          await reportProgress('finished');
+          result = {
+            success: true,
+            evaluationSucceeded: true,
+            managed: true,
+            evalId: response.evalId,
+            grade: response.grade,
+            pdfAvailable: response.pdfAvailable,
+          };
+        } else if (evaluate) {
+          const brand = getBrand(settings.standaloneBrandId);
           const finish = await finishAndDownload(workflow, exportData, brand);
           result = {
             success: true,
@@ -402,46 +484,49 @@ export default defineBackground(() => {
             error: finish.error,
           };
         } else {
-          // Sin evaluación: solo descargamos la traza (no se llama al LLM
-          // ni se genera PDF). Útil cuando el alumno quiere cerrar el caso
-          // sin gastar una llamada de evaluación.
           await downloadTraceExport(exportData);
-          result = {
-            success: true,
-            evaluationSucceeded: false,
-          };
+          result = { success: true, evaluationSucceeded: false };
         }
       } catch (err) {
         console.error('[SOCIA Background] Finish error:', err);
         result = {
-          success: false,
+          success: evaluate,
           evaluationSucceeded: false,
+          managed,
           error: err instanceof Error ? err.message : String(err),
         };
       }
-    }
 
-    // Always clear session state, even if download/evaluation failed —
-    // the student pressed Terminar, so the case is done.
-    await clearAllFromStorage();
-    await clearTrace();
-    await clearHintEvents();
-    state = null;
-    workflow = null;
-    trace = [];
-    hintEvents = [];
-    networkTrace = [];
-    // Remember the launch we just finished so the next managed-poll tick
-    // doesn't re-load it before the server has registered our `finished`
-    // progress row. Cleared by the tick when server reports freshLaunch=true
-    // for the same id (i.e. teacher pressed "Volver a lanzar").
-    if (managedLaunchId) recentlyFinishedLaunchId = managedLaunchId;
-    managedLaunchId = null;
-    managedLaunchGuided = null;
-    await refreshCurrentMode();
-    lastReportedMilestoneCount = -1;
-    lastReportedHintCount = -1;
-    return result;
+      if (evaluate && result.evaluationSucceeded !== true) {
+        const error = result.error || 'No se pudo generar la evaluación.';
+        pendingFinish = {
+          submissionId: pendingFinish!.submissionId,
+          traceExport: exportData,
+          error,
+        };
+        await savePendingFinish(pendingFinish);
+        broadcastStateChange();
+        return { ...result, success: true, error };
+      }
+      if (!result.success) return result;
+
+      await clearAllFromStorage();
+      await clearTrace();
+      await clearHintEvents();
+      await clearPendingFinish();
+      state = null;
+      workflow = null;
+      trace = [];
+      hintEvents = [];
+      networkTrace = [];
+      pendingFinish = null;
+      if (managedLaunchId) recentlyFinishedLaunchId = managedLaunchId;
+      managedLaunchId = null;
+      managedLaunchGuided = null;
+      await refreshCurrentMode();
+      lastReportedMilestoneCount = -1;
+      lastReportedHintCount = -1;
+      return result;
     } finally {
       isFinishing = false;
       broadcastStateChange();
@@ -451,15 +536,15 @@ export default defineBackground(() => {
   // ──────────────── Action Recording ────────────────
 
   async function handleAction(action: StudentAction) {
-    if (!state || !workflow) return { success: false };
-    trace = appendAction(trace, action);
+    if (!state || !workflow || pendingFinish) return { success: false };
+    await appendAction(trace, action);
     return { success: true };
   }
 
   // ──────────────── Network Event Processing ────────────────
 
   async function handleNetworkEvent(event: StudentNetworkEvent) {
-    if (!state || !workflow) return { success: false };
+    if (!state || !workflow || pendingFinish) return { success: false };
 
     // Store network event
     networkTrace.push(event);

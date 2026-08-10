@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import type { WorkflowData, WorkflowPhase, SociaState } from '@socia/eval';
+import {
+  assertWorkflowData,
+  type WorkflowData,
+  type WorkflowPhase,
+  type SociaState,
+} from '@socia/eval';
 import {
   loadServerSettings,
   isManaged as isManagedSettings,
@@ -28,6 +33,8 @@ interface StateResponse {
   completedMilestones?: string[];
   milestoneStatus?: Record<string, boolean>;
   isFinishing?: boolean;
+  finishError?: string | null;
+  canRetryEvaluation?: boolean;
   error?: string;
 }
 
@@ -123,10 +130,7 @@ export default function App() {
     setError(null);
     try {
       const text = await file.text();
-      const workflowData: WorkflowData = JSON.parse(text);
-      if (!workflowData.phases || !workflowData.case) {
-        throw new Error('Formato de workflow no válido');
-      }
+      const workflowData = assertWorkflowData(JSON.parse(text));
       const resp = await sendMessage<{ success: boolean; error?: string }>({
         type: 'SOCIA_LOAD_WORKFLOW',
         workflow: workflowData,
@@ -176,13 +180,17 @@ export default function App() {
       }>({ type: 'SOCIA_FINISH_CASE', evaluate });
       if (!resp.success) {
         setError(resp.error || 'Error terminando el caso');
+        await fetchState();
+        return;
       } else if (resp.evaluationSucceeded === false && evaluate) {
         setError(
           resp.managed
-            ? 'La evaluación se enviará en cuanto el servidor esté disponible.'
+            ? `No se pudo enviar la evaluación. ${resp.error || ''}`.trim()
             : 'La evaluación automática falló, pero se ha descargado la traza. ' +
                 (resp.error || ''),
         );
+        await fetchState();
+        return;
       } else if (resp.managed) {
         setFinishedSummary({
           grade: resp.grade,
@@ -190,12 +198,14 @@ export default function App() {
           evalId: resp.evalId,
         });
       }
+      setStateResp(null);
+      setElapsedSeconds(0);
     } catch (err) {
       setError(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      await fetchState();
+    } finally {
+      setIsLoading(false);
     }
-    setStateResp(null);
-    setElapsedSeconds(0);
-    setIsLoading(false);
   };
 
   const downloadServerPdf = async () => {
@@ -344,6 +354,8 @@ export default function App() {
 
   const currentPhaseIndex = stateResp?.currentPhaseIndex ?? 0;
   const totalCompleted = stateResp?.completedMilestones?.length ?? 0;
+  const finishError = error || stateResp?.finishError;
+  const canRetryEvaluation = stateResp?.canRetryEvaluation ?? false;
   const totalMilestones = workflow.phases.reduce(
     (sum, p) => sum + p.milestones.length,
     0
@@ -367,7 +379,7 @@ export default function App() {
       </header>
 
       <div className="socia-body">
-        {error && <div className="socia-error">{error}</div>}
+        {finishError && <div className="socia-error">{finishError}</div>}
 
         {/* Live card: timer + stats */}
         <div className="live-card">
@@ -474,13 +486,23 @@ export default function App() {
           </div>
         )}
 
-        <button
-          className="btn btn-danger btn-block"
-          onClick={handleFinishClick}
-          disabled={isLoading || isFinishing}
-        >
-          {isFinishing ? 'Evaluando…' : 'Terminar'}
-        </button>
+        {canRetryEvaluation ? (
+          <button
+            className="btn btn-danger btn-block"
+            onClick={() => void runFinish(true)}
+            disabled={isLoading || isFinishing}
+          >
+            {isFinishing ? 'Evaluando…' : 'Reintentar evaluación'}
+          </button>
+        ) : (
+          <button
+            className="btn btn-danger btn-block"
+            onClick={handleFinishClick}
+            disabled={isLoading || isFinishing}
+          >
+            {isFinishing ? 'Evaluando…' : 'Terminar'}
+          </button>
+        )}
       </div>
 
       {showFinishModal && (

@@ -21,7 +21,15 @@ export default defineConfig({
         description:
           'Herramienta para que estudiantes ejecuten y validen casos SOC prácticos con verificación automática',
         version: '1.0.0',
-        permissions: ['storage', 'tabs', 'activeTab', 'webNavigation', 'downloads', 'scripting'],
+        permissions: [
+          'storage',
+          'unlimitedStorage',
+          'tabs',
+          'activeTab',
+          'webNavigation',
+          'downloads',
+          'scripting',
+        ],
         host_permissions: ['<all_urls>'],
         action: {
           default_title: 'SOCIA',

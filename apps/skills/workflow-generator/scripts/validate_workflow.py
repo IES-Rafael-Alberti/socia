@@ -26,9 +26,9 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
 # ── Schema ─────────────────────────────────────────────────────────
@@ -40,56 +40,68 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+NonEmptyStr = Annotated[str, Field(min_length=1)]
+NonEmptyStrList = Annotated[list[NonEmptyStr], Field(min_length=1)]
+
+
 class NetworkSignature(_Strict):
-    method: str | list[str]
-    url_contains: str | list[str]
-    host_contains: str
+    method: NonEmptyStr | NonEmptyStrList
+    url_contains: NonEmptyStr | NonEmptyStrList
+    host_contains: NonEmptyStr
     response_status: list[int] = Field(min_length=1)
-    request_body_contains: str | list[str] | None = None
-    response_body_contains: str | list[str] | None = None
+    request_body_contains: NonEmptyStr | NonEmptyStrList | None = None
+    response_body_contains: NonEmptyStr | NonEmptyStrList | None = None
 
 
 class Milestone(_Strict):
-    id: str
-    label: str
-    network_signature: NetworkSignature
-    depends_on: list[str] | None = None
-    after_milestone: str | None = None
+    id: NonEmptyStr
+    label: NonEmptyStr
+    network_signature: NetworkSignature | None = None
+    network_signatures: list[NetworkSignature] | None = Field(default=None, min_length=1)
+    depends_on: list[NonEmptyStr] | None = None
+    after_milestone: NonEmptyStr | None = None
     match_mode: Literal["all", "any_of_body"] | None = None
-    hint_examples: list[str] | None = None
+    hint_examples: list[NonEmptyStr] | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_signature_form(self) -> "Milestone":
+        if (self.network_signature is None) == (self.network_signatures is None):
+            raise ValueError(
+                "use exactly one of network_signature or network_signatures"
+            )
+        return self
 
 
 class Phase(_Strict):
-    id: str
-    title: str
-    description: str
-    role: str | None = None
+    id: NonEmptyStr
+    title: NonEmptyStr
+    description: NonEmptyStr
+    role: NonEmptyStr | None = None
     order: int
-    tool_hosts: list[str]
-    milestones: list[Milestone]
+    tool_hosts: NonEmptyStrList
+    milestones: list[Milestone] = Field(min_length=1)
 
 
 class Case(_Strict):
-    id: str
-    title: str
-    description: str
-    difficulty: str | None = None
-    estimated_minutes: int | None = None
-    title_template: str | None = None
+    id: NonEmptyStr
+    title: NonEmptyStr
+    description: NonEmptyStr
+    difficulty: NonEmptyStr | None = None
+    estimated_minutes: int | None = Field(default=None, gt=0)
+    title_template: NonEmptyStr | None = None
 
 
 class Context(_Strict):
-    tools: dict[str, str]
-    pedagogy: dict[str, str]
+    tools: dict[str, NonEmptyStr]
+    pedagogy: dict[str, NonEmptyStr]
     notes: str
 
 
 class Workflow(_Strict):
     case: Case
-    variables: dict[str, str]
+    variables: dict[str, NonEmptyStr]
     context: Context
-    phases: list[Phase]
-    per_student_ports: list[str] | None = None
+    phases: list[Phase] = Field(min_length=1)
 
 
 # ── Semantic checks ────────────────────────────────────────────────
@@ -232,20 +244,7 @@ def semantic_checks(wf: Workflow, raw: dict) -> tuple[list[str], list[str]]:
                 f"context.pedagogy: missing entry for phase `{pid}`"
             )
 
-    # 6. per_student_ports references variables in IP:PORT format.
-    if wf.per_student_ports:
-        for name in wf.per_student_ports:
-            if name not in var_names:
-                errors.append(
-                    f"per_student_ports: variable `{name}` not defined in `variables`"
-                )
-            elif ":" not in wf.variables[name]:
-                warnings.append(
-                    f"per_student_ports: `{name}`=`{wf.variables[name]}` "
-                    f"has no base port (expected IP:PORT)"
-                )
-
-    # 7. `case.mode` is forbidden (already caught by `extra=forbid`, but we
+    # 6. `case.mode` is forbidden (already caught by `extra=forbid`, but we
     # surface a specific message in case it slips through a partial validation).
     if isinstance(raw.get("case"), dict) and "mode" in raw["case"]:
         errors.append(

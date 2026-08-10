@@ -36,8 +36,13 @@ export interface Milestone {
   id: string;
   /** Human-readable label (shown in guided mode UI). Supports {{variables}}. */
   label: string;
-  /** The HTTP request that verifies this milestone */
-  network_signature: NetworkSignature;
+  /** One request that verifies this milestone. Use this or network_signatures. */
+  network_signature?: NetworkSignature;
+  /**
+   * Alternative complete requests. Array = OR between signatures.
+   * Use this or network_signature, never both.
+   */
+  network_signatures?: NetworkSignature[];
   /** Same-phase milestone IDs that must be completed first */
   depends_on?: string[];
   /** Cross-phase dependency: milestone ID from a previous phase */
@@ -90,6 +95,8 @@ export interface WorkflowContext {
 export interface WorkflowCase {
   id: string;
   title: string;
+  /** Server-managed copy of the original title with {{variables}}. Generators should omit it. */
+  title_template?: string;
   description: string;
   difficulty?: string;
   estimated_minutes?: number;
@@ -185,12 +192,12 @@ The matcher (`network-matcher.ts`) processes each network event as follows:
 1. Iterates ALL phases and ALL milestones (not just the current phase)
 2. Skips already-completed milestones
 3. Checks dependencies (`depends_on` + `after_milestone`) — skips if not met
-4. For each pending, dependency-satisfied milestone, checks the signature:
+4. For each pending, dependency-satisfied milestone, checks its signature or complete signature alternatives:
    - `method`: case-insensitive match, any of array
    - `host_contains`: interpolated, case-insensitive substring
    - `url_contains`: interpolated, case-insensitive substring. Array = OR.
    - `response_status`: exact match, any of array
    - `request_body_contains`: interpolated, case-insensitive. String = substring. Array + `all` = AND. Array + `any_of_body` = OR.
    - `response_body_contains`: same as request_body_contains
-5. If all checks pass → milestone is completed
+5. If every check in one complete signature passes → milestone is completed
 6. Newly completed milestones are immediately visible to subsequent milestones in the same event loop (a single network event can cascade-complete multiple milestones)

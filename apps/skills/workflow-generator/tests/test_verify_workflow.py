@@ -1,0 +1,143 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+
+
+SCRIPT = Path(__file__).parents[1] / "scripts" / "verify_workflow.py"
+SPEC = importlib.util.spec_from_file_location("verify_workflow", SCRIPT)
+assert SPEC and SPEC.loader
+verify_workflow = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = verify_workflow
+SPEC.loader.exec_module(verify_workflow)
+
+
+def workflow(body_pattern: str = "needle") -> dict:
+    return {
+        "case": {"id": "test", "title": "Test", "description": "Test"},
+        "variables": {"host": "example.test"},
+        "context": {"tools": {}, "pedagogy": {"phase": "Test"}, "notes": ""},
+        "phases": [
+            {
+                "id": "phase",
+                "title": "Phase",
+                "description": "Test",
+                "order": 1,
+                "tool_hosts": ["{{host}}"],
+                "milestones": [
+                    {
+                        "id": "first",
+                        "label": "First",
+                        "network_signature": {
+                            "method": "POST",
+                            "url_contains": ["/wrong", "/first"],
+                            "host_contains": "{{host}}",
+                            "response_status": [201],
+                            "request_body_contains": body_pattern,
+                        },
+                    },
+                    {
+                        "id": "second",
+                        "label": "Second",
+                        "depends_on": ["first"],
+                        "network_signature": {
+                            "method": "PATCH",
+                            "url_contains": "/second",
+                            "host_contains": "{{host}}",
+                            "response_status": [204],
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+
+
+def events(redactions: list[str] | None = None) -> list[dict]:
+    return [
+        {
+            "t": 10,
+            "method": "POST",
+            "url": "https://example.test/first",
+            "host": "example.test",
+            "status": 201,
+            "requestBody": '{"value":"needle"}',
+            "responseBody": "{}",
+            "requestBodyRedactions": redactions or [],
+            "responseBodyRedactions": [],
+            "outcome": "completed",
+        },
+        {
+            "t": 20,
+            "method": "PATCH",
+            "url": "https://example.test/second",
+            "host": "example.test",
+            "status": 204,
+            "requestBody": None,
+            "responseBody": None,
+            "requestBodyRedactions": [],
+            "responseBodyRedactions": [],
+            "outcome": "completed",
+        },
+    ]
+
+
+class VerifyWorkflowTests(unittest.TestCase):
+    def test_matches_url_arrays_as_or_and_replays_dependencies(self) -> None:
+        data = workflow()
+        milestones = verify_workflow.milestone_list(data)
+        self.assertTrue(verify_workflow.matches(events()[0], milestones[0], data["variables"]))
+
+        completed: set[str] = set()
+        for event in events():
+            for milestone in milestones:
+                if milestone["id"] not in completed and verify_workflow.dependencies_met(
+                    milestone, completed
+                ) and verify_workflow.matches(event, milestone, data["variables"]):
+                    completed.add(milestone["id"])
+        self.assertEqual(completed, {"first", "second"})
+
+    def test_reads_a_mentora_zip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive_path = Path(directory) / "recording.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("recording/network-log.json", json.dumps(events()))
+                archive.writestr("recording/metadata.json", json.dumps({"captureWarnings": []}))
+            capture = verify_workflow.load_capture(archive_path)
+        self.assertEqual(len(capture.events), 2)
+        self.assertEqual(capture.metadata, {"captureWarnings": []})
+
+    def test_finds_redacted_fields_used_by_a_signature(self) -> None:
+        event = events(["$.password"])[0]
+        self.assertEqual(verify_workflow.redacted_fields(event, "request"), {"password"})
+        self.assertEqual(verify_workflow.pattern_names('"password"'), {"password"})
+
+    def test_matches_any_complete_signature_alternative(self) -> None:
+        data = workflow()
+        current = data["phases"][0]["milestones"][0]
+        single = current.pop("network_signature")
+        current["network_signatures"] = [
+            {
+                "method": "GET",
+                "url_contains": "/current-user",
+                "host_contains": "{{host}}",
+                "response_status": [200],
+            },
+            single,
+        ]
+
+        self.assertTrue(verify_workflow.matches(events()[0], current, data["variables"]))
+        self.assertFalse(
+            verify_workflow.matches_signature(
+                events()[0], current["network_signatures"][0], current, data["variables"]
+            )
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

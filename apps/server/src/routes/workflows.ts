@@ -6,17 +6,18 @@ import { db } from '../db.js';
 import { requireAdmin } from '../auth.js';
 import { config } from '../config.js';
 import { uid } from '../util.js';
+import { assertWorkflowData } from '@socia/eval';
 
 export const workflowsRouter = Router();
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 function parseAndStore(rawJson: string, originalName: string) {
-  let parsed: any;
+  let parsed;
   try {
-    parsed = JSON.parse(rawJson);
-  } catch {
-    throw new Error('invalid_json');
+    parsed = assertWorkflowData(JSON.parse(rawJson));
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : 'invalid_workflow');
   }
   const id = uid('wf_');
   const filename = `${id}.json`;
@@ -39,30 +40,12 @@ function parseAndStore(rawJson: string, originalName: string) {
   }
   fs.writeFileSync(dst, JSON.stringify(parsed, null, 2));
 
-  const title =
-    (typeof parsed?.case?.title === 'string' && parsed.case.title) ||
-    (typeof parsed.title === 'string' && parsed.title) ||
-    (typeof parsed.name === 'string' && parsed.name) ||
-    originalName.replace(/\.json$/i, '');
-  const minutes =
-    typeof parsed.minutes === 'number'
-      ? parsed.minutes
-      : typeof parsed.estimatedMinutes === 'number'
-        ? parsed.estimatedMinutes
-        : null;
-  const phases = Array.isArray(parsed.phases) ? parsed.phases.length : null;
-  const steps = Array.isArray(parsed.phases)
-    ? parsed.phases.reduce(
-        (acc: number, p: any) => acc + (Array.isArray(p?.milestones) ? p.milestones.length : 0),
-        0,
-      ) || null
-    : Array.isArray(parsed.milestones)
-      ? parsed.milestones.length
-      : Array.isArray(parsed.steps)
-        ? parsed.steps.length
-        : null;
-  const tools = Array.isArray(parsed.tools) ? parsed.tools.join(',') : null;
-  const difficulty = typeof parsed.difficulty === 'string' ? parsed.difficulty : null;
+  const title = parsed.case.title || originalName.replace(/\.json$/i, '');
+  const minutes = parsed.case.estimated_minutes ?? null;
+  const phases = parsed.phases.length;
+  const steps = parsed.phases.reduce((acc, phase) => acc + phase.milestones.length, 0);
+  const tools = Object.keys(parsed.context.tools).join(',') || null;
+  const difficulty = parsed.case.difficulty ?? null;
   const finalSize = fs.statSync(dst).size;
   db.prepare(
     `INSERT INTO workflows (id, title, filename, size, minutes, steps, phases, difficulty, tools, uploaded_at)
@@ -168,8 +151,8 @@ workflowsRouter.get('/:id/variables', (req, res) => {
 /**
  * Overwrite the variables block of a workflow. Validates that every
  * incoming key already existed (you can't add new variables here, only
- * change values) and that values are strings — otherwise we'd silently
- * break interpolation in the case body.
+ * change values) and that values are non-empty strings. The full workflow is
+ * checked again before it is saved.
  */
 workflowsRouter.put('/:id/variables', (req, res) => {
   const wf = db.prepare('SELECT filename FROM workflows WHERE id = ?').get(req.params.id) as
@@ -199,8 +182,8 @@ workflowsRouter.put('/:id/variables', (req, res) => {
   const next: Record<string, string> = {};
   for (const [k, v] of Object.entries(incoming as Record<string, unknown>)) {
     if (!knownKeys.has(k)) continue; // ignore unknown keys silently
-    if (typeof v !== 'string') {
-      res.status(400).json({ error: 'variable_must_be_string', key: k });
+    if (typeof v !== 'string' || v.length === 0) {
+      res.status(400).json({ error: 'variable_must_be_non_empty_string', key: k });
       return;
     }
     next[k] = v;
@@ -238,6 +221,15 @@ workflowsRouter.put('/:id/variables', (req, res) => {
           Object.prototype.hasOwnProperty.call(next, key) ? next[key] : _m,
       );
     }
+  }
+
+  try {
+    assertWorkflowData(parsed);
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : 'invalid_workflow',
+    });
+    return;
   }
 
   fs.writeFileSync(filePath, JSON.stringify(parsed, null, 2));

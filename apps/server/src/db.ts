@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS progress (
 
 CREATE TABLE IF NOT EXISTS evaluations (
   id TEXT PRIMARY KEY,
+  submission_id TEXT,
   student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   launch_id TEXT NOT NULL REFERENCES launches(id) ON DELETE CASCADE,
   workflow_title TEXT NOT NULL,
@@ -106,6 +107,18 @@ try {
 } catch {
   // Column already exists — ignore.
 }
+
+try {
+  db.exec('ALTER TABLE evaluations ADD COLUMN submission_id TEXT');
+} catch {
+  // Column already exists — ignore.
+}
+
+db.exec(`
+CREATE UNIQUE INDEX IF NOT EXISTS idx_evals_submission
+ON evaluations(student_id, launch_id, submission_id)
+WHERE submission_id IS NOT NULL;
+`);
 
 // First-run admin token
 function ensureAdminToken(): string {

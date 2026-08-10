@@ -19,3 +19,4 @@ export * from './server-client';
 export * from './server-settings';
 export * from './trace-export';
 export * from './finish-bundle';
+export * from './pending-finish';

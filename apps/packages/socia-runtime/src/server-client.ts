@@ -116,6 +116,7 @@ export async function requestHintFromServer(payload: {
 }
 
 export async function postEvaluation(payload: {
+  submissionId: string;
   launchId: string;
   workflow: unknown;
   traceExport: unknown;
@@ -124,7 +125,10 @@ export async function postEvaluation(payload: {
     method: 'POST',
     body: JSON.stringify(payload),
   });
-  if (!r.ok) throw new Error('evaluation_failed');
+  if (!r.ok) {
+    const body = (await r.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error || 'evaluation_failed');
+  }
   return r.json();
 }
 

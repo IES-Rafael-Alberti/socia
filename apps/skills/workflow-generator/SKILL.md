@@ -144,7 +144,7 @@ If multiple tools are used within the same logical step (e.g., investigating in 
 
 ### 3. Create milestones from network requests
 
-For each significant action, create a milestone. The `network_signature` must match the actual request from the network log.
+For each significant action, create a milestone. Use `network_signature` when one request proves it. Use `network_signatures` when several complete requests can prove the same result. Every signature must match an actual request from the network log.
 
 #### How to write a good network_signature
 
@@ -166,6 +166,45 @@ The matcher checks these fields **in order** — all must pass:
 - **Discriminate the correct entity on generic endpoints.** When a milestone represents "view details of X" and the endpoint returns data for any entity of that type (any alert, any case, any observable), add `response_body_contains` with an identifier of the correct entity — typically `{{alert_title}}`, the case name, or the observable value. Without this, opening *any* entity of the same type would complete the milestone. This is especially important for TheHive's `/api/v1/query` endpoint, which returns different entities depending on the query body but always has the same URL pattern.
 - **Bodies are limited to 16 KiB** in both MENTORA and SOCIA. Check the truncation fields before relying on body text.
 - **Never match `[REDACTED]` or a redacted field.** Choose another stable path, status or non-secret body value. MENTORA and SOCIA apply the same cleaning rules, so a retained value can be compared in both extensions.
+- **Use complete alternatives for states with several valid paths.** `network_signatures` is an OR between full signatures. SOCIA never mixes the method or URL from one alternative with the body from another.
+
+#### Sessions that may already be open
+
+Do not require the student to log in again when the learning goal is to use an authenticated tool. Define the milestone as access with a valid session and use complete alternatives when the capture supports them:
+
+1. The successful login request.
+2. A successful current-user or session-restoration request.
+3. The first protected request made while doing the next task, but only when it also proves the expected identity or the exercise does not distinguish users.
+
+The third option lets SOCIA complete the access milestone and the next milestone from the same event. This covers a tab that was already open before the workflow started. Do not use it across role changes unless the request or response identifies the new user. Keep tool-specific routes in the workflow JSON; never require special logic in the SOCIA extension.
+
+```json
+{
+  "id": "access-tool",
+  "label": "Acceder a la herramienta con una sesión válida",
+  "network_signatures": [
+    {
+      "method": "POST",
+      "url_contains": "/login",
+      "host_contains": "{{tool_host}}",
+      "response_status": [200]
+    },
+    {
+      "method": "GET",
+      "url_contains": "/current-user",
+      "host_contains": "{{tool_host}}",
+      "response_status": [200]
+    },
+    {
+      "method": "POST",
+      "url_contains": "/api/protected-query",
+      "host_contains": "{{tool_host}}",
+      "response_status": [200],
+      "request_body_contains": "{{case_marker}}"
+    }
+  ]
+}
+```
 
 ### 4. Define dependencies
 
@@ -215,10 +254,11 @@ Use `{{variables}}` in hints so they adapt to the case. The hint LLM uses these 
 
 ### 8. Validate the workflow
 
-Run the validator script. It enforces the schema **strictly** (rejects undeclared fields — catches typos like `network_match`, `hints_examples`, `methods`) and checks semantic invariants. Any error is blocking: iterate until it passes. Warnings are quality recommendations; address them when you can.
+Run both scripts. The first enforces the schema **strictly** (rejects undeclared fields — catches typos like `network_match`, `hints_examples`, `methods`) and checks semantic invariants. The second applies every signature to the MENTORA capture and then replays the events in time order with dependencies enabled. Any error is blocking: iterate until both pass. Warnings are quality recommendations; address them when you can.
 
 ```bash
 uv run apps/skills/workflow-generator/scripts/validate_workflow.py path/to/workflow.json
+uv run apps/skills/workflow-generator/scripts/verify_workflow.py path/to/workflow.json path/to/mentora-recording.zip
 ```
 
 What it covers:
@@ -228,16 +268,19 @@ What it covers:
 - **Dependencies**: `depends_on` references milestones in the **same phase**; `after_milestone` references milestones in an **earlier phase** (lower `order`); no cycles.
 - **Uniqueness**: `phase.id`, `phase.order`, and `milestone.id` unique across the whole workflow.
 - **Pedagogy**: keys of `context.pedagogy` correspond to `phase.id` values.
-- **Per-student**: if `per_student_ports` is present, every listed name exists in `variables`.
 - **(Warning) `case.title`** uses `{{variables}}` so the panel re-interpolates it on edit (otherwise the title stays frozen).
 - **(Warning) `tool_hosts` and `hint_examples`** use host variables (`{{thehive_host}}`, `{{graylog_host}}`) instead of literal IPs — IPs change.
 - **(Warning) `hint_examples`** follows the convention of 3 hints, least to most directive.
 
-Things the **validator cannot check** that you must ensure when designing:
+The capture verifier checks:
 
-- Each `network_signature` maps to at least one real request from `network-log.json`.
+- Each `network_signature` and every entry in `network_signatures` maps to at least one real request from `network-log.json`.
 - No signature uses `[REDACTED]` or a path listed in a `*Redactions` field.
 - Capture warnings and dropped-event counters are reported with the verification result.
+- Dependencies allow every milestone to complete when the events are replayed in time order.
+
+Things the scripts cannot judge for you:
+
 - Milestones that detect "viewing details" of an entity (alert, case, observable) include a `response_body_contains` with a discriminating value (`{{alert_title}}`, victim host, observable value) to avoid false positives when the student opens a different entity of the same type.
 
 ## Common patterns and examples
@@ -297,14 +340,14 @@ Note: `response_body_contains` with `{{alert_title}}` ensures only the correct a
   "label": "Buscar logs de fuerza bruta por IP origen",
   "network_signature": {
     "method": "POST",
-    "url_contains": ["/api/views/search/", "/execute"],
+    "url_contains": "/api/views/search",
     "host_contains": "{{graylog_host}}",
     "response_status": [200, 201],
-    "request_body_contains": "{{attacker_ip}}"
+    "request_body_contains": ["{{attacker_ip}}", "{{rule_ids}}"]
   }
 }
 ```
-Note: `url_contains` is an array here because Graylog's search URL has a structure like `/api/views/search/{id}/messages/{id}/execute`. Using two fragments ensures the URL is specific enough — any one matching is sufficient (the matcher treats URL arrays as OR).
+Note: this milestone matches the request that creates the search. Its path and query are present in the same event. Do not combine the body of one request with the path of a later execution request. A `url_contains` array means OR, not AND.
 
 ### Parallel branches
 ```json

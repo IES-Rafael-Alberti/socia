@@ -37,8 +37,14 @@ export interface Milestone {
   id: string;
   /** Human-readable label (shown in guided mode UI) */
   label: string;
-  /** The HTTP request that verifies this milestone */
-  network_signature: NetworkSignature;
+  /** The HTTP request that verifies this milestone (legacy/single form). */
+  network_signature?: NetworkSignature;
+  /**
+   * Alternative complete requests that can verify the same milestone.
+   * SOCIA uses OR between entries and requires every condition inside the
+   * selected signature. Use either this field or network_signature, not both.
+   */
+  network_signatures?: NetworkSignature[];
   /** Milestone IDs that must be completed before this one is evaluated */
   depends_on?: string[];
   /**
@@ -90,6 +96,8 @@ export interface WorkflowContext {
 export interface WorkflowCase {
   id: string;
   title: string;
+  /** Original title with {{variables}}; the server adds it when editing a workflow. */
+  title_template?: string;
   description: string;
   difficulty?: string;
   estimated_minutes?: number;
@@ -165,6 +173,9 @@ export interface SociaState {
   milestoneCompletedAt: Record<string, number>;
   /** Epoch ms when the student first entered each phase (keyed by phase id) */
   phaseEnteredAt: Record<string, number>;
+  /** Managed launch restored with the case after a service-worker restart. */
+  managedLaunchId?: string;
+  managedLaunchGuided?: boolean;
 }
 
 // ──────────────── Hint Event (for export timeline) ────────────────
