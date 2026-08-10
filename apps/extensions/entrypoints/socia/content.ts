@@ -13,6 +13,7 @@ import {
   shouldRelayNetworkCapture,
   type NetworkCaptureMessage,
 } from '../../utils/shared/network-capture';
+import { getEventElement } from '../../utils/shared/event-target';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -59,10 +60,12 @@ export default defineContentScript({
     document.addEventListener(
       'click',
       (event) => {
-        const target = event.target as HTMLElement;
+        const target = getEventElement(event);
         if (!target) return;
         const elementText =
-          target.innerText?.substring(0, 150) ||
+          (target instanceof HTMLElement
+            ? target.innerText?.substring(0, 150)
+            : target.textContent?.substring(0, 150)) ||
           target.getAttribute('aria-label') ||
           target.getAttribute('title') ||
           '';
@@ -84,8 +87,14 @@ export default defineContentScript({
     document.addEventListener(
       'input',
       (event) => {
-        const target = event.target as HTMLInputElement | HTMLTextAreaElement;
-        if (!target) return;
+        const target = getEventElement(event);
+        if (
+          !(target instanceof HTMLInputElement) &&
+          !(target instanceof HTMLTextAreaElement) &&
+          !(target instanceof HTMLSelectElement)
+        ) {
+          return;
+        }
         if (target instanceof HTMLInputElement && target.type === 'password') return;
 
         const existing = inputDebounce.get(target);
@@ -111,7 +120,8 @@ export default defineContentScript({
     document.addEventListener(
       'submit',
       (event) => {
-        const form = event.target as HTMLFormElement;
+        const form = getEventElement(event);
+        if (!(form instanceof HTMLFormElement)) return;
         sendAction({
           type: 'form_submit',
           url: window.location.href,
@@ -236,7 +246,7 @@ export default defineContentScript({
       chrome.runtime.sendMessage({ type: 'SOCIA_STUDENT_ACTION', action }).catch(() => {});
     }
 
-    function safeSelector(el: HTMLElement): string {
+    function safeSelector(el: Element): string {
       if (el.id) return `#${el.id}`;
       const tag = el.tagName?.toLowerCase() || 'unknown';
       const cls =
