@@ -1,12 +1,260 @@
 ---
-title: SOCIA Server — panel del centro
-description: Página en construcción.
+title: Panel web (gestión)
+description: Cómo poner en marcha el servidor de SOCIA y gestionar clases, casos, seguimiento y evaluaciones desde el panel.
 sidebar:
   order: 4
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import panelSeguimiento from '../../../assets/panel-seguimiento.png';
+import panelLogin from '../../../assets/panel-login.png';
+import panelInicio from '../../../assets/panel-inicio.png';
+import panelClases from '../../../assets/panel-clases.png';
+import panelProyectar from '../../../assets/panel-proyectar.png';
+import panelCasos from '../../../assets/panel-casos.png';
+import panelVariables from '../../../assets/panel-variables.png';
+import panelLanzar from '../../../assets/panel-lanzar.png';
+import panelEvaluaciones from '../../../assets/panel-evaluaciones.png';
 
-<Aside type="caution" title="En construcción">
-Esta página está en preparación. Mientras tanto, puedes consultar la **[web del proyecto](https://socia.fpciberseguridad.com/)** para una visión general de SOCIA.
+## Qué es el panel
+
+El panel web es la aplicación en la que el profesorado puede desplegar y monitorizar casos al alumnado. Se puede levantar en la misma infraestructura del SOC.
+
+Desde el panel se crean las clases, se suben los casos, se lanzan al alumnado y se consultan los informes. Mientras el alumnado resuelve, el panel muestra el avance de cada persona en tiempo real.
+
+<figure class="screenshot">
+  <Image src={panelSeguimiento} alt="Pestaña Seguimiento del panel con un caso activo, sus contadores y el progreso de cada estudiante" />
+  <figcaption>Un caso activo visto desde la pestaña Seguimiento.</figcaption>
+</figure>
+
+## Cómo ponerlo en marcha
+
+La forma recomendada es Docker. El archivo `docker-compose.yml` toma como contexto la carpeta `apps/`, así que hay que lanzarlo desde `apps/server`:
+
+```bash
+cd apps/server
+cp .env.example .env
+# edita .env: ADMIN_USER, ADMIN_PASS, SESSION_SECRET, OPENROUTER_API_KEY, BRAND_ID
+
+docker compose up -d
+```
+
+El panel queda levantado en `http://<ip-del-servidor>:4318`. Dentro del contenedor el servicio escucha en el 4317; el 4318 es el puerto que se publica.
+
+Los datos se almacenan en el volumen `socia-data`, montado en `/data`. Ahí se guardan la base SQLite, los casos subidos y los PDF de los informes. De esta forma son persistentes a los reinicios del servidor.
+
+Para trabajar sin Docker, desde `apps/`:
+
+```bash
+cd apps
+pnpm install
+cp server/.env.example server/.env
+pnpm --filter @socia/server build:panel   # genera panel/dist
+pnpm dev:server                           # servidor en :4317
+```
+
+Si además quieres modificar el panel y ver los cambios al momento, lanza en otra terminal `pnpm dev:server:panel`, que abre el panel en el puerto 5173 contra el servidor del 4317.
+
+<Aside type="caution" title="Antes de exponerlo">
+Cambia `ADMIN_USER`, `ADMIN_PASS` y `SESSION_SECRET` antes de dejar el servidor accesible. Los valores del archivo de ejemplo son públicos y `SESSION_SECRET` es lo que firma la cookie de sesión del panel.
 </Aside>
+
+## Entrar
+
+El panel pide usuario y contraseña. Son los valores de `ADMIN_USER` y `ADMIN_PASS` del archivo `.env`. No hay registro ni recuperación de contraseña: para cambiarlos se edita el `.env` y se reinicia el servidor.
+
+La sesión dura 30 días. **Cerrar sesión** está al final de la barra lateral.
+
+<figure class="screenshot">
+  <Image src={panelLogin} alt="Pantalla de acceso del docente al panel de SOCIA" />
+  <figcaption>Acceso al panel con las credenciales del archivo .env.</figcaption>
+</figure>
+
+## Inicio
+
+La pestaña **Inicio** resume los tres pasos del uso normal y muestra el token de administrador.
+
+Ese token sirve para usar la API del servidor desde fuera del panel, sin sesión abierta. Por ejemplo, para subir un caso desde un script o desde un agente:
+
+```bash
+curl -X POST http://<ip-del-servidor>:4318/api/workflows \
+  -H "Authorization: Bearer <token>" \
+  -F file=@workflow.json
+```
+
+**Regenerar** crea un token nuevo y anula el anterior. Cualquier herramienta que usara el viejo dejará de funcionar.
+
+<Aside type="note" title="Sobre el token">
+El panel sugiere pegar el token en MENTORA. Esa integración todavía no existe en la extensión: hoy los casos se suben a mano desde la pestaña **Casos** o con la API. La idea es que a futuro la misma extensión de MENTORA pueda subir directamente el caso.
+</Aside>
+
+<figure class="screenshot">
+  <Image src={panelInicio} alt="Pestaña Inicio del panel con la tarjeta del token de administrador" />
+  <figcaption>La pestaña Inicio muestra el token y los tres pasos del flujo.</figcaption>
+</figure>
+
+## Clases
+
+Una clase es un grupo de alumnado con un código propio.
+
+Para crear una, pulsa **Nueva clase** e indica:
+
+- **Nombre**: el que reconozca el grupo, por ejemplo `CFGS Ciberseguridad`.
+- **Dominio permitido** (opcional): si lo rellenas, el alumnado tendrá que identificarse con un correo de ese dominio. Si lo dejas vacío, basta con un nombre.
+
+El servidor asigna a cada clase un código de cuatro caracteres.
+
+### Compartir el código
+
+Cada clase tiene una tarjeta con su QR y dos enlaces:
+
+- **Proyectar** abre la página a pantalla completa, con letra grande y fondo oscuro. Es la vista para el proyector del aula.
+- **Vista previa** abre la misma página en tamaño normal.
+
+Las dos muestran la dirección del servidor, el código, el QR y las instrucciones para instalar la extensión SOCIA. El QR lleva a esa misma página, así que el alumnado puede escanearlo desde el móvil y tener los datos a mano mientras configura el navegador.
+
+<figure class="screenshot">
+  <Image src={panelProyectar} alt="Página de acceso a la clase en modo proyección, con el código y el QR" />
+  <figcaption>Vista de proyección con la dirección del servidor, el código y el QR.</figcaption>
+</figure>
+
+### Alumnado
+
+La tabla de la clase lista a quien se ha conectado, con su nombre y su correo si la clase pide dominio. El botón de la papelera expulsa a una persona: se borra de la clase y tendrá que volver a identificarse.
+
+**Regenerar código** cambia el código de la clase. Es útil si el anterior se ha filtrado. Quien ya estaba dentro sigue estándolo; el código nuevo solo afecta a las conexiones futuras.
+
+**Borrar clase** elimina el grupo. Es una acción sin vuelta atrás.
+
+<figure class="screenshot">
+  <Image src={panelClases} alt="Pestaña Clases con las tarjetas de grupo, la lista de alumnado y el QR" />
+  <figcaption>Detalle de una clase: alumnado conectado y tarjeta para compartir el acceso.</figcaption>
+</figure>
+
+## Casos
+
+Un caso es el archivo `workflow.json` que genera la skill **workflow-generator** a partir de una grabación de [MENTORA](/docs/ia/mentora/).
+
+**Subir caso** abre el selector de archivos. El servidor valida el JSON antes de guardarlo: si faltan campos o las dependencias entre hitos no encajan, rechaza la subida y muestra el error.
+
+De cada caso, la lista muestra el título y la duración estimada. El detalle añade las herramientas que usa y dos botones:
+
+- **Descargar** guarda el JSON tal y como está en el servidor.
+- **Ajustes** abre las variables del caso.
+
+### Variables
+
+Muchos casos dejan huecos para los datos que cambian entre centros: una IP, un nombre de máquina, un usuario. En el JSON se escriben como <code>{'{{nombre}}'}</code> y se rellenan al ejecutar el caso.
+
+La ventana **Variables del caso** lista esos huecos y permite cambiar sus valores. Al guardar, el servidor reescribe el JSON, vuelve a validarlo y actualiza el título del caso si dependía de alguna variable.
+
+Solo se pueden cambiar valores. Para añadir o quitar variables hay que editar el JSON y volver a subirlo.
+
+<figure class="screenshot">
+  <Image src={panelVariables} alt="Ventana de variables de un caso con sus valores editables" />
+  <figcaption>Las variables permiten adaptar un mismo caso a la infraestructura de cada centro.</figcaption>
+</figure>
+
+### Asignar a clases
+
+En el detalle del caso, marca las clases que deben poder recibirlo y pulsa **Guardar asignación**. La asignación no lanza nada: solo deja el caso preparado para lanzarlo después a todas esas clases a la vez.
+
+<figure class="screenshot">
+  <Image src={panelCasos} alt="Pestaña Casos con la lista de casos y el panel de asignación a clases" />
+  <figcaption>Detalle de un caso con sus herramientas y las clases asignadas.</figcaption>
+</figure>
+
+## Seguimiento
+
+Aquí se lanza el caso y se ve el trabajo del aula en tiempo real.
+
+**Lanzar caso** pide tres cosas:
+
+- **Caso**: cuál de los subidos.
+- **Destino**: una clase concreta, o todas las clases asignadas a ese caso.
+- **Modo**: guiado o no guiado.
+
+En el **modo guiado**, el alumnado ve las fases, los hitos completados y lo que le queda. En el **modo no guiado** solo ve el cronómetro, aunque la extensión sigue registrando todo para evaluarlo. En los dos modos se pueden pedir pistas.
+
+El caso se activa al instante en la extensión de quien esté conectado a esa clase. Si la clase ya tenía un caso activo, el servidor lo cierra antes de abrir el nuevo.
+
+<figure class="screenshot">
+  <Image src={panelLanzar} alt="Ventana de lanzamiento de un caso con la clase y el caso elegidos" />
+  <figcaption>Lanzar un caso a una clase o a todas las que lo tengan asignado.</figcaption>
+</figure>
+
+### Mientras el aula trabaja
+
+La cabecera resume el caso activo con cuatro contadores: quién está resolviendo, cuántos han cerrado, cuántos están atascados y cuántas pistas se han pedido en total.
+
+Debajo aparece una fila por estudiante, con una barra de cinco tramos que aproxima su avance y el número de pistas que ha pedido. La lista se actualiza sola, sin recargar la página.
+
+Cada fila puede estar en uno de estos estados:
+
+| Estado      | Qué significa                                                   |
+| ----------- | --------------------------------------------------------------- |
+| Sin empezar | La persona está conectada pero aún no ha completado ningún hito |
+| Resolviendo | Muestra hitos completados sobre el total                        |
+| Cerrado     | Ha pulsado **Terminar** y su evaluación ya está registrada      |
+| Atascado    | Lleva demasiado tiempo sin avanzar                              |
+
+**Volver a lanzar** reabre el caso para una sola persona, desde cero. Sirve cuando alguien pulsa **Terminar** por error o pierde la sesión. Las evaluaciones anteriores se conservan.
+
+**Detener caso** lo cierra para toda la clase.
+
+## Evaluaciones
+
+Cuando el alumnado pulsa **Terminar**, el servidor calcula la nota, redacta el informe y guarda el PDF. La tabla de esta pestaña recoge, por cada intento: estudiante, caso, fecha de cierre, duración, hitos completados, pistas pedidas y nota sobre diez.
+
+La nota sale de un cálculo fijo a partir del tiempo, los hitos y las pistas. El modelo de lenguaje solo escribe la justificación y las sugerencias de mejora, no decide la calificación.
+
+Desde aquí puedes:
+
+- Filtrar por caso con el desplegable.
+- Abrir el PDF de cualquier evaluación.
+- **Descargar todo**: un ZIP con los PDF y un `evaluaciones.csv` con las mismas columnas de la tabla, listo para la hoja de cálculo.
+- **Borrar**: elimina las evaluaciones que muestre el filtro, con sus PDF. No se puede deshacer.
+
+El interruptor **Permitir al alumnado descargar su propio PDF** decide si cada persona puede guardar su informe desde la extensión al terminar. Se aplica a todas las clases a la vez, no a una sola.
+
+<figure class="screenshot">
+  <Image src={panelEvaluaciones} alt="Pestaña Evaluaciones con la tabla de notas y el interruptor de descarga" />
+  <figcaption>Listado de evaluaciones con la nota de cada intento y acceso a los PDF.</figcaption>
+</figure>
+
+## Flujo de una sesión
+
+1. Sube el caso en **Casos** y revisa sus variables.
+2. Asígnalo a las clases que lo vayan a hacer.
+3. Proyecta el código de la clase desde **Clases** y espera a que el alumnado se conecte.
+4. Lanza el caso desde **Seguimiento**, eligiendo guiado o no guiado.
+5. Sigue el avance mientras trabajan y reabre el caso a quien lo necesite.
+6. Detén el caso al terminar la sesión.
+7. Revisa las notas en **Evaluaciones** y descarga el ZIP.
+
+## Variables de entorno
+
+| Variable                 | Por defecto                  | Para qué sirve                                                                                     |
+| ------------------------ | ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `PORT`                   | `4317`                       | Puerto en el que escucha el servidor                                                               |
+| `ADMIN_USER`             | `admin`                      | Usuario del panel                                                                                  |
+| `ADMIN_PASS`             | `changeme`                   | Contraseña del panel                                                                               |
+| `SESSION_SECRET`         | `dev-secret-change-me`       | Firma la cookie de sesión del panel                                                                |
+| `OPENROUTER_API_KEY`     | (vacío)                      | Sin ella no hay pistas ni evaluación automática                                                    |
+| `OPENROUTER_MODEL_HINTS` | `xiaomi/mimo-v2-flash`       | Modelo que redacta las pistas                                                                      |
+| `OPENROUTER_MODEL_EVAL`  | `xiaomi/mimo-v2-flash`       | Modelo que redacta el informe                                                                      |
+| `DATA_DIR`               | `./data` (`/data` en Docker) | Carpeta de la base de datos, los casos y los PDF                                                   |
+| `BRAND_ID`               | `socia`                      | Logo, colores y firma del PDF. Los disponibles están en `apps/packages/socia-branding/src/brands/` |
+
+## Límites actuales
+
+El panel tiene un solo usuario. No distingue entre docentes ni guarda quién hizo cada cosa, así que todo el profesorado que entre ve y puede tocar lo mismo.
+
+El estado **Atascado** aparece en la interfaz, pero la extensión todavía no lo comunica, así que ese contador se queda en cero. Se implementará a futuro.
+
+Al lanzar un caso a varias clases a la vez, la cabecera de **Seguimiento** resume solo el último lanzamiento, aunque la lista de abajo incluye al alumnado de todas.
+
+El servidor no cifra el tráfico por su cuenta. Si va a salir del aula, ponlo detrás de un proxy con HTTPS.
+
+Nada de esto sustituye a la prueba previa: conviene resolver el caso en SOCIA antes de lanzarlo, tal y como se explica en la página de [MENTORA](/docs/ia/mentora/).
