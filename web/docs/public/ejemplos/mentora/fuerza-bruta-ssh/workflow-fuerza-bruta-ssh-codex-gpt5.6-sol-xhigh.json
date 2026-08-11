@@ -1,0 +1,761 @@
+{
+  "case": {
+    "id": "fuerza-bruta-ssh",
+    "title": "Fuerza bruta SSH de {{attacker_ip}} contra {{victim_ip}}",
+    "description": "Analizar una alerta de fuerza bruta SSH, comprobar su alcance, bloquear la IP atacante y cerrar el caso sin impacto.",
+    "difficulty": "advanced",
+    "estimated_minutes": 60
+  },
+  "variables": {
+    "thehive_host": "172.17.33.104:9000",
+    "graylog_host": "172.17.33.153:9000",
+    "malcolm_host": "172.17.33.103",
+    "opnsense_host": "172.18.2.1",
+    "attacker_ip": "172.31.0.2",
+    "victim_ip": "172.18.2.100",
+    "victim_host": "vulnmachine",
+    "analyst_n1": "analista1",
+    "analyst_n2": "analista2",
+    "graylog_user": "analista",
+    "alert_title": "[debian] sshd: brute force trying to get access to the system. Authentication failed. from 172.31.0.2",
+    "case_title": "Brute force SSH to from vulnmachine (172.18.2.100) from 172.31.0.2",
+    "rule_ids": "5710 OR 5711 OR 5712 OR 5763",
+    "success_rule_id": "5715",
+    "firewall_alias": "SOC_BLOCKED_IPS"
+  },
+  "context": {
+    "tools": {
+      "TheHive": "Plataforma para recibir alertas, crear casos, guardar pruebas, coordinar analistas y cerrar incidentes.",
+      "Cortex": "Servicio conectado a TheHive que ejecuta analizadores sobre observables como direcciones IP.",
+      "Graylog": "Plataforma de registros usada para buscar los intentos SSH y comprobar si alguna autenticación tuvo éxito.",
+      "Malcolm y Arkime": "Herramientas de análisis de tráfico que muestran sesiones, protocolos, direcciones y puertos de red.",
+      "OPNsense": "Cortafuegos donde se mantiene el alias de direcciones bloqueadas y se revisan los descartes de tráfico."
+    },
+    "pedagogy": {
+      "triage-n1": "Convertir una alerta en un caso, revisar sus observables y dejar un traspaso claro al siguiente nivel.",
+      "investigacion-registros": "Usar los registros para separar intentos fallidos de accesos SSH logrados.",
+      "investigacion-red": "Confirmar el origen, el destino, el puerto y el alcance de la actividad en los datos de red.",
+      "contencion": "Aplicar un bloqueo preciso y revisar si el cortafuegos recibe más tráfico del origen.",
+      "cierre": "Documentar la acción, fijar la valoración final y asociar las alertas del mismo incidente."
+    },
+    "notes": "La alerta describe una fuerza bruta SSH desde {{attacker_ip}} contra {{victim_host}} ({{victim_ip}}). Los registros no muestran una autenticación correcta, por lo que el caso es un verdadero positivo sin impacto. El analista N1 crea y enriquece el caso; el N2 confirma el alcance, bloquea el origen y cierra el caso. La grabación no perdió acciones ni peticiones de red."
+  },
+  "phases": [
+    {
+      "id": "triage-n1",
+      "title": "Triage y traspaso de N1",
+      "description": "Revisar la alerta en TheHive, crear el caso, enriquecer los observables y preparar el traspaso.",
+      "role": "Analista SOC N1",
+      "order": 1,
+      "tool_hosts": [
+        "{{thehive_host}}"
+      ],
+      "milestones": [
+        {
+          "id": "access-thehive-n1",
+          "label": "Acceder a TheHive como {{analyst_n1}}",
+          "network_signatures": [
+            {
+              "method": "POST",
+              "url_contains": "/api/v1/login",
+              "host_contains": "{{thehive_host}}",
+              "response_status": [
+                200
+              ],
+              "request_body_contains": "\"user\":\"{{analyst_n1}}\""
+            },
+            {
+              "method": "GET",
+              "url_contains": "/api/v1/user/current",
+              "host_contains": "{{thehive_host}}",
+              "response_status": [
+                200
+              ],
+              "response_body_contains": "\"login\":\"{{analyst_n1}}@thehive.local\""
+            }
+          ],
+          "hint_examples": [
+            "¿Qué portal centraliza las alertas y los casos del SOC?",
+            "Accede a TheHive con la cuenta de N1 {{analyst_n1}}.",
+            "Abre http://{{thehive_host}}, inicia sesión como {{analyst_n1}} y entra en Alertas."
+          ]
+        },
+        {
+          "id": "review-brute-force-alert",
+          "label": "Revisar la alerta {{alert_title}}",
+          "depends_on": [
+            "access-thehive-n1"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/query",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": [
+              "getAlert",
+              "page"
+            ],
+            "response_body_contains": "{{alert_title}}"
+          },
+          "hint_examples": [
+            "¿Qué alerta contiene el origen y el destino del intento SSH?",
+            "En Alertas, busca la alerta de fuerza bruta que contiene {{attacker_ip}}.",
+            "Abre la alerta {{alert_title}} y revisa su descripción, origen, destino y regla."
+          ]
+        },
+        {
+          "id": "create-incident-case",
+          "label": "Crear el caso {{case_title}}",
+          "depends_on": [
+            "review-brute-force-alert"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/alert/",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              201
+            ],
+            "request_body_contains": [
+              "{{case_title}}",
+              "{{attacker_ip}}",
+              "{{victim_ip}}"
+            ],
+            "response_body_contains": [
+              "\"_type\":\"Case\"",
+              "{{case_title}}"
+            ]
+          },
+          "hint_examples": [
+            "¿Cómo puedes convertir la alerta en una unidad de trabajo del SOC?",
+            "Crea un caso vacío desde la alerta y conserva los datos del ataque.",
+            "Pulsa Crear caso, elige un caso vacío, usa el título {{case_title}}, fija severidad baja, TLP ámbar y PAP ámbar, y confirma."
+          ]
+        },
+        {
+          "id": "start-case-work",
+          "label": "Poner el caso en curso",
+          "depends_on": [
+            "create-incident-case"
+          ],
+          "network_signature": {
+            "method": "PATCH",
+            "url_contains": "/api/v1/case/",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              204
+            ],
+            "request_body_contains": "\"status\":\"InProgress\""
+          },
+          "hint_examples": [
+            "¿Qué estado indica que un analista ya trabaja en el caso?",
+            "Cambia el estado del caso de nuevo a en curso.",
+            "Abre el estado del caso, elige In Progress y guarda el cambio."
+          ]
+        },
+        {
+          "id": "review-attacker-observable",
+          "label": "Revisar el observable atacante {{attacker_ip}}",
+          "depends_on": [
+            "start-case-work"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/query",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": [
+              "getObservable",
+              "page"
+            ],
+            "response_body_contains": [
+              "\"dataType\":\"ip\"",
+              "\"data\":\"{{attacker_ip}}\""
+            ]
+          },
+          "hint_examples": [
+            "¿Qué observable representa el origen del ataque?",
+            "En los observables del caso, localiza la IP {{attacker_ip}}.",
+            "Abre Observables, entra en {{attacker_ip}} y comprueba que figura como atacante, IOC y observado."
+          ]
+        },
+        {
+          "id": "run-attacker-analyzers",
+          "label": "Ejecutar analizadores de Cortex sobre {{attacker_ip}}",
+          "depends_on": [
+            "review-attacker-observable"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/connector/cortex/job/_bulk",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              201
+            ],
+            "request_body_contains": [
+              "AbuseIPDB_1_0",
+              "MISP_2_1",
+              "VirusTotal_GetReport_3_1"
+            ]
+          },
+          "hint_examples": [
+            "¿Qué fuentes pueden aportar contexto sobre la IP de origen?",
+            "Ejecuta los analizadores disponibles desde el observable {{attacker_ip}}.",
+            "En el menú del observable, pulsa Run analyzers, selecciona AbuseIPDB, Abuse Finder, MISP y VirusTotal, y ejecuta el lote."
+          ]
+        },
+        {
+          "id": "review-victim-observable",
+          "label": "Revisar el observable víctima {{victim_ip}}",
+          "depends_on": [
+            "run-attacker-analyzers"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/query",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": [
+              "getObservable",
+              "page"
+            ],
+            "response_body_contains": [
+              "\"dataType\":\"ip\"",
+              "\"data\":\"{{victim_ip}}\""
+            ]
+          },
+          "hint_examples": [
+            "¿Qué observable pertenece al equipo atacado?",
+            "Busca en el caso la IP del equipo {{victim_host}}.",
+            "Vuelve a Observables y abre {{victim_ip}}, que corresponde a {{victim_host}}."
+          ]
+        },
+        {
+          "id": "tag-victim-observable",
+          "label": "Etiquetar {{victim_ip}} como víctima",
+          "depends_on": [
+            "review-victim-observable"
+          ],
+          "network_signature": {
+            "method": "PATCH",
+            "url_contains": "/api/v1/observable/",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              204
+            ],
+            "request_body_contains": [
+              "\"tags\"",
+              "\"victim\""
+            ]
+          },
+          "hint_examples": [
+            "¿Cómo dejarías clara la función de esta IP en el incidente?",
+            "Añade una etiqueta que identifique a {{victim_ip}} como víctima.",
+            "Edita las etiquetas del observable, añade victim y guarda."
+          ]
+        },
+        {
+          "id": "clear-victim-ioc",
+          "label": "Quitar la marca IOC de {{victim_ip}}",
+          "depends_on": [
+            "tag-victim-observable"
+          ],
+          "network_signature": {
+            "method": "PATCH",
+            "url_contains": "/api/v1/observable/",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              204
+            ],
+            "request_body_contains": "\"ioc\":false"
+          },
+          "hint_examples": [
+            "¿Una IP interna conocida debe quedar marcada como indicador de compromiso en este caso?",
+            "Revisa la marca IOC del observable víctima.",
+            "Desactiva IOC en {{victim_ip}} y guarda el cambio."
+          ]
+        },
+        {
+          "id": "handoff-to-n2",
+          "label": "Documentar el traspaso de N1 a N2",
+          "depends_on": [
+            "clear-victim-ioc"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/comment",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              201
+            ],
+            "request_body_contains": [
+              "[HANDOFF N1->N2]",
+              "{{attacker_ip}}",
+              "{{victim_ip}}",
+              "Pendiente de confirmar si hubo login exitoso"
+            ]
+          },
+          "hint_examples": [
+            "¿Qué necesita saber N2 para seguir sin repetir el trabajo de N1?",
+            "Añade un comentario con origen, destino, resultados de Cortex y tareas pendientes.",
+            "En Comentarios, escribe un bloque [HANDOFF N1->N2] con {{attacker_ip}}, {{victim_ip}}, el resultado de Cortex y la comprobación pendiente de acceso exitoso."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "investigacion-registros",
+      "title": "Investigación de registros",
+      "description": "Retomar el caso como N2 y comprobar en Graylog si la fuerza bruta logró una autenticación.",
+      "role": "Analista SOC N2",
+      "order": 2,
+      "tool_hosts": [
+        "{{thehive_host}}",
+        "{{graylog_host}}"
+      ],
+      "milestones": [
+        {
+          "id": "access-thehive-n2",
+          "label": "Acceder a TheHive como {{analyst_n2}}",
+          "after_milestone": "handoff-to-n2",
+          "network_signatures": [
+            {
+              "method": "POST",
+              "url_contains": "/api/v1/login",
+              "host_contains": "{{thehive_host}}",
+              "response_status": [
+                200
+              ],
+              "request_body_contains": "\"user\":\"{{analyst_n2}}\""
+            },
+            {
+              "method": "GET",
+              "url_contains": "/api/v1/user/current",
+              "host_contains": "{{thehive_host}}",
+              "response_status": [
+                200
+              ],
+              "response_body_contains": "\"login\":\"{{analyst_n2}}@thehive.local\""
+            }
+          ],
+          "hint_examples": [
+            "¿Qué rol debe retomar el análisis de alcance y contención?",
+            "Accede a TheHive con la cuenta de N2 {{analyst_n2}}.",
+            "Cierra la sesión de N1, inicia sesión como {{analyst_n2}} y abre el caso {{case_title}}."
+          ]
+        },
+        {
+          "id": "read-n1-handoff",
+          "label": "Leer el traspaso de N1",
+          "depends_on": [
+            "access-thehive-n2"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/query",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": [
+              "getCase",
+              "allComments"
+            ],
+            "response_body_contains": [
+              "[HANDOFF N1->N2]",
+              "{{attacker_ip}}",
+              "{{victim_ip}}"
+            ]
+          },
+          "hint_examples": [
+            "¿Qué información dejó N1 antes del cambio de turno?",
+            "Abre el caso y revisa el comentario de traspaso.",
+            "En Detalles del caso, lee [HANDOFF N1->N2] y anota el origen, el destino y las tareas pendientes."
+          ]
+        },
+        {
+          "id": "access-graylog",
+          "label": "Acceder a Graylog como {{graylog_user}}",
+          "depends_on": [
+            "read-n1-handoff"
+          ],
+          "network_signatures": [
+            {
+              "method": "POST",
+              "url_contains": "/api/system/sessions",
+              "host_contains": "{{graylog_host}}",
+              "response_status": [
+                200
+              ],
+              "request_body_contains": "\"username\":\"{{graylog_user}}\"",
+              "response_body_contains": "\"username\":\"{{graylog_user}}\""
+            },
+            {
+              "method": "GET",
+              "url_contains": "/api/users/{{graylog_user}}",
+              "host_contains": "{{graylog_host}}",
+              "response_status": [
+                200
+              ],
+              "response_body_contains": "\"username\":\"{{graylog_user}}\""
+            }
+          ],
+          "hint_examples": [
+            "¿Dónde puedes consultar los registros enviados por Wazuh?",
+            "Accede a Graylog con la cuenta {{graylog_user}}.",
+            "Abre http://{{graylog_host}}, inicia sesión como {{graylog_user}} y entra en Search."
+          ]
+        },
+        {
+          "id": "search-ssh-attempts",
+          "label": "Buscar intentos SSH de {{attacker_ip}}",
+          "depends_on": [
+            "access-graylog"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/views/search",
+            "host_contains": "{{graylog_host}}",
+            "response_status": [
+              201
+            ],
+            "request_body_contains": [
+              "{{rule_ids}}",
+              "{{attacker_ip}}",
+              "data_srcip"
+            ]
+          },
+          "hint_examples": [
+            "¿Qué reglas SSH y qué IP de origen delimitan los intentos de fuerza bruta?",
+            "Busca en las últimas dos horas las reglas {{rule_ids}} para {{attacker_ip}}.",
+            "En Search, fija dos horas y ejecuta rule_id:({{rule_ids}}) AND data_srcip:\"{{attacker_ip}}\"."
+          ]
+        },
+        {
+          "id": "search-successful-ssh",
+          "label": "Comprobar si {{attacker_ip}} logró entrar por SSH",
+          "depends_on": [
+            "search-ssh-attempts"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/views/search",
+            "host_contains": "{{graylog_host}}",
+            "response_status": [
+              201
+            ],
+            "request_body_contains": [
+              "{{attacker_ip}}",
+              "{{success_rule_id}}",
+              "Accepted"
+            ]
+          },
+          "hint_examples": [
+            "¿Qué dato separa un intento fallido de una autenticación lograda?",
+            "Busca la regla {{success_rule_id}} o mensajes Accepted para {{attacker_ip}}.",
+            "Ejecuta data_srcip:\"{{attacker_ip}}\" AND (rule_id:{{success_rule_id}} OR full_message: \"Accepted\") y confirma que devuelve cero eventos."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "investigacion-red",
+      "title": "Investigación de red",
+      "description": "Usar Malcolm y Arkime para confirmar las sesiones SSH y revisar el alcance del origen.",
+      "role": "Analista SOC N2",
+      "order": 3,
+      "tool_hosts": [
+        "{{malcolm_host}}"
+      ],
+      "milestones": [
+        {
+          "id": "review-malcolm-ssh-dashboard",
+          "label": "Revisar el panel SSH de Malcolm",
+          "after_milestone": "search-successful-ssh",
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/dashboards/internal/search/opensearch",
+            "host_contains": "{{malcolm_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": "zeek.ssh.hassh"
+          },
+          "hint_examples": [
+            "¿Qué panel resume las sesiones y los rasgos del protocolo SSH?",
+            "En Malcolm, abre el panel dedicado a SSH.",
+            "Abre https://{{malcolm_host}}, entra en Dashboards y selecciona el panel SSH para revisar conteos, puertos y algoritmos."
+          ]
+        },
+        {
+          "id": "search-arkime-attacker-victim",
+          "label": "Buscar sesiones SSH de {{attacker_ip}} a {{victim_ip}}",
+          "depends_on": [
+            "review-malcolm-ssh-dashboard"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/sessions",
+            "host_contains": "{{malcolm_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": [
+              "protocols==ssh",
+              "ip.src=={{attacker_ip}}",
+              "ip.dst=={{victim_ip}}"
+            ],
+            "response_body_contains": [
+              "\"source.ip\":\"{{attacker_ip}}\"",
+              "\"destination.ip\":\"{{victim_ip}}\""
+            ]
+          },
+          "hint_examples": [
+            "¿Qué filtro confirma la relación exacta entre origen, destino y protocolo?",
+            "En Arkime, combina SSH con {{attacker_ip}} como origen y {{victim_ip}} como destino.",
+            "Abre Arkime Sessions y ejecuta protocols==ssh && ip.src=={{attacker_ip}} && ip.dst=={{victim_ip}}."
+          ]
+        },
+        {
+          "id": "search-attacker-other-ssh-targets",
+          "label": "Comprobar otros destinos SSH de {{attacker_ip}}",
+          "depends_on": [
+            "search-arkime-attacker-victim"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/sessions",
+            "host_contains": "{{malcolm_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": [
+              "ip.src=={{attacker_ip}}",
+              "port.dst==22"
+            ]
+          },
+          "hint_examples": [
+            "¿La IP de origen probó el puerto SSH de otros equipos?",
+            "Quita el destino concreto y conserva el origen y el puerto 22.",
+            "En Arkime, ejecuta ip.src=={{attacker_ip}} && port.dst==22 y revisa los destinos."
+          ]
+        },
+        {
+          "id": "broaden-attacker-activity",
+          "label": "Revisar toda la actividad de {{attacker_ip}}",
+          "depends_on": [
+            "search-attacker-other-ssh-targets"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/sessions",
+            "host_contains": "{{malcolm_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": "\"expression\":\"ip.src=={{attacker_ip}}\"",
+            "response_body_contains": "\"source.ip\":\"{{attacker_ip}}\""
+          },
+          "hint_examples": [
+            "¿Qué actividad queda si eliminas el filtro de protocolo y puerto?",
+            "Busca solo por la IP de origen y amplía el periodo si hace falta.",
+            "Ejecuta ip.src=={{attacker_ip}} en Arkime y revisa si aparecen protocolos o destinos distintos."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "contencion",
+      "title": "Contención en el cortafuegos",
+      "description": "Añadir el origen al alias de bloqueo de OPNsense y revisar los registros del cortafuegos.",
+      "role": "Analista SOC N2",
+      "order": 4,
+      "tool_hosts": [
+        "{{opnsense_host}}"
+      ],
+      "milestones": [
+        {
+          "id": "access-opnsense",
+          "label": "Acceder a OPNsense con una sesión válida",
+          "after_milestone": "broaden-attacker-activity",
+          "network_signature": {
+            "method": "GET",
+            "url_contains": "/api/firewall/alias/list_network_aliases",
+            "host_contains": "{{opnsense_host}}",
+            "response_status": [
+              200
+            ]
+          },
+          "hint_examples": [
+            "¿Qué herramienta aplica el bloqueo de red?",
+            "Accede al cortafuegos OPNsense.",
+            "Abre https://{{opnsense_host}}, inicia sesión si hace falta y entra en Firewall > Aliases."
+          ]
+        },
+        {
+          "id": "open-blocked-ip-alias",
+          "label": "Abrir el alias {{firewall_alias}}",
+          "depends_on": [
+            "access-opnsense"
+          ],
+          "network_signature": {
+            "method": "GET",
+            "url_contains": "/api/firewall/alias/getItem/",
+            "host_contains": "{{opnsense_host}}",
+            "response_status": [
+              200
+            ],
+            "response_body_contains": "\"name\":\"{{firewall_alias}}\""
+          },
+          "hint_examples": [
+            "¿Qué lista reúne las IP que el SOC quiere bloquear?",
+            "Busca el alias {{firewall_alias}} en Firewall > Aliases.",
+            "En la lista de alias, pulsa editar en {{firewall_alias}} y revisa su contenido."
+          ]
+        },
+        {
+          "id": "block-attacker-ip",
+          "label": "Añadir {{attacker_ip}} al alias {{firewall_alias}}",
+          "depends_on": [
+            "open-blocked-ip-alias"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/firewall/alias/setItem/",
+            "host_contains": "{{opnsense_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": [
+              "{{firewall_alias}}",
+              "{{attacker_ip}}"
+            ],
+            "response_body_contains": "\"result\":\"saved\""
+          },
+          "hint_examples": [
+            "¿Qué indicador debes añadir para impedir nuevos intentos?",
+            "Añade {{attacker_ip}} al contenido del alias {{firewall_alias}}.",
+            "Edita {{firewall_alias}}, añade {{attacker_ip}} en Content y guarda los cambios."
+          ]
+        },
+        {
+          "id": "review-firewall-drops",
+          "label": "Revisar los descartes del cortafuegos",
+          "depends_on": [
+            "block-attacker-ip"
+          ],
+          "network_signature": {
+            "method": "GET",
+            "url_contains": "/api/diagnostics/firewall/log/",
+            "host_contains": "{{opnsense_host}}",
+            "response_status": [
+              200
+            ]
+          },
+          "hint_examples": [
+            "¿Dónde confirmarías si el bloqueo descarta tráfico nuevo?",
+            "Abre la vista en directo de los registros del cortafuegos.",
+            "Ve a Firewall > Log Files > Live View, filtra por {{attacker_ip}} y comprueba si hay descartes."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cierre",
+      "title": "Documentación y cierre",
+      "description": "Registrar la contención, cerrar el caso como verdadero positivo sin impacto y asociar la alerta relacionada.",
+      "role": "Analista SOC N2",
+      "order": 5,
+      "tool_hosts": [
+        "{{thehive_host}}"
+      ],
+      "milestones": [
+        {
+          "id": "document-containment",
+          "label": "Documentar la contención en TheHive",
+          "after_milestone": "review-firewall-drops",
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/comment",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              201
+            ],
+            "request_body_contains": [
+              "[CONTENCIÓN APLICADA]",
+              "{{attacker_ip}}",
+              "{{firewall_alias}}",
+              "No hubo login exitoso"
+            ]
+          },
+          "hint_examples": [
+            "¿Qué debe quedar escrito antes de cerrar el caso?",
+            "Añade un comentario con el resultado, el bloqueo y su verificación.",
+            "En el caso, crea un comentario [CONTENCIÓN APLICADA] que indique que no hubo acceso, que {{attacker_ip}} se añadió a {{firewall_alias}} y si se observaron descartes."
+          ]
+        },
+        {
+          "id": "close-case-no-impact",
+          "label": "Cerrar el caso como verdadero positivo sin impacto",
+          "depends_on": [
+            "document-containment"
+          ],
+          "network_signature": {
+            "method": "PATCH",
+            "url_contains": "/api/v1/case/",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              204
+            ],
+            "request_body_contains": [
+              "\"status\":\"TruePositive\"",
+              "\"impactStatus\":\"NoImpact\"",
+              "{{attacker_ip}}",
+              "{{victim_ip}}",
+              "{{firewall_alias}}"
+            ]
+          },
+          "hint_examples": [
+            "¿Cómo clasificas un ataque real que no logró entrar en el equipo?",
+            "Cierra el caso como verdadero positivo y sin impacto, con un resumen completo.",
+            "Pulsa Close, elige True Positive y No Impact, resume el origen {{attacker_ip}}, el destino {{victim_ip}}, los intentos fallidos y el bloqueo en {{firewall_alias}}, y confirma."
+          ]
+        },
+        {
+          "id": "merge-related-alert",
+          "label": "Asociar la alerta relacionada al caso",
+          "depends_on": [
+            "close-case-no-impact"
+          ],
+          "network_signature": {
+            "method": "POST",
+            "url_contains": "/api/v1/alert/merge/_bulk",
+            "host_contains": "{{thehive_host}}",
+            "response_status": [
+              200
+            ],
+            "request_body_contains": [
+              "alertIds",
+              "caseId"
+            ],
+            "response_body_contains": [
+              "\"_type\":\"Case\"",
+              "{{case_title}}"
+            ]
+          },
+          "hint_examples": [
+            "¿Qué debes hacer con otra alerta que pertenece al mismo incidente?",
+            "Busca la alerta relacionada y añádela al caso ya creado.",
+            "En Alertas, selecciona la alerta relacionada, elige Add to existing case, busca {{case_title}} y confirma la asociación."
+          ]
+        }
+      ]
+    }
+  ]
+}
