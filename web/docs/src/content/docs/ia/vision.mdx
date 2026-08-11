@@ -1,12 +1,41 @@
 ---
 title: Visión general
-description: Página en construcción.
+description: Qué es la capa de IA de SOCIA, qué hace cada componente y cómo encajan entre sí.
 sidebar:
   order: 1
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+La capa de IA de SOCIA permite al profesorado crear casos fácilmente, desplegarlos y hacer el seguimiento en tiempo real del desempeño del alumnado en un aula. Son tres aplicaciones independientes, a continuación encontrarás una tabla resumen.
 
-<Aside type="caution" title="En construcción">
-Esta página está en preparación. Mientras tanto, puedes consultar la **[web del proyecto](https://socia.fpciberseguridad.com/)** para una visión general de SOCIA.
-</Aside>
+## Los tres componentes
+
+| Componente | Quién lo usa | Para qué sirve |
+| --- | --- | --- |
+| [MENTORA](/docs/ia/mentora/) | Profesorado | Extensión de navegador que graba una resolución explicada en voz alta y la convierte en un caso y en una guía didáctica |
+| [SOCIA](/docs/ia/socia/) | Alumnado | Extensión de navegador que sigue el avance, da pistas cuando se piden y genera el informe final |
+| [Panel web](/docs/ia/server/) | Profesorado | Aplicación web con clases, casos, seguimiento en tiempo real y generación de informes |
+
+## Cómo funciona
+
+1. El profesorado resuelve el caso una vez con MENTORA grabando. Al terminar obtiene un ZIP con vídeo, capturas, acciones, peticiones de red y la transcripción de su explicación.
+2. Un agente convierte ese ZIP en un `workflow.json` con la skill **workflow-generator**. Con la skill **guide-generator** se obtiene además una guía didáctica en PDF.
+3. El caso se sube al panel web y se asigna a una clase.
+4. El alumnado se conecta con la extensión SOCIA y espera a que el profesorado lance el caso.
+5. SOCIA registra el trabajo, ofrece pistas y, al terminar, entrega el informe.
+6. El profesorado revisa los resultados en el panel web.
+
+El panel web es opcional. SOCIA también funciona sin servidor: el caso se carga a mano desde un archivo y el informe se descarga en el propio equipo.
+
+## Qué papel tiene la IA
+
+El seguimiento del caso no usa modelos de lenguaje. Cada hito se da por superado cuando la extensión detecta en el navegador la prueba que el caso define, casi siempre una petición de red concreta. La nota propuesta sale de un cálculo fijo a partir del tiempo, los hitos completados y las pistas pedidas.
+
+El modelo de lenguaje interviene en tres momentos: redacta las pistas, justifica la calificación con sugerencias de mejora y, fuera del aula, ayuda a convertir una grabación de MENTORA en un caso y en una guía didáctica.
+
+Ese reparto es deliberado. Mantiene el coste bajo, hace que dos ejecuciones iguales tengan la misma nota y deja el diseño del caso en manos del profesorado. En [Proceso de diseño](/docs/ia/proceso-diseno/) contamos cómo llegamos hasta aquí y qué descartamos por el camino.
+
+## Por dónde empezar
+
+- ¿Vas a **preparar casos**? Empieza por [MENTORA](/docs/ia/mentora/).
+- ¿Vas a **usarlo en clase**? Monta primero el [panel web](/docs/ia/server/).
+- ¿Quieres **probarlo sin montar nada**? Instala la extensión [SOCIA](/docs/ia/socia/) y carga un caso a mano.

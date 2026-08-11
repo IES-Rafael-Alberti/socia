@@ -17,7 +17,7 @@ import sociaEvaluacion from '../../../assets/socia-evaluacion.png';
 
 SOCIA es la extensión de navegador que acompaña al alumnado mientras resuelve un caso de ciberseguridad en el SOC. Muestra el avance, ofrece pistas cuando se solicitan y permite descargar la traza o generar un informe de desempeño al terminar.
 
-<figure class="screenshot">
+<figure class="screenshot screenshot--small">
   <Image src={sociaPopupCargarCaso} alt="Popup de SOCIA sin un caso activo, con el botón Cargar caso y el acceso a Ajustes" />
   <figcaption>SOCIA lista para cargar un caso en el modo sin servidor.</figcaption>
 </figure>
@@ -79,7 +79,7 @@ En este modo, el caso se carga a mano desde un archivo `workflow.json`. Desde **
 
 La clave de OpenRouter es opcional. Sin ella se puede resolver el caso y descargar la traza, pero no se pueden generar pistas ni el informe.
 
-<figure class="screenshot">
+<figure class="screenshot screenshot--small">
   <Image src={sociaAjustes} alt="Ajustes de SOCIA con la configuración del servidor, el modo sin servidor y la opción de modo guiado" />
   <figcaption>Algunos ajustes para usar SOCIA con el servidor del centro o sin él.</figcaption>
 </figure>
@@ -98,7 +98,7 @@ SOCIA conserva el caso, el tiempo, los hitos y las pistas aunque se cierre el po
 
 Antes de iniciar un caso sin servidor, SOCIA valida el JSON. Si faltan campos o las dependencias entre hitos no son válidas, muestra el error y no comienza la sesión.
 
-<figure class="screenshot">
+<figure class="screenshot screenshot--small">
   <Image src={sociaCasoGuiado} alt="Caso de fuerza bruta SSH activo en SOCIA con cronómetro, acciones, peticiones de red, fases e hitos" />
   <figcaption>Caso activo en modo guiado, con el avance y los hitos visibles.</figcaption>
 </figure>
@@ -145,7 +145,7 @@ SOCIA ofrece dos opciones:
 
 Si la evaluación falla, SOCIA conserva el caso y la traza. El botón cambia a **Reintentar evaluación**, por lo que no hace falta repetir el ejercicio.
 
-<figure class="screenshot">
+<figure class="screenshot screenshot--small">
   <Image src={sociaEvaluacion} alt="Diálogo Terminar el caso de SOCIA con las opciones Cancelar, Sin evaluar y Evaluar" />
   <figcaption>Opciones para terminar un caso en el modo sin servidor.</figcaption>
 </figure>

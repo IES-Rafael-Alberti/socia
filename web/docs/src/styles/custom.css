@@ -620,6 +620,11 @@ header.header {
   max-width: min(100%, 48rem);
   margin: 2.25rem auto;
 }
+/* Capturas estrechas (popups de las extensiones): a 48rem se amplían por
+   encima de su tamaño real y pierden nitidez. */
+.sl-markdown-content figure.screenshot--small {
+  max-width: min(100%, 26rem);
+}
 .sl-markdown-content figure.screenshot img {
   width: 100%;
   max-height: none;
