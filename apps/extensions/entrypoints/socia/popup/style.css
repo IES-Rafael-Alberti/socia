@@ -59,14 +59,21 @@
   --shadow-md: 0 4px 14px rgba(20, 22, 27, 0.08);
 }
 
+html,
+body,
+#root {
+  width: 360px;
+  min-width: 360px;
+  max-width: 360px;
+}
+
 body {
   font-family: var(--font-body);
   background: var(--white);
   color: var(--ink-800);
   font-size: 13px;
   line-height: 1.5;
-  min-width: 360px;
-  max-width: 380px;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -76,6 +83,9 @@ body {
 .socia-popup {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Inner padding lives on the sub-blocks so the dark header can be edge-to-edge. */
@@ -558,11 +568,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0;
 }
 
 .settings-section {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 .settings-section + .settings-section {
   border-top: 1px solid var(--ink-100);
@@ -609,6 +621,8 @@ body {
 }
 .settings-input {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding: 9px 11px;
   font-size: 13px;
   border: 1px solid var(--ink-200);
@@ -633,12 +647,14 @@ body {
   display: flex; justify-content: space-between; align-items: center;
   font-size: 12.5px;
   color: var(--ink-500);
+  min-width: 0;
 }
 .settings-row strong {
   color: var(--ink-800);
   font-weight: 600;
   text-align: right;
-  word-break: break-word;
+  min-width: 0;
+  overflow-wrap: anywhere;
   margin-left: 8px;
 }
 .btn-ghost {

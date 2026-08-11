@@ -145,13 +145,16 @@ La idea es adjuntar el ZIP al agente y pedirle que use la skill **guide-generato
 
 ## Ejemplo de captura y guía didáctica
 
-Los tres archivos siguientes parten de la misma grabación de una respuesta a un ataque de fuerza bruta por SSH. Puedes descargar la grabación y comparar las guías que crearon dos agentes con la misma fuente usando la skill sin iteraciones:
+Los cinco archivos siguientes parten de la misma grabación de una respuesta a un ataque de fuerza bruta por SSH. Puedes descargar la grabación y comparar las guías que crearon dos agentes con la misma fuente usando la skill sin iteraciones, así como revisar los casos generados:
 
 - [Grabación original de MENTORA (ZIP, 139,6 MiB)](https://drive.google.com/file/d/1qfcJKwwt8r-uodIe17VXL0JYdQN4e3kD/view?usp=sharing)
 - [Guía creada con Claude Code y Opus 5 (PDF, 22 páginas)](/docs/ejemplos/mentora/fuerza-bruta-ssh/guia-fuerza-bruta-ssh-claude-code-opus-5.pdf)
-- [Guía creada con Codex y GPT-5.6-sol, razonamiento xhigh (PDF, 12 páginas)](/docs/ejemplos/mentora/fuerza-bruta-ssh/guia-fuerza-bruta-ssh-codex-gpt5.6-sol-xhigh.pdf)
+- [Guía creada con Codex y GPT-5.6 Sol, razonamiento xhigh (PDF, 12 páginas)](/docs/ejemplos/mentora/fuerza-bruta-ssh/guia-fuerza-bruta-ssh-codex-gpt5.6-sol-xhigh.pdf)
+- [Workflow creado con Claude Code y Opus 5](/docs/ejemplos/mentora/fuerza-bruta-ssh/workflow-fuerza-bruta-ssh-claude-code-opus-5.json)
+- [Workflow creado con Codex y GPT-5.6 Sol, razonamiento xhigh](/docs/ejemplos/mentora/fuerza-bruta-ssh/workflow-fuerza-bruta-ssh-codex-gpt5.6-sol-xhigh.json)
 
-Los agentes pueden elegir otra estructura, extensión o selección de capturas. Por eso las dos guías son distintas, aunque parten del mismo material.
+
+Los agentes pueden elegir otra estructura, extensión o selección de capturas. Por eso las dos guías son distintas, aunque parten del mismo material. De la misma forma, aunque ambos son JSON válidos para [SOCIA](/docs/ia/socia/), los agentes han tomado decisiones diferentes en su generación.
 
 ## Flujo recomendado
 
@@ -161,10 +164,10 @@ El flujo completo queda así:
 2. Descargar y conservar el ZIP original.
 3. Usar `workflow-generator` para crear el `workflow.json`.
 4. Validar el JSON con el script de la skill.
-5. Probar el caso en SOCIA como si fuera un estudiante.
+5. Probar el caso en [SOCIA](/docs/ia/socia/) como si fuera un estudiante.
 6. Usar `guide-generator` para crear la guía paso a paso.
 7. Revisar la guía, especialmente capturas, valores concretos y explicaciones.
-8. Subir el workflow al panel web y compartir la guía si se quiere usar como material de apoyo.
+8. Subir el workflow al [panel web](/docs/ia/server/) y compartir la guía si se quiere usar como material de apoyo.
 
 Si quieres compartirlo con la comunidad, haz un Pull Request al repositorio siguiendo [estas instrucciones](https://github.com/IES-Rafael-Alberti/socia?tab=contributing-ov-file#a%C3%B1adir-un-caso-nuevo-pr).
 

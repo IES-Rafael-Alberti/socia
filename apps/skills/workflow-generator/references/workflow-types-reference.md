@@ -24,6 +24,7 @@ export interface NetworkSignature {
   /**
    * String(s) that must appear in the response body.
    * null/omitted = don't check body. Supports {{variables}}.
+   * If array: depends on match_mode (default: all must match).
    */
   response_body_contains?: string | string[] | null;
 }
@@ -48,9 +49,10 @@ export interface Milestone {
   /** Cross-phase dependency: milestone ID from a previous phase */
   after_milestone?: string;
   /**
-   * How to match request_body_contains when it's an array:
+   * How to match request_body_contains and response_body_contains arrays:
    * - "all" = every string must be present (default)
    * - "any_of_body" = at least one string must be present
+   * The selected mode applies to both bodies.
    */
   match_mode?: 'all' | 'any_of_body';
   /**
@@ -198,6 +200,6 @@ The matcher (`network-matcher.ts`) processes each network event as follows:
    - `url_contains`: interpolated, case-insensitive substring. Array = OR.
    - `response_status`: exact match, any of array
    - `request_body_contains`: interpolated, case-insensitive. String = substring. Array + `all` = AND. Array + `any_of_body` = OR.
-   - `response_body_contains`: same as request_body_contains
+   - `response_body_contains`: same as request_body_contains, including `match_mode`
 5. If every check in one complete signature passes → milestone is completed
 6. Newly completed milestones are immediately visible to subsequent milestones in the same event loop (a single network event can cascade-complete multiple milestones)

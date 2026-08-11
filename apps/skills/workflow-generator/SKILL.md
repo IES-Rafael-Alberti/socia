@@ -155,7 +155,7 @@ The matcher checks these fields **in order** — all must pass:
 3. **`url_contains`**: Substring(s) of the URL path. For a single pattern, use a string. For alternatives (e.g., an endpoint that might have different URL structures), use an array — the matcher treats arrays as OR (any match).
 4. **`response_status`**: Array of valid HTTP status codes. Include all codes that indicate success (e.g., `[200, 201]` for creation endpoints).
 5. **`request_body_contains`** (optional): String or array of strings that must appear in the request body. Use this to distinguish between generic API calls (e.g., a query endpoint used for many things). **Array = AND by default** (all must be present). Set `match_mode: "any_of_body"` for OR logic.
-6. **`response_body_contains`** (optional): Same as above but for the response body. Useful to verify the server confirmed the action (e.g., `"_type":"Case"` confirms a case was created).
+6. **`response_body_contains`** (optional): Same as above but for the response body. Useful to verify the server confirmed the action (e.g., `"_type":"Case"` confirms a case was created). When this field is an array, it uses the milestone's `match_mode` too.
 
 #### Rules for signatures
 
@@ -163,6 +163,7 @@ The matcher checks these fields **in order** — all must pass:
 - **Always use `{{variables}}` for IPs, hostnames, and case-specific data** (attacker IPs, alert IDs, search terms). This makes the workflow reusable across lab setups.
 - **Check the request body when the URL alone is ambiguous.** For example, TheHive uses `/api/v1/query` for everything — the body distinguishes "getAlert" from "getCase" from "getObservable".
 - **Use `response_body_contains` sparingly** — only when you need to confirm the *result* of an action, not just that it was attempted. Example: verifying a case was actually created (`"_type":"Case"`).
+- **Treat `match_mode` as milestone-wide.** It applies to arrays in both `request_body_contains` and `response_body_contains`. `any_of_body` changes both arrays from AND to OR; it cannot relax one body without relaxing the other.
 - **Discriminate the correct entity on generic endpoints.** When a milestone represents "view details of X" and the endpoint returns data for any entity of that type (any alert, any case, any observable), add `response_body_contains` with an identifier of the correct entity — typically `{{alert_title}}`, the case name, or the observable value. Without this, opening *any* entity of the same type would complete the milestone. This is especially important for TheHive's `/api/v1/query` endpoint, which returns different entities depending on the query body but always has the same URL pattern.
 - **Bodies are limited to 16 KiB** in both MENTORA and SOCIA. Check the truncation fields before relying on body text.
 - **Never match `[REDACTED]` or a redacted field.** Choose another stable path, status or non-secret body value. MENTORA and SOCIA apply the same cleaning rules, so a retained value can be compared in both extensions.
@@ -278,10 +279,13 @@ The capture verifier checks:
 - No signature uses `[REDACTED]` or a path listed in a `*Redactions` field.
 - Capture warnings and dropped-event counters are reported with the verification result.
 - Dependencies allow every milestone to complete when the events are replayed in time order.
+- A warning identifies one HTTP event that completes several milestones. Event identity uses the capture entry, not its timestamp; `requestId` appears in the output when available.
+- A warning reports a signature whose first independent match occurs before dependencies let the milestone activate.
 
 Things the scripts cannot judge for you:
 
 - Milestones that detect "viewing details" of an entity (alert, case, observable) include a `response_body_contains` with a discriminating value (`{{alert_title}}`, victim host, observable value) to avoid false positives when the student opens a different entity of the same type.
+- When `primera t` / `requestId` differs from `reproducción t` / `requestId`, inspect both events. The signature matched before activation; it may be too broad or its dependencies may be wrong. This warning is not blocking because a repeated valid action can also cause it.
 
 ## Common patterns and examples
 

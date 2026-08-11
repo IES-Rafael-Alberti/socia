@@ -14,6 +14,7 @@ import {
   NETWORK_PENDING_TTL_MS,
   NETWORK_EVENTS_PER_MINUTE,
 } from '../../utils/mentora/capture-limits';
+import { getEventElement } from '../../utils/shared/event-target';
 
 function sendMessage<T>(message: Record<string, unknown>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -120,7 +121,7 @@ export default defineContentScript({
       (event) => {
         if (!isRecording || !event.isTrusted) return;
 
-        const target = event.target as Element;
+        const target = getEventElement(event);
         if (!target) return;
 
         const element = {
@@ -157,8 +158,14 @@ export default defineContentScript({
       (event) => {
         if (!isRecording || !event.isTrusted) return;
 
-        const target = event.target as HTMLInputElement | HTMLTextAreaElement;
-        if (!target) return;
+        const target = getEventElement(event);
+        if (
+          !(target instanceof HTMLInputElement) &&
+          !(target instanceof HTMLTextAreaElement) &&
+          !(target instanceof HTMLSelectElement)
+        ) {
+          return;
+        }
 
         // Debounce inputs
         const existingTimeout = inputDebounceMap.get(target);
@@ -169,8 +176,14 @@ export default defineContentScript({
         const timeout = window.setTimeout(() => {
           inputDebounceMap.delete(target);
 
+          const inputType =
+            target instanceof HTMLInputElement
+              ? target.type
+              : target instanceof HTMLSelectElement
+                ? 'select'
+                : 'textarea';
           const sensitive = isSensitiveInputField({
-            type: target instanceof HTMLInputElement ? target.type : 'textarea',
+            type: inputType,
             name: target.name,
             id: target.id,
             autocomplete: target.getAttribute('autocomplete') ?? undefined,
@@ -187,8 +200,7 @@ export default defineContentScript({
                 id: target.id || undefined,
                 selector: getUniqueSelector(target),
               },
-              inputType:
-                target instanceof HTMLInputElement ? target.type : 'textarea',
+              inputType,
               inputName: target.name || undefined,
               inputValue: value,
             },
@@ -304,11 +316,11 @@ export default defineContentScript({
         if (!isSpecialKey && !hasModifier) return;
 
         // Skip if typing in an input
-        const target = event.target as Element;
+        const target = getEventElement(event);
         const isInput =
           target instanceof HTMLInputElement ||
           target instanceof HTMLTextAreaElement ||
-          target.getAttribute('contenteditable') === 'true';
+          target?.getAttribute('contenteditable') === 'true';
 
         // For inputs, only log Enter and Escape
         if (isInput && !['Enter', 'Escape'].includes(event.key) && !hasModifier) {
@@ -344,8 +356,8 @@ export default defineContentScript({
       (event) => {
         if (!isRecording || !event.isTrusted) return;
 
-        const form = event.target as HTMLFormElement;
-        if (!form) return;
+        const form = getEventElement(event);
+        if (!(form instanceof HTMLFormElement)) return;
 
         logAction(
           'form_submit',
@@ -368,7 +380,7 @@ export default defineContentScript({
       (event) => {
         if (!isRecording || !event.isTrusted) return;
 
-        const target = event.target as Element;
+        const target = getEventElement(event);
         if (!target) return;
 
         // Only track hover on interactive elements
@@ -414,7 +426,7 @@ export default defineContentScript({
       'mouseleave',
       (event) => {
         if (!event.isTrusted) return;
-        const target = event.target as Element;
+        const target = getEventElement(event);
         if (target === hoveredElement) {
           if (hoverTimeout) {
             clearTimeout(hoverTimeout);

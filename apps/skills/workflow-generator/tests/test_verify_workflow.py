@@ -138,6 +138,71 @@ class VerifyWorkflowTests(unittest.TestCase):
             )
         )
 
+    def test_distinguishes_requests_that_share_a_timestamp(self) -> None:
+        data = workflow()
+        current_events = events()
+        current_events[0]["t"] = 10
+        current_events[0]["requestId"] = "request-first"
+        current_events[1]["t"] = 10
+        current_events[1]["requestId"] = "request-second"
+
+        completed, replayed, completed_by_event = verify_workflow.replay_milestones(
+            current_events,
+            verify_workflow.milestone_list(data),
+            data["variables"],
+        )
+
+        self.assertEqual(completed, {"first", "second"})
+        self.assertEqual(replayed, {"first": 0, "second": 1})
+        self.assertEqual(completed_by_event, {0: ["first"], 1: ["second"]})
+
+    def test_reports_two_milestones_completed_by_one_event(self) -> None:
+        data = workflow()
+        first, second = data["phases"][0]["milestones"]
+        second["network_signature"] = json.loads(json.dumps(first["network_signature"]))
+        current_event = events()[0]
+        current_event["requestId"] = "shared-request"
+
+        completed, replayed, completed_by_event = verify_workflow.replay_milestones(
+            [current_event],
+            verify_workflow.milestone_list(data),
+            data["variables"],
+        )
+
+        self.assertEqual(completed, {"first", "second"})
+        self.assertEqual(replayed, {"first": 0, "second": 0})
+        self.assertEqual(completed_by_event, {0: ["first", "second"]})
+
+    def test_detects_a_signature_match_before_activation(self) -> None:
+        data = workflow()
+        current_events = [events()[1], events()[0], events()[1].copy()]
+        current_events[0]["t"] = 5
+        current_events[0]["requestId"] = "second-before-first"
+        current_events[1]["t"] = 10
+        current_events[1]["requestId"] = "first"
+        current_events[2]["t"] = 20
+        current_events[2]["requestId"] = "second-after-first"
+        milestones = verify_workflow.milestone_list(data)
+        independent_indices = {
+            milestone["id"]: [
+                event_index
+                for event_index, event in enumerate(current_events)
+                if verify_workflow.matches(event, milestone, data["variables"])
+            ]
+            for milestone in milestones
+        }
+
+        _, replayed, _ = verify_workflow.replay_milestones(
+            current_events, milestones, data["variables"]
+        )
+
+        self.assertEqual(independent_indices["second"], [0, 2])
+        self.assertEqual(replayed["second"], 2)
+        self.assertEqual(
+            verify_workflow.early_match_events(independent_indices, replayed),
+            {"second": (0, 2)},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

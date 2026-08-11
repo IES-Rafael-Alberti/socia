@@ -27,6 +27,7 @@ export interface NetworkSignature {
   /**
    * String(s) that must appear in the response body.
    * null = don't check body.
+   * If array: depends on match_mode (default: all must match).
    */
   response_body_contains?: string | string[] | null;
 }
@@ -53,9 +54,10 @@ export interface Milestone {
    */
   after_milestone?: string;
   /**
-   * How to match request_body_contains when it's an array:
+   * How to match request_body_contains and response_body_contains arrays:
    * - "all" = every string must be present (default)
    * - "any_of_body" = at least one string must be present
+   * The selected mode applies to both bodies.
    */
   match_mode?: 'all' | 'any_of_body';
   /**

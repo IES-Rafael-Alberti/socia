@@ -51,6 +51,7 @@ import {
   serializedByteLength,
   type CaptureQuotaSummary,
 } from '../../utils/mentora/capture-limits';
+import { canCaptureScreenshot } from '../../utils/mentora/screenshot-capture';
 
 interface MentoraRuntimeMessage {
   type: string;
@@ -77,6 +78,7 @@ export default defineBackground(() => {
   let startInProgress = false;
   let exportStage: ExportStage = 'idle';
   let currentRecordingTranscriptionEnabled = false;
+  let lastScreenshotCaptureAt: number | null = null;
   const actionQuota = new CaptureQuota({
     perMinute: ACTION_EVENTS_PER_MINUTE,
     maxEvents: ACTION_EVENTS_PER_RECORDING,
@@ -710,23 +712,30 @@ export default defineBackground(() => {
 
     // Take screenshot if needed (for clicks)
     let screenshotId: string | undefined;
-    if (action.needsScreenshot && tabId) {
+    if (action.needsScreenshot && tabId !== undefined) {
       try {
-        const dataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' });
-        screenshotId = `screenshot_${Date.now()}.png`;
+        const tab = await chrome.tabs.get(tabId);
+        const captureTime = Date.now();
+        if (canCaptureScreenshot(tab, lastScreenshotCaptureAt, captureTime)) {
+          lastScreenshotCaptureAt = captureTime;
+          const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
+            format: 'png',
+          });
+          screenshotId = `screenshot_${captureTime}.png`;
 
-        const screenshot: Screenshot = {
-          id: screenshotId,
-          timestamp: Date.now(),
-          relativeTime,
-          dataUrl,
-          actionId: action.id,
-        };
+          const screenshot: Screenshot = {
+            id: screenshotId,
+            timestamp: captureTime,
+            relativeTime,
+            dataUrl,
+            actionId: action.id,
+          };
 
-        await saveScreenshot(recordingId, screenshot);
-        actionWithTime.details.screenshotId = screenshotId;
+          await saveScreenshot(recordingId, screenshot);
+          actionWithTime.details.screenshotId = screenshotId;
+        }
       } catch (error) {
-        console.error('[Background] Failed to capture screenshot:', error);
+        console.warn('[Background] Failed to capture screenshot:', error);
       }
     }
 
@@ -904,7 +913,9 @@ export default defineBackground(() => {
         filename: response.filename,
       };
     } catch (error) {
-      console.error('[Background] Failed to download recording:', error);
+      if (!isCanceledDownload(error)) {
+        console.error('[Background] Failed to download recording:', error);
+      }
       return { success: false, error: String(error) };
     } finally {
       if (hasDownloadUrl) {
@@ -1047,6 +1058,11 @@ export default defineBackground(() => {
         // The change listener remains authoritative.
       });
     });
+  }
+
+  function isCanceledDownload(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message === 'USER_CANCELED';
   }
 
   async function notifyAllTabs(

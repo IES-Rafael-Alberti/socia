@@ -1,12 +1,177 @@
 ---
-title: SOCIA — extensión del alumnado
-description: Página en construcción.
+title: SOCIA (alumnado)
+description: Qué es y cómo usar SOCIA para resolver casos, pedir pistas y recibir una evaluación.
 sidebar:
   order: 3
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import sociaPopupCargarCaso from '../../../assets/socia-popup-cargar-caso.png';
+import sociaAjustes from '../../../assets/socia-ajustes.png';
+import sociaCasoGuiado from '../../../assets/socia-caso-guiado.png';
+import sociaPista from '../../../assets/socia-pista.png';
+import sociaEvaluacion from '../../../assets/socia-evaluacion.png';
 
-<Aside type="caution" title="En construcción">
-Esta página está en preparación. Mientras tanto, puedes consultar la **[web del proyecto](https://socia.fpciberseguridad.com/)** para una visión general de SOCIA.
+## Qué es SOCIA
+
+SOCIA es la extensión de navegador que acompaña al alumnado mientras resuelve un caso de ciberseguridad en el SOC. Muestra el avance, ofrece pistas cuando se solicitan y permite descargar la traza o generar un informe de desempeño al terminar.
+
+<figure class="screenshot">
+  <Image src={sociaPopupCargarCaso} alt="Popup de SOCIA sin un caso activo, con el botón Cargar caso y el acceso a Ajustes" />
+  <figcaption>SOCIA lista para cargar un caso en el modo sin servidor.</figcaption>
+</figure>
+
+## Cómo instalarla
+
+La instalación depende de si se usa una versión ya empaquetada o si se trabaja desde el repositorio.
+
+Si se dispone de una build, basta con cargarla en el navegador en modo desarrollador. En Chrome o Edge, abre `chrome://extensions`, activa el **modo desarrollador** y pulsa **Cargar descomprimida** para elegir la carpeta de SOCIA.
+
+Para construir la extensión desde el repositorio:
+
+```bash
+cd apps
+pnpm install
+pnpm --filter @socia/extensions build:socia
+```
+
+Para trabajar en modo desarrollo, sin crear una build después de cada cambio:
+
+```bash
+cd apps
+pnpm install
+pnpm --filter @socia/extensions dev:socia
+```
+
+La consola indicará la carpeta creada dentro de `.output`. Esa es la carpeta que debe cargarse como extensión descomprimida si el navegador no se abre solo.
+
+Para crear un ZIP distribuible:
+
+```bash
+cd apps
+pnpm --filter @socia/extensions zip:socia
+```
+
+## Preparar SOCIA antes del caso
+
+SOCIA puede trabajar con el servidor del centro a través del [panel web](/docs/ia/server/) o sin él. La configuración se encuentra en **Ajustes**, dentro del popup de la extensión.
+
+### Con el servidor del centro (modo gestionado)
+
+El profesorado facilita tres datos:
+
+- La dirección del servidor SOCIA.
+- El código de la clase.
+- El nombre o el correo que debe usar el alumnado.
+
+Abre **Ajustes**, escribe la dirección del servidor y comprueba que aparezca como accesible. Añade el código y pulsa **Buscar clase**. Después, indica el nombre o el correo solicitado y pulsa **Conectarme**.
+
+SOCIA queda en espera hasta que el profesorado lance un caso. El servidor elige el modo guiado o no guiado y recibe el avance, las pistas y el informe final.
+
+### Sin servidor (standalone)
+
+En este modo, el caso se carga a mano desde un archivo `workflow.json`. Desde **Ajustes** también se puede elegir:
+
+- Si el caso será guiado o no guiado.
+- La identidad visual del informe.
+- La clave de OpenRouter para las pistas y la evaluación local.
+
+La clave de OpenRouter es opcional. Sin ella se puede resolver el caso y descargar la traza, pero no se pueden generar pistas ni el informe.
+
+<figure class="screenshot">
+  <Image src={sociaAjustes} alt="Ajustes de SOCIA con la configuración del servidor, el modo sin servidor y la opción de modo guiado" />
+  <figcaption>Algunos ajustes para usar SOCIA con el servidor del centro o sin él.</figcaption>
+</figure>
+
+## Cómo resolver un caso
+
+El uso normal sigue estos pasos:
+
+1. Carga el archivo JSON o espera a que el profesorado lance el caso.
+2. Abre las herramientas del laboratorio SOC.
+3. Resuelve el incidente y consulta la extensión para revisar el avance.
+4. Pide una pista solo cuando la necesites.
+5. Pulsa **Terminar** cuando hayas acabado.
+
+SOCIA conserva el caso, el tiempo, los hitos y las pistas aunque se cierre el popup. Volver a abrirlo no interrumpe la sesión.
+
+Antes de iniciar un caso sin servidor, SOCIA valida el JSON. Si faltan campos o las dependencias entre hitos no son válidas, muestra el error y no comienza la sesión.
+
+<figure class="screenshot">
+  <Image src={sociaCasoGuiado} alt="Caso de fuerza bruta SSH activo en SOCIA con cronómetro, acciones, peticiones de red, fases e hitos" />
+  <figcaption>Caso activo en modo guiado, con el avance y los hitos visibles.</figcaption>
+</figure>
+
+## Modo guiado y no guiado
+
+En el **modo guiado**, la extensión muestra las fases, los hitos completados y el trabajo pendiente. Un hito se marca cuando SOCIA detecta la petición de red definida como prueba de ese paso.
+
+En el **modo no guiado**, la extensión oculta los hitos. Solo muestra el tiempo, el número de acciones y el botón **Terminar**. SOCIA sigue registrando el trabajo para evaluarlo después.
+
+En ambos modos, el alumnado realiza el caso por su cuenta. La diferencia está en la cantidad de información que se le muestra.
+
+<Aside type="tip" title="Si un hito no se completa">
+Espera a que la herramienta termine la petición y comprueba que has usado los datos correctos. Si el hito sigue pendiente, anota la acción y avisa al profesorado para que revise la prueba del JSON.
 </Aside>
+
+## Pedir una pista
+
+Cuando hay un caso activo, SOCIA muestra un botón flotante con el icono de una bombilla en las páginas del ejercicio. Al pulsarlo, la extensión genera una pista adaptada a la fase, los hitos completados y las acciones realizadas.
+
+La primera pista suele ser general. Si se pide otra sin haber resuelto el paso, la nueva ayuda será más directa. SOCIA guarda todas las pistas en la traza para tenerlas en cuenta durante la evaluación.
+
+Las pistas funcionan en los modos guiado y no guiado. En el modo sin servidor se necesita una clave válida de OpenRouter.
+
+<figure class="screenshot">
+  <Image src={sociaPista} alt="Pista de SOCIA sobre la revisión de una alerta en TheHive junto al botón flotante para pedir ayuda" />
+  <figcaption>Una pista de SOCIA adaptada al siguiente hito pendiente.</figcaption>
+</figure>
+
+## Terminar y recibir la evaluación
+
+Pulsa **Terminar** cuando hayas completado el trabajo. El resultado depende del modo de uso.
+
+### Con el servidor del centro
+
+SOCIA envía la traza al servidor, genera el informe y muestra la nota. Si el centro permite descargar el informe, también aparece el botón **Descargar mi PDF**.
+
+### Sin servidor
+
+SOCIA ofrece dos opciones:
+
+- **Evaluar**: genera un ZIP con la traza, el informe y el PDF.
+- **Sin evaluar**: descarga solo la traza y cierra el caso.
+
+Si la evaluación falla, SOCIA conserva el caso y la traza. El botón cambia a **Reintentar evaluación**, por lo que no hace falta repetir el ejercicio.
+
+<figure class="screenshot">
+  <Image src={sociaEvaluacion} alt="Diálogo Terminar el caso de SOCIA con las opciones Cancelar, Sin evaluar y Evaluar" />
+  <figcaption>Opciones para terminar un caso en el modo sin servidor.</figcaption>
+</figure>
+
+## Qué registra SOCIA
+
+La traza reúne los datos necesarios para reconstruir la resolución:
+
+| Dato                                 | Para qué se usa                            |
+| ------------------------------------ | ------------------------------------------ |
+| Navegaciones, pulsaciones y entradas | Explican el camino seguido por el alumnado |
+| Peticiones de red                    | Prueban los hitos del caso                 |
+| Hitos completados y sus tiempos      | Miden el avance por fases                  |
+| Pistas solicitadas                   | Aportan contexto a la evaluación           |
+| Duración y modo del caso             | Completan el resumen de la sesión          |
+
+SOCIA fija la traza al terminar. La calificación sigue un cálculo determinista en función del tiempo y los hitos completados. Se penaliza el uso de pistas. El modelo de lenguaje se utiliza únicamente para justificar dicha calificación y ofrecer sugerencias de mejora.
+
+## Flujo recomendado para el aula
+
+1. El profesorado graba y explica una resolución con [MENTORA](/docs/ia/mentora/).
+2. Un agente genera el JSON con la skill **workflow-generator**.
+3. El profesorado valida el archivo contra la grabación y prueba el caso en SOCIA. Realiza las correcciones oportunas.
+4. El JSON se sube al servidor y se asigna a una clase.
+5. El alumnado se identifica en la extensión y espera el lanzamiento.
+6. SOCIA registra el avance, ofrece pistas y genera el informe.
+7. El profesorado revisa los resultados desde el [panel del centro](/docs/ia/server/).
+
+La prueba docente antes de la clase sigue siendo necesaria. Cada aplicación expone peticiones distintas y una actualización puede cambiar una ruta o un cuerpo de respuesta.
