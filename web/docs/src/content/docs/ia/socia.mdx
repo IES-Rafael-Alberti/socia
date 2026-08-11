@@ -26,7 +26,7 @@ SOCIA es la extensión de navegador que acompaña al alumnado mientras resuelve 
 
 La instalación depende de si se usa una versión ya empaquetada o si se trabaja desde el repositorio.
 
-Si se dispone de una build, basta con cargarla en el navegador en modo desarrollador. En Chrome o Edge, abre `chrome://extensions`, activa el **modo desarrollador** y pulsa **Cargar descomprimida** para elegir la carpeta de SOCIA.
+Si se dispone de una build (oficialmente publicada en [releases](https://github.com/IES-Rafael-Alberti/socia/releases)), basta con cargarla en el navegador en modo desarrollador. En Chrome o Edge, abre `chrome://extensions`, activa el **modo desarrollador** y pulsa **Cargar descomprimida** para elegir la carpeta de SOCIA.
 
 Para construir la extensión desde el repositorio:
 
@@ -94,8 +94,6 @@ El uso normal sigue estos pasos:
 4. Pide una pista solo cuando la necesites.
 5. Pulsa **Terminar** cuando hayas acabado.
 
-SOCIA conserva el caso, el tiempo, los hitos y las pistas aunque se cierre el popup. Volver a abrirlo no interrumpe la sesión.
-
 Antes de iniciar un caso sin servidor, SOCIA valida el JSON. Si faltan campos o las dependencias entre hitos no son válidas, muestra el error y no comienza la sesión.
 
 <figure class="screenshot screenshot--small">
@@ -112,7 +110,7 @@ En el **modo no guiado**, la extensión oculta los hitos. Solo muestra el tiempo
 En ambos modos, el alumnado realiza el caso por su cuenta. La diferencia está en la cantidad de información que se le muestra.
 
 <Aside type="tip" title="Si un hito no se completa">
-Espera a que la herramienta termine la petición y comprueba que has usado los datos correctos. Si el hito sigue pendiente, anota la acción y avisa al profesorado para que revise la prueba del JSON.
+Espera a que la herramienta termine la petición y comprueba que has usado los datos correctos. Si el hito sigue pendiente, anota la acción y pide al agente que revise ese caso en el JSON usando la skill.
 </Aside>
 
 ## Pedir una pista

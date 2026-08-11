@@ -343,7 +343,9 @@ a {
   border-collapse: collapse;
   border: 1px solid var(--sl-color-hairline);
   border-radius: 8px;
-  overflow: hidden;
+  /* `hidden` hacía falta para redondear las esquinas, pero recortaba en
+     silencio las tablas que no cabían. `auto` las deja desplazarse. */
+  overflow: auto;
 }
 .sl-markdown-content thead {
   background: var(--socia-red-500);
@@ -645,7 +647,11 @@ header.header {
 }
 
 /* Evitar que los nombres en código dentro de tablas se partan en dos líneas
-   (p. ej. `attack0` en la tabla de redes) */
+   (p. ej. `attack0` en la tabla de redes).
+
+   Ojo al escribir tablas: una celda con código muy largo ensancha su columna
+   y deja sin espacio al resto. Si hace falta citar una ruta larga, ponla en
+   una línea debajo de la tabla, no dentro de una celda. */
 .sl-markdown-content table code {
   white-space: nowrap;
 }

@@ -27,7 +27,7 @@ MENTORA va registrando las diferentes acciones realizadas: qué se hace con el r
 
 La instalación depende de si se está usando una versión ya empaquetada o si se está trabajando desde el repositorio del proyecto.
 
-Si se dispone de una build de la extensión, basta con cargarla en el navegador en modo desarrollador. En Chrome o Edge, el flujo habitual es abrir `chrome://extensions`, activar el **modo desarrollador** y usar **Cargar descomprimida** para subir la carpeta del build de MENTORA.
+Si se dispone de una build de la extensión (oficialmente publicada en [releases](https://github.com/IES-Rafael-Alberti/socia/releases)), basta con cargarla en el navegador en modo desarrollador. En Chrome o Edge, el flujo habitual es abrir `chrome://extensions`, activar el **modo desarrollador** y usar **Cargar descomprimida** para subir la carpeta del build de MENTORA.
 
 Si se quiere construir desde el repositorio, se trabaja desde el workspace de aplicaciones:
 
@@ -54,9 +54,9 @@ cd apps
 pnpm --filter @socia/extensions zip:mentora
 ```
 
-La extensión necesita permiso para capturar la pantalla y el micrófono. La primera vez que se use puede abrir una pantalla auxiliar de permisos. Es necesario concederlos antes de grabar una sesión, ya que el contexto es muy importante para la fiabilidad de la creación del caso.
+La extensión necesita permiso para capturar la pantalla y el micrófono. Cuando se use normalmente abrirá una pantalla auxiliar de permisos. Es necesario concederlos antes de grabar una sesión, ya que el contexto es muy importante para la fiabilidad de la creación del caso.
 
-La transcripción es opcional, pero muy recomendable. Para activarla hay que guardar una clave de OpenRouter en el popup de MENTORA. Cuando se detiene la grabación, MENTORA envía el audio a OpenRouter para transcribirlo.
+La transcripción es opcional, pero muy recomendable. Para activarla hay que guardar una clave de OpenRouter en la extensión. Cuando se detiene la grabación, MENTORA envía el audio a OpenRouter para transcribirlo.
 
 <figure class="screenshot">
   <Image src={mentoraPermisosCaptura} alt="Selector del navegador para compartir pantalla con MENTORA y pestaña de permiso de micrófono" />
@@ -67,7 +67,7 @@ La transcripción es opcional, pero muy recomendable. Para activarla hay que gua
 
 Antes de pulsar **Empezar**, merece la pena preparar el caso como si fuera una demostración en clase. MENTORA graba lo que ocurre y es fundamental que la explicación sea clara y lo más detallada posible.
 
-Lo recomendable es tener claro:
+Lo recomendable es tener pensado:
 
 - Qué incidente se va a resolver.
 - Qué herramientas se van a usar.
@@ -75,7 +75,7 @@ Lo recomendable es tener claro:
 - Qué partes deben convertirse en hitos para el alumnado.
 - Qué explicación de conceptos puede ayudar después a generar la guía.
 
-Cuando todo esté listo, abre el popup de la extensión MENTORA y pulsa **Empezar**. A partir de ese momento la extensión captura pantalla, micrófono, acciones del navegador y peticiones de red. Durante la grabación puede pausarse si hace falta preparar algo que no forma parte del caso, aunque lo recomendable es hacerlo en una sola vez.
+Cuando todo esté listo, abre la extensión MENTORA y pulsa **Empezar**. A partir de ese momento la extensión captura pantalla, micrófono, acciones del navegador y peticiones de red. Durante la grabación puede pausarse si hace falta preparar algo que no forma parte del caso, aunque lo recomendable es hacerlo en una sola vez.
 
 Al terminar, pulsa **Detener**. MENTORA prepara automáticamente el ZIP y abre el diálogo de descarga. El nombre del archivo sigue el patrón `mentora-recording-<fecha>.zip`.
 
@@ -109,7 +109,7 @@ Si todo ha ido bien contiene:
 El archivo más importante para el workflow es `network-log.json`, porque SOCIA valida los pasos del alumnado a partir de peticiones reales. Para la guía, en cambio, pesan más `activity-log-readable.txt`, las capturas y la transcripción.
 
 <Aside type="note" title="Alcance del registro de red">
-`network-log.json` no es un HAR completo. Registra las llamadas hechas con `fetch`, XHR y `sendBeacon`, pero no el tráfico de workers, WebSocket, SSE ni todas las navegaciones del navegador.
+`network-log.json` no es un HAR completo. Registra las llamadas hechas con `fetch`, XHR y `sendBeacon`, pero no tráfico de workers, WebSocket o SSE.
 </Aside>
 
 ## Convertir la grabación en un workflow JSON
@@ -118,7 +118,7 @@ El primer producto que suele salir de una grabación es el `workflow.json`. Ese 
 
 Para generarlo se usa la skill **workflow-generator**, incluida en el repositorio en `apps/skills/workflow-generator`. La idea es adjuntar el ZIP de MENTORA al agente y pedirle que use la skill correspondiente para generar el workflow. La grabación puede entregarse como ZIP o como carpeta descomprimida, y la skill le proporciona las instrucciones para transformar las peticiones de red en diferentes fases e hitos.
 
-La skill cruza los tiempos de las peticiones, las acciones y la voz. La explicación del profesorado sirve para entender la intención, redactar el contexto y preparar las pistas. Aun así, cada hito debe corresponder a una petición válida de `network-log.json`: la transcripción aporta contexto, pero no prueba que la acción se haya completado.
+La skill cruza los tiempos de las peticiones, las acciones y la voz. La explicación del profesorado sirve para entender la intención, redactar el contexto y preparar las pistas. Normalmente, cada hito debe corresponder a una petición válida de `network-log.json`.
 
 Se recomienda usar un agente potente, como Codex o Claude, ya que los resultados serán mejores. La instalación de la skill depende del sistema que uses. Por ejemplo, en las [releases del repositorio](https://github.com/IES-Rafael-Alberti/socia/releases) puedes encontrar el archivo `.skill`, que se instala directamente en Claude abriendo el archivo con su aplicación de escritorio.
 

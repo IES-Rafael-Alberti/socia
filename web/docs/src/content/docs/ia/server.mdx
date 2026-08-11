@@ -40,7 +40,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-El panel queda levantado en `http://<ip-del-servidor>:4318`. Dentro del contenedor el servicio escucha en el 4317; el 4318 es el puerto que se publica.
+El panel queda levantado en `http://<ip-del-servidor>:4318`.
 
 Los datos se almacenan en el volumen `socia-data`, montado en `/data`. Ahí se guardan la base SQLite, los casos subidos y los PDF de los informes. De esta forma son persistentes a los reinicios del servidor.
 
@@ -245,7 +245,9 @@ El interruptor **Permitir al alumnado descargar su propio PDF** decide si cada p
 | `OPENROUTER_MODEL_HINTS` | `xiaomi/mimo-v2-flash`       | Modelo que redacta las pistas                                                                      |
 | `OPENROUTER_MODEL_EVAL`  | `xiaomi/mimo-v2-flash`       | Modelo que redacta el informe                                                                      |
 | `DATA_DIR`               | `./data` (`/data` en Docker) | Carpeta de la base de datos, los casos y los PDF                                                   |
-| `BRAND_ID`               | `socia`                      | Logo, colores y firma del PDF. Los disponibles están en `apps/packages/socia-branding/src/brands/` |
+| `BRAND_ID`               | `socia`                      | Logo, colores y firma del PDF                                                                      |
+
+Las identidades visuales disponibles para `BRAND_ID` están en `apps/packages/socia-branding/src/brands/`.
 
 ## Límites actuales
 
